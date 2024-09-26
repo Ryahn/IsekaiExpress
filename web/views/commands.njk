@@ -100,6 +100,7 @@
             </div>
             <div id="commandsTable"></div>
 
+            {% if allow %}
             <!-- Modal for Editing -->
             <div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
               <div class="modal-dialog" role="document">
@@ -169,7 +170,7 @@
               </div>
             </div>
             <!-- End of Modal for addmin -->
-            
+            {% endif %}
             
       </div>
   </div>
@@ -290,7 +291,7 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         ]
     });
-
+{% if allow %}
     // Save changes to the command
     document.getElementById("saveChanges").addEventListener("click", function() {
         var name = $('#commandName').val();
@@ -353,6 +354,7 @@ document.getElementById("addCommandBtn").addEventListener("click", function() {
             }
         });
     });
+{% endif %}
 
     // Search functionality
     document.getElementById("searchInput").addEventListener("input", function(event) {
