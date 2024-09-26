@@ -1,9 +1,10 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
 const path = require("path");
-const fs = require("node:fs").promises;
+const fs = require("node:fs");
 const { Collection } = require("discord.js");
 require('dotenv').config();
 const StateManager = require('../../utils/StateManager');
+const { getConnection } = require('../../../database/db');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
 
@@ -12,87 +13,86 @@ const rest = new REST({ version: '9' }).setToken(process.env.DISCORD_BOT_TOKEN);
 module.exports = class ReadyEvent extends BaseEvent {
     constructor() {
         super('ready');
-        this.stateManager = new StateManager();
     }
 
     async run(client) {
         console.log(`${client.user.tag} has logged in.`);
 
-        // Initialize collections
-        ['langs', 'guildSubReddits', 'guildCommandPrefixes', 'guildWelcomes', 'slashCommands'].forEach(collection => {
-            client[collection] = new Collection();
-        });
+        client.langs = new Collection();
+        client.guildSubReddits = new Collection();
+        client.guildCommandPrefixes = new Collection();
+        client.guildWelcomes = new Collection();
+        client.slashCommands = new Collection();
 
-        await this.loadSlashCommands(client);
-        await this.syncGuildsWithDatabase(client);
-        await this.loadGuildConfigurations(client);
-
-        client.user.setActivity(`zonies cry`, { type: 'LISTENING' });
-        console.log('Collection refreshed, no errors occurred while starting the program! SUCCESS!');
-    }
-
-    async loadSlashCommands(client) {
-        const slashCommands = path.join(__dirname, '../../commands/slashCommands');
-        const commandFiles = await fs.readdir(slashCommands);
         const commands = [];
         const commandInfo = [];
+        const slashCommands = path.join(__dirname, '../../commands/slashCommands');
+        const commandFiles = fs.readdirSync(slashCommands).filter(file => file.endsWith('.js'));
 
-        for (const file of commandFiles.filter(file => file.endsWith('.js'))) {
-            const command = require(`${slashCommands}/${file}`);
-            commands.push(command.data.toJSON());
-            commandInfo.push({
-                name: command.data.name,
-                description: command.data.description,
-            });
-            client.slashCommands.set(command.data.name, command);
-        }
 
-        await fs.writeFile('slashCommands.json', JSON.stringify(commandInfo, null, 2));
+                for (const file of commandFiles) {
+                    const command = require(`${slashCommands}/${file}`);
+                    commands.push(command.data.toJSON());
+                    commandInfo.push({
+                        name: command.data.name,
+                        description: command.data.description,
+                    });
+                    client.slashCommands.set(command.data.name, command);
+                    fs.writeFileSync('slashCommands.json', JSON.stringify(commandInfo, null, 2));
+                }
 
-        try {
-            await rest.put(
-                Routes.applicationGuildCommands(process.env.APPLICATION_ID, process.env.DISCORD_GUILD_ID),
-                { body: commands },
-            );
-        } catch (err) {
-            console.error("Error registering slash commands:", err);
-        }
-    }
+                try {
+                    await rest.put(
+                        Routes.applicationGuildCommands(process.env.APPLICATION_ID, process.env.DISCORD_GUILD_ID),
+                        { body: commands },
+                    );
 
-    async syncGuildsWithDatabase(client) {
+                } catch (err) {
+                    console.log(err)
+                }
+
+
+        const connection = await getConnection();
+        const stateManager = new StateManager(connection);
+        const filename = path.basename(__filename);
+
+        // Start of checking if all Guild-Ids are in the database
         const guildIds = client.guilds.cache.map(g => g.id);
+        let dbGuildIds = [];
 
         try {
-            const result = await this.stateManager.query(`SELECT guildId FROM GuildConfigurable`);
-            const dbGuildIds = result.map(row => row.guildId);
+            const result = await stateManager.query(`SELECT guildId FROM GuildConfigurable`);
+            dbGuildIds = result.map(row => row.guildId);
+        } catch (err) {
+            await stateManager.closePool(filename);
+            console.error("Error fetching guild IDs from the database:", err);
+        }
 
-            for (const guildId of guildIds) {
+        // Insert missing guild IDs into the Guilds and GuildConfigurable tables
+        for (const guildId of guildIds) {
+            try {
                 if (!dbGuildIds.includes(guildId)) {
-                    await this.stateManager.query(
+                    await stateManager.query(
                         `INSERT INTO Guilds (guildId, ownerId) VALUES (?, ?)`,
                         [guildId, client.guilds.resolve(guildId).ownerId]
                     );
-                    await this.stateManager.query(
+                    await stateManager.query(
                         `INSERT INTO GuildConfigurable (guildId) VALUES (?)`,
                         [guildId]
                     );
                     console.log(`Guild ${guildId} added to Guilds and GuildConfigurable.`);
                 }
+            } catch (err) {
+                await stateManager.closePool(filename);
+                console.error(`Error inserting guild ${guildId}:`, err);
             }
-        } catch (err) {
-            console.error("Error syncing guilds with database:", err);
-        } finally {
-            this.stateManager.closePool(path.basename(__filename));
         }
-    }
 
-    async loadGuildConfigurations(client) {
-        const guildIds = client.guilds.cache.map(g => g.id);
-
+        // Start of getting all data out of the database
         try {
             for (const guildId of guildIds) {
-                const result = await this.stateManager.query(
-                    `SELECT cmdPrefix, subReddit, guildWelcome, guildLanguage FROM GuildConfigurable WHERE guildId = ?`,
+                const result = await stateManager.query(
+                    `SELECT cmdPrefix, subReddit, guildWelcome, guildVolume, guildLanguage FROM GuildConfigurable WHERE guildId = ?`,
                     [guildId]
                 );
                 
@@ -106,9 +106,14 @@ module.exports = class ReadyEvent extends BaseEvent {
                 }
             }
         } catch (err) {
-            console.error("Error fetching guild configurations:", err);
+            await stateManager.closePool(filename);
+            console.error("Error fetching guild configuration:", err);
         } finally {
-            this.stateManager.closePool(path.basename(__filename));
+            stateManager.closePool(filename);
         }
+        // End of section
+
+        client.user.setActivity(`zonies cry`, { type: 'LISTENING' });
+        console.log('Collection refreshed, no errors occurred while starting the program! SUCCESS!');
     }
 }
