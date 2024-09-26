@@ -1,0 +1,51 @@
+{
+  "name": "orange.db",
+  "version": "1.2.7",
+  "main": "src/bot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon . /src/bot.js",
+    "lavalink": "java -jar Lavalink.jar",
+    "start": "node -r dotenv/config ./src/bot.js"
+  },
+  "author": "Jonas Krödel",
+  "license": "ISC",
+  "dependencies": {
+    "2": "^3.0.0",
+    "@discordjs/builders": "^0.13.0",
+    "@discordjs/rest": "^0.4.1",
+    "@napi-rs/canvas": "^0.1.56",
+    "axios": "^0.27.2",
+    "body-parser": "^1.20.3",
+    "canvas": "^2.10.1",
+    "discord-api-types": "^0.33.0",
+    "discord.js": "^13.11.0",
+    "dotenv": "^16.0.2",
+    "erela.js": "github:menudocs/erela.js#build",
+    "erela.js-spotify": "^1.2.0",
+    "form-data": "^4.0.0",
+    "glob": "^8.0.3",
+    "got": "^11.8.3",
+    "lodash": "^4.17.21",
+    "lyrics-finder": "^21.7.0",
+    "moment": "^2.29.2",
+    "mysql2": "^2.3.3",
+    "nekos-best.js": "^6.3.0",
+    "node-fetch": "^2.7.0",
+    "node-schedule": "^2.1.1",
+    "nodemon": "^2.0.16",
+    "openai": "^3.2.1",
+    "python-shell": "^1.0.4",
+    "request": "^2.88.2",
+    "sharp": "^0.30.4"
+  },
+  "description": "Discord Bot with mySQL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jonaskroedel/orangedb.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jonaskroedel/orangedb/issues"
+  },
+  "homepage": "https://github.com/jonaskroedel/orangedb#readme"
+}

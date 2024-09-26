@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"name": "Web",
+			"path": "./web"
+		},
+		{
+			"name": "Bot",
+			"path": "./bot"
+		},
+		{
+			"name": "Root",
+			"path": "."
+		}
+	]
+}
