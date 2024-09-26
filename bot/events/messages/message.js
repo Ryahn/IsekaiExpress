@@ -16,6 +16,13 @@ module.exports = class MessageEvent extends BaseEvent {
 
         const usedPrefix = message.content.slice(0, prefix.length);
 
+        const channelId = message.channel.id;
+        try {
+            await updateChannelStats(channelId);
+        } catch (error) {
+            console.error('Error updating channel stats:', error);
+        }
+
         // Check if the message starts with the correct prefix
         if (usedPrefix === prefix) {
             const [cmdName, ...cmdArgs] = message.content.slice(prefix.length).trim().split(/\s+/);
