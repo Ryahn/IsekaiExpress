@@ -60,6 +60,10 @@
     "description": "Feelin' happy?"
   },
   {
+    "name": "help",
+    "description": "Help"
+  },
+  {
     "name": "highfive",
     "description": "highfive someone"
   },

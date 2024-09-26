@@ -33,7 +33,7 @@ const client = new Client({
 // Schedule the task to check every minute
 schedule.scheduleJob('*/1 * * * *', async () => {
     const currentTime = moment().unix(); // Get current Unix timestamp
-    const filename = `${path.basename(__filename)} - ${process.env.PREFIX}${process.env.COMMAND_NAME}`;
+    const filename = path.basename(__filename);
     
     try {
         await stateManager.initPool(); // Ensure the pool is initialized
