@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en-US" dir="ltr">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- ===============================================-->
+    <!--    Document Title-->
+    <!-- ===============================================-->
+    <title>IsekaiExpress Bot | For F95Zone</title>
+    {% include "head.njk" %}
+    {% block css %}
+    {% endblock %}
+  </head>
+
+  <body>
+    <!-- ===============================================-->
+    <!--    Main Content-->
+    <!-- ===============================================-->
+    <main class="main" id="top">
+      {% include "sidebar.njk" %}
+      <div class="content">
+        {% block content %}
+        Default content in layout
+        {% endblock %}
+      </div>
+    </main>
+    <!-- ===============================================-->
+    <!--    End of Main Content-->
+    <!-- ===============================================-->
+
+   {% include "scripts.njk" %}
+
+	{% block scripts %}
+  {% endblock %}
+  </body>
+</html>
