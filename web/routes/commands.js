@@ -21,13 +21,7 @@ router.get("/list", async (req, res) => {
 	try {
 		const results = await db.query(query);
 
-		const formattedResults = results.map(command => ({
-			...command,
-			created_at: new Date(command.created_at * 1000).toLocaleString(),
-			updated_at: new Date(command.updated_at * 1000).toLocaleString(),
-		}));
-
-		res.json({ commands: formattedResults });
+		res.json({ commands: results });
 	} catch (error) {
 		console.error(error);
 		res.status(400).json({ message: 'Error fetching commands', error: error.message });

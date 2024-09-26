@@ -211,19 +211,41 @@ document.addEventListener("DOMContentLoaded", function() {
     var table = new Tabulator("#commandsTable", {
         ajaxURL: "/commands/list", // Load data via AJAX
         ajaxResponse: function(url, params, response) {
-            return response.commands; // Return the array from the response object
+            // Ensure we're returning an array of unique commands
+            if (Array.isArray(response.commands)) {
+                // Use a Set to remove duplicates based on command ID
+                const uniqueCommands = Array.from(new Set(response.commands.map(cmd => cmd.id)))
+                    .map(id => response.commands.find(cmd => cmd.id === id));
+                return uniqueCommands;
+            }
+            return []; // Return an empty array if response.commands is not an array
         },
         pagination: "local", // Enable pagination
         paginationSize: 10, // Set page size
         layout: "fitColumns",
+        initialSort: [
+            { column: "name", dir: "asc" }
+        ],
         columns: [
             { title: "Name", field: "name" },
             { title: "Content", field: "content" },
             { title: "Usage", field: "usage" },
             { title: "Created By", field: "created_by_username" },
             { title: "Updated By", field: "updated_by_username" },
-            { title: "Created At", field: "created_at" },
-            { title: "Updated At", field: "updated_at" },
+            { 
+                title: "Created At", 
+                field: "created_at",
+                formatter: function(cell, formatterParams) {
+                    return formatDate(cell.getValue());
+                }
+            },
+            { 
+                title: "Updated At", 
+                field: "updated_at",
+                formatter: function(cell, formatterParams) {
+                    return formatDate(cell.getValue());
+                }
+            },
             {
                 title: "Action",
                 field: "id",
@@ -350,6 +372,12 @@ document.getElementById("addCommandBtn").addEventListener("click", function() {
 
 });
 
+// Add this function outside of the DOMContentLoaded event listener
+function formatDate(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp * 1000); // Convert Unix timestamp to milliseconds
+    return date.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }); // Format date based on user's locale
+}
 
 	</script>
 {% endblock %}
