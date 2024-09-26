@@ -26,7 +26,7 @@ async function updateChannelStats(channelId, channelName) {
             // If no entry exists, create a new one
             await stateManager.query(
                 'INSERT INTO channel_stats (channel_id, channel_name, month_day, total) VALUES (?, ?, ?, 1)',
-                [channelId, currentDate]
+                [channelId, channelName, currentDate]
             );
         }
     } catch (error) {
