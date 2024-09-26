@@ -8,7 +8,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('fake_cage')
         .setDescription("fake cage someone")
-        .addUserOption(option => option.setName('target').setDescription('The user you want to cage').required(true)),
+        .addUserOption(option => option.setName('target').setDescription('The user you want to cage').setRequired(true)),
 
     async execute(client, interaction) {
         let targetUser = interaction.options.getUser('target');

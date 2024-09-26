@@ -4,7 +4,6 @@ const fs = require("node:fs");
 const { Collection } = require("discord.js");
 require('dotenv').config();
 const StateManager = require('../../utils/StateManager');
-const { getConnection } = require('../../../database/db');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
 
@@ -52,8 +51,7 @@ module.exports = class ReadyEvent extends BaseEvent {
                 }
 
 
-        const connection = await getConnection();
-        const stateManager = new StateManager(connection);
+        const stateManager = new StateManager();
         const filename = path.basename(__filename);
 
         // Start of checking if all Guild-Ids are in the database
@@ -61,6 +59,7 @@ module.exports = class ReadyEvent extends BaseEvent {
         let dbGuildIds = [];
 
         try {
+            await stateManager.initPool();
             const result = await stateManager.query(`SELECT guildId FROM GuildConfigurable`);
             dbGuildIds = result.map(row => row.guildId);
         } catch (err) {

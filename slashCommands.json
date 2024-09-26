@@ -52,6 +52,10 @@
     "description": "bang someone really hard"
   },
   {
+    "name": "fake_cage",
+    "description": "fake cage someone"
+  },
+  {
     "name": "furry_license",
     "description": "Get a qualified furry license"
   },
