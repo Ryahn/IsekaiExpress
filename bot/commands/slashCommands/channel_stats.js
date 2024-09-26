@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
 const StateManager = require('../../utils/StateManager');
+const moment = require('moment'); // Add this line to import moment.js
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -21,32 +22,33 @@ module.exports = {
                 .setDescription('Year to search')
                 .setRequired(false)),
 
-    async execute(interaction) {
+    async execute(client, interaction) {  // Add client parameter
+        await interaction.deferReply();  // Defer the reply
+
         const stateManager = new StateManager();
 
-		try {
-			await stateManager.initPool();
-		} catch (error) {
-			console.error('Error initializing database connection pool:', error);
-			await interaction.reply('An error occurred while initializing the database connection.');
-			return;
-		}
-
         try {
-            const date = interaction.options.getString('date');
+            await stateManager.initPool();
+
+            const dateInput = interaction.options.getString('date');
             const month = interaction.options.getInteger('month');
             const year = interaction.options.getInteger('year');
 
             let result;
             let embed = new MessageEmbed().setColor('#0099ff');
 
-            if (date) {
-                result = await getStatsByDate(stateManager, date);
-                if (result.length === 0) {
-                    embed.setDescription(`No data found for ${date}`);
+            if (dateInput) {
+                const standardizedDate = standardizeDate(dateInput);
+                if (!standardizedDate) {
+                    embed.setDescription('Invalid date format. Please use YYYY-MM-DD, DD-MM-YYYY, or similar formats.');
                 } else {
-                    embed.setTitle(`Channel Stats for ${date}`)
-                        .addFields(result.map(r => ({ name: r.channel_name, value: `Total: ${r.total}` })));
+                    result = await getStatsByDate(stateManager, standardizedDate);
+                    if (result.length === 0) {
+                        embed.setDescription(`No data found for ${standardizedDate}`);
+                    } else {
+                        embed.setTitle(`Channel Stats for ${standardizedDate}`)
+                            .addFields(result.map(r => ({ name: r.channel_name, value: `Total: ${r.total}` })));
+                    }
                 }
             } else if (month && year) {
                 result = await getStatsByMonthYear(stateManager, month, year);
@@ -62,15 +64,46 @@ module.exports = {
                     .addFields(result.map(r => ({ name: r.channel_name, value: `Total: ${r.total}` })));
             }
 
-            await interaction.reply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [embed] });
         } catch (error) {
             console.error('Error in channel_stats command:', error);
-            await interaction.reply('An error occurred while fetching channel stats.');
+            await interaction.editReply('An error occurred while fetching channel stats.');
         } finally {
             await stateManager.closePool('channel_stats.js');
         }
     },
 };
+
+function standardizeDate(dateInput) {
+    const formats = [
+        'YYYY-MM-DD', 'DD-MM-YYYY', 'D-M-YYYY', 'D-MM-YYYY', 'DD-M-YYYY',
+        'YY-MM-DD', 'DD-MM-YY', 'D-M-YY', 'D-MM-YY', 'DD-M-YY',
+        'YYYY-M-D', 'YY-M-D', 'YYYY-MM-D', 'YY-MM-D',
+        'DD-MMM-YYYY', 'DD-MMM-YY', 'D-MMM-YYYY', 'D-MMM-YY',
+        'M-D-YYYY', 'MM-DD-YYYY', 'M-D-YY', 'MM-DD-YY' 
+    ];
+
+    let processedInput = dateInput.replace(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/, (match, p1, p2, p3) => {
+        p1 = p1.padStart(2, '0');
+        p2 = p2.padStart(2, '0');
+        if (p3.length === 2) {
+            p3 = '20' + p3;
+        }
+        return `${p1}-${p2}-${p3}`;
+    });
+
+    const parsedDate = moment(processedInput, formats, true);
+    
+    if (parsedDate.isValid()) {
+        // Check if the year is reasonable (e.g., between 1900 and 2100)
+        if (parsedDate.year() < 1900 || parsedDate.year() > 2100) {
+            return null;
+        }
+        return parsedDate.format('YYYY-MM-DD');
+    }
+    
+    return null;
+}
 
 async function getStatsByDate(stateManager, date) {
     return stateManager.query(

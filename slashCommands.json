@@ -20,6 +20,10 @@
     "description": "Apply the cage role to a user, stripping all other roles."
   },
   {
+    "name": "channel_stats",
+    "description": "Show channel statistics"
+  },
+  {
     "name": "check_cages",
     "description": "Lists all currently caged users."
   },
