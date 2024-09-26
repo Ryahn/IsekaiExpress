@@ -1,5 +1,4 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
-const { getConnection } = require('../../../database/db');
 const StateManager = require('../../utils/StateManager');
 const path = require('path');
 
@@ -9,10 +8,10 @@ module.exports = class GuildDeleteEvent extends BaseEvent {
     }
 
     async run(client, guild) {
+        const stateManager = new StateManager();
+        const filename = path.basename(__filename);
         try {
-            const connection = await getConnection();
-            const stateManager = new StateManager(connection);
-
+            await stateManager.initPool();
             // Delete from Guilds table
             await stateManager.query(
                 `DELETE FROM Guilds WHERE guildId = ?`, [guild.id]
@@ -26,6 +25,8 @@ module.exports = class GuildDeleteEvent extends BaseEvent {
             console.log(`Guild ${guild.id} removed from database.`);
         } catch (err) {
             console.error(`Error removing guild ${guild.id} from the database:`, err);
+        } finally {
+            await stateManager.closePool(filename);
         }
     }
 }

@@ -1,5 +1,4 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
-const { getConnection } = require('../../../database/db');
 const StateManager = require('../../utils/StateManager');
 const path = require('path');
 
@@ -9,9 +8,11 @@ module.exports = class GuildCreateEvent extends BaseEvent {
     }
 
     async run(client, guild) {
+        const stateManager = new StateManager();
+        const filename = path.basename(__filename);
+
         try {
-            const connection = await getConnection();
-            const stateManager = new StateManager(connection);
+            await stateManager.initPool();
 
             // Insert guild into the Guilds table
             await stateManager.query(
@@ -41,6 +42,8 @@ module.exports = class GuildCreateEvent extends BaseEvent {
 
         } catch (err) {
             console.error(`Error adding guild ${guild.id} to the database:`, err);
+        } finally {
+            await stateManager.closePool(filename);
         }
     }
 }

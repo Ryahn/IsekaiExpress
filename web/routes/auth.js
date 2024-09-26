@@ -3,7 +3,7 @@ const passport = require("passport");
 const { Strategy } = require("passport-discord");
 const { Routes } = require("discord-api-types/v10");
 const { REST } = require("@discordjs/rest");
-require("dotenv").config({path: '../.env'});
+require("dotenv").config();
 const rest = new REST({ version: "10" }).setToken(
   process.env.DISCORD_BOT_TOKEN
 );
@@ -30,23 +30,34 @@ router.get(
   "/discord/callback",
   passport.authenticate("discord", { failureRedirect: "/" }),
   async (req, res) => {
-	const userId = req.user.id;
+    try {
+      const userId = req.user.id;
+      const [member, [existingUser]] = await Promise.all([
+        rest.get(Routes.guildMember(process.env.DISCORD_GUILD_ID, userId)),
+        db.query('SELECT * FROM users WHERE discord_id = ?', [userId])
+      ]);
 
-	db.query('INSERT IGNORE INTO users (username, discord_id) VALUES (?, ?)', [req.user.username, userId], async (err, results, fields) => {
-		const member = await rest.get(Routes.guildMember(process.env.DISCORD_GUILD_ID, userId));
-		req.session.roles = member.roles;
-		req.session.loggedin = true;
-		const { email, accessToken, ...safeUser } = req.user;
-		req.session.user = safeUser;
-		req.session.expires = Date.now() + daysToSeconds(process.env.SESSION_EXPIRES);
-		req.session.csrf = generateCsrfToken();
-		req.session.save((err) => {
-			if (err) {
-			console.error("Session save error:", err);
-			}
-			res.redirect("/");
-		});
-	});
+      req.session.roles = member.roles;
+      req.session.loggedin = true;
+      const { email, accessToken, ...safeUser } = req.user;
+      req.session.user = safeUser;
+      req.session.expires = Date.now() + daysToSeconds(process.env.SESSION_EXPIRES);
+      req.session.csrf = generateCsrfToken();
+
+      if (!existingUser) {
+        await db.query('INSERT INTO users (username, discord_id) VALUES (?, ?)', [req.user.username, userId]);
+      }
+
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+        }
+        res.redirect("/");
+      });
+    } catch (error) {
+      console.error("Error in Discord callback:", error);
+      res.status(500).send("An error occurred during authentication");
+    }
   }
 );
 

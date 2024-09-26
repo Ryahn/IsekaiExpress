@@ -1,6 +1,6 @@
 const { EventEmitter } = require('events');
 const mysql = require('mysql2/promise');
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config();
 
 class StateManager extends EventEmitter {
     constructor() {

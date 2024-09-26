@@ -1,6 +1,4 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
-const { getConnection } = require('../../../database/db');
-const StateManager = require('../../utils/StateManager');
 const path = require('path');
 
 

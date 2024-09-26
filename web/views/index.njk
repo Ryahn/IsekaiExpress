@@ -1,72 +1,4 @@
 {% extends "layout.njk" %}
-{% block css %}
-<link href="https://unpkg.com/tabulator-tables@5.4.3/dist/css/tabulator.min.css" rel="stylesheet">
-
-<style>
-  /* Table background for dark theme */
-.tabulator {
-    background-color: #2c2c2c;
-    color: #f5f5f5;
-    border: 1px solid transparent;
-}
-
-/* Table header for dark theme */
-.tabulator .tabulator-header {
-    background-color: #0f111a ;
-    background: #0f111a ;
-    color: #f5f5f5;
-    border-bottom: 1px solid #0f111a;
-}
-
-.tabulator .tabulator-header .tabulator-col {
-  background-color: #0f111a ;
-    background: #0f111a ;
-}
-
-/* Table rows for dark theme */
-.tabulator .tabulator-row {
-    background-color: #141824;
-    color: #f5f5f5;
-}
-
-.tabulator .tabulator-row:nth-child(even) {
-    background-color: #191e2d;
-}
-
-/* Row hover effect */
-.tabulator .tabulator-row:hover {
-    background-color: #1d2233;
-}
-
-/* Pagination buttons for dark theme */
-.tabulator .tabulator-paginator button {
-    background-color: #0f111a;
-    color: #fff;
-    border: none;
-}
-
-.tabulator .tabulator-footer .tabulator-page {
-    background-color: #0f111a;
-    color: #f5f5f5;
-}
-
-.tabulator .tabulator-paginator button:hover {
-    background-color: #1d2233;
-}
-
-.tabulator .tabulator-footer {
-    background-color: #0f111a;
-    color: #f5f5f5;
-    border-top: 1px solid #0f111a;
-}
-
-.toast-header {
-    background-color: transparent;
-    color: #f5f5f5;
-}
-
-</style>
-{% endblock %}
 
 {% block content %}
 
@@ -74,78 +6,15 @@
           <div data-list='{"valueNames":["product","customer","rating","review","time"],"page":6}'>
             <div class="row align-items-end justify-content-between pb-5 g-3">
               <div class="col-auto">
-                <h3>User Warnings</h3>
-                <p class="text-700 lh-sm mb-0">List of all discord warnings</p>
+                <h3>Dashboard</h3>
+                <p class="text-700 lh-sm mb-0">Welcome to the IsekaiExpress Dashboard</p>
               </div>
             </div>
-            <div class="search-box mb-3 mx-auto">
-              <input class="form-control search-input form-control-sm" type="search" id="searchInput" placeholder="Search" aria-label="Search">
-            </div>
-            <div id="warningTable"></div>
+            Nothing much to see here yet, but more features are coming soon!
+           
 
-            <!-- Modal for Editing -->
-            <div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
-              <div class="modal-dialog" role="document">
-                <div class="modal-content">
-                  <div class="modal-header">
-                    <h5 class="modal-title" id="editModalLabel">Edit Warning</h5>
-                    <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
-                      <span aria-hidden="true">&times;</span>
-                    </button>
-                  </div>
-                  <div class="modal-body">
-                    <form id="editForm">
-                      <div class="form-group">
-                        <label for="reason">Reason</label>
-                        <input type="hidden" name="id" id="warn_id" value="">
-                        <input type="hidden" name="_crsf" id="csrf" value="{{ csrfToken }}">
-                        <input type="text" class="form-control" id="reason" placeholder="Reason">
-                      </div>
-                      <div class="form-group">
-                        <label for="warnUserId">User ID</label>
-                        <input type="text" class="form-control" id="warnUserId" placeholder="Enter content" readonly>
-                      </div>
-                      <div class="form-group">
-                        <label for="warnUsername">Username</label>
-                        <input type="text" class="form-control" id="warnUsername" placeholder="Enter content" readonly>
-                      </div>
-                      <!-- Add other fields as needed -->
-                    </form>
-                  </div>
-                  <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" id="saveChanges">Save changes</button>
-                  </div>
-                </div>
-              </div>
-            </div>            
-            <!-- End of Modal for Editing -->
-             <!-- Modal for Viewing Full Reason -->
-<div class="modal fade" id="fullReasonModal" tabindex="-1" role="dialog" aria-labelledby="fullReasonModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="fullReasonModalLabel">Full Warning Reason</h5>
-        <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body" id="fullReasonModalBody">
-        <!-- Full reason will be displayed here -->
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
-<!-- End of Modal for Viewing Full Reason -->
           </div>
-
-            
-            
-      </div>
-  </div>
+        </div>
 
 <footer class="footer position-absolute">
   <div class="row g-0 justify-content-between align-items-center h-100">

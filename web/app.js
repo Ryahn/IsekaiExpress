@@ -1,7 +1,7 @@
 const express = require("express");
 const session = require("express-session");
 const passport = require("passport");
-require("dotenv").config({ path: "../.env" });
+require("dotenv").config();
 const RedisStore = require("connect-redis").default;
 const { createClient } = require("redis");
 const bodyParser = require("body-parser");
@@ -21,11 +21,7 @@ let redisStore = new RedisStore({
 
 const app = express();
 
-if (process.CORS_ENABLED) {
-  app.use(helmet());
-}
-
-nunjucks.configure('views', {
+nunjucks.configure(path.join(__dirname, 'views'), {
   autoescape: true,        // Escape variables by default
   express: app,            // Connect with Express
   watch: process.env.TEMPLTE_WATCH,             // Watch for file changes (dev environment)
@@ -45,7 +41,7 @@ app.use(
   })
 );
 
-app.use(express.static(path.join(__dirname, "public")));
+app.use('/public', express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.set('views', path.join(__dirname, 'views'));

@@ -1,0 +1,6 @@
+{   
+    "ignore": ["test.js", "README"],
+    "watch": ["web/views", "*.js"],
+	"cwd": "./",
+    "exec": "node ./web/app.js"
+}

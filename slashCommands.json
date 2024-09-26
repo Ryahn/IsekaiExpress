@@ -1,0 +1,150 @@
+[
+  {
+    "name": "baka",
+    "description": "stupid"
+  },
+  {
+    "name": "bite",
+    "description": "bite someone :p"
+  },
+  {
+    "name": "blush",
+    "description": "blush"
+  },
+  {
+    "name": "bored",
+    "description": "show the world how bored you are"
+  },
+  {
+    "name": "cage",
+    "description": "Apply the cage role to a user, stripping all other roles."
+  },
+  {
+    "name": "check_cages",
+    "description": "Lists all currently caged users."
+  },
+  {
+    "name": "cry",
+    "description": "cry like a baby"
+  },
+  {
+    "name": "cuddle",
+    "description": "that's lewd"
+  },
+  {
+    "name": "dance",
+    "description": "Keep On Ravin' Baby"
+  },
+  {
+    "name": "delwarn",
+    "description": "Deletes a warning by its ID."
+  },
+  {
+    "name": "facepalm",
+    "description": "a gif can say more than a thousand words"
+  },
+  {
+    "name": "feed",
+    "description": "pls give me food"
+  },
+  {
+    "name": "fuck",
+    "description": "bang someone really hard"
+  },
+  {
+    "name": "furry_license",
+    "description": "Get a qualified furry license"
+  },
+  {
+    "name": "happy",
+    "description": "Feelin' happy?"
+  },
+  {
+    "name": "highfive",
+    "description": "highfive someone"
+  },
+  {
+    "name": "hug",
+    "description": "huggies"
+  },
+  {
+    "name": "kiss",
+    "description": "now that's lewd"
+  },
+  {
+    "name": "laugh",
+    "description": "laugh"
+  },
+  {
+    "name": "lolilicense",
+    "description": "Get a qualified loli license"
+  },
+  {
+    "name": "magik",
+    "description": "create magik"
+  },
+  {
+    "name": "pat",
+    "description": "pat pat"
+  },
+  {
+    "name": "poke",
+    "description": "poke poke poke poke poke"
+  },
+  {
+    "name": "pout",
+    "description": "no u"
+  },
+  {
+    "name": "remove_cage",
+    "description": "Removes the cage from a user and restores their roles."
+  },
+  {
+    "name": "shrug",
+    "description": "ツ"
+  },
+  {
+    "name": "slap",
+    "description": "SCHLAP"
+  },
+  {
+    "name": "sleep",
+    "description": "go 2 bed"
+  },
+  {
+    "name": "smile",
+    "description": "（*＾-＾*）"
+  },
+  {
+    "name": "smug",
+    "description": "I don't like where this is going"
+  },
+  {
+    "name": "stare",
+    "description": "STaLKER!"
+  },
+  {
+    "name": "think",
+    "description": "thonk"
+  },
+  {
+    "name": "tickle",
+    "description": "tickle tickle tickle tickle"
+  },
+  {
+    "name": "warn",
+    "description": "Issue a warning to a user."
+  },
+  {
+    "name": "warnings",
+    "description": "Lists the warnings for a user."
+  },
+  {
+    "name": "wave",
+    "description": "EllO!/GudBaYe"
+  },
+  {
+    "name": "wink",
+    "description": "are you able to read?"
+  }
+]
