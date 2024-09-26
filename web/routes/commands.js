@@ -1,7 +1,7 @@
 const express = require("express");
 require("dotenv").config();
 const router = express.Router();
-const { timestamp, getDiscordAvatarUrl } = require("../libs/utils");
+const { timestamp, getDiscordAvatarUrl, hasRole } = require("../libs/utils");
 const db = require("../libs/database/db");
 const crypto = require('crypto');
 
@@ -38,6 +38,10 @@ router.post("/add", async (req, res) => {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
 
+	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+		return res.status(403).json({ message: 'You do not have permission to add commands' });
+	}
+
 	const { name, content } = req.body;
 	if (!name || !content) {
 		return res.status(400).json({ message: 'Missing required fields' });
@@ -67,6 +71,11 @@ router.post("/edit/:id", async (req, res) => {
 	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
+
+	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+		return res.status(403).json({ message: 'You do not have permission to edit commands' });
+	}
+
 	const { name, content } = req.body;
 	if (!name || !content) {
 		return res.status(400).json({ message: 'Missing required fields' });
@@ -94,6 +103,10 @@ router.post("/edit/:id", async (req, res) => {
 router.post("/delete/:id", async(req, res) => {
 	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
+	}
+
+	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+		return res.status(403).json({ message: 'You do not have permission to delete commands' });
 	}
 
 	try {

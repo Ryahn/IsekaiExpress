@@ -24,6 +24,10 @@ router.post("/add", async (req, res) => {
 	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
+	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+		return res.status(403).json({ message: 'You do not have permission to add warnings' });
+	}
+
 	const { warn_user_id, warn_user, warn_reason } = req.body;
 	if (!reason ) {
 		return res.status(400).json({ message: 'Missing required fields' });
@@ -52,6 +56,10 @@ router.post("/edit/:id", async (req, res) => {
 	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
+	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+		return res.status(403).json({ message: 'You do not have permission to edit warnings' });
+	}
+
 	const { reason } = req.body;
 	if (!reason) {
 		return res.status(400).json({ message: 'Missing required fields' });
@@ -70,6 +78,9 @@ router.post("/delete/:id", async (req, res) => {
     if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
         return res.status(403).json({ message: 'Invalid CSRF token' });
     }
+	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+		return res.status(403).json({ message: 'You do not have permission to delete warnings' });
+	}
 
     try {
         await db.query("DELETE FROM warnings WHERE warn_id = ?", [req.params.id]);
