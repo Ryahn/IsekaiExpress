@@ -229,10 +229,14 @@ document.addEventListener("DOMContentLoaded", function() {
                 field: "id",
                 hozAlign: "center",
                 formatter: function(cell, formatterParams) {
+                  {% if user.role === staffRole %}
                     return `
                         <button class="btn btn-sm btn-primary editButton" data-id="${cell.getValue()}">Edit</button>
                         <button class="btn btn-sm btn-danger deleteButton" data-id="${cell.getValue()}">Delete</button>
                     `;
+                    {% else %}
+                    return '';
+                    {% endif %}
                 },
                 cellClick: function(e, cell) {
                     var id = cell.getValue();
