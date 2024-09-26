@@ -6,7 +6,8 @@ const db = require("../libs/database/db");
 const crypto = require('crypto');
 
 router.get("/", (req, res) => {
-	res.render('commands', { username: req.session.user.username,  avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar), csrfToken: req.session.csrf, user: req.session.user, staffRole: process.env.DISCORD_STAFF_ROLE_ID });
+	const allowed = req.session.roles.includes(process.env.DISCORD_STAFF_ROLE_ID);
+	res.render('commands', { username: req.session.user.username, avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar), csrfToken: req.session.csrf, allow: allowed });
 });
 
 router.get("/list", async (req, res) => {
