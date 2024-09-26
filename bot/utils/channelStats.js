@@ -16,7 +16,7 @@ async function updateChannelStats(channelId) {
             [channelId, currentDate]
         );
 
-        if (existingEntry.length > 0) {
+        if (existingEntry?.length > 0) {
             // If entry exists, increment the total
             await stateManager.query(
                 'UPDATE channel_stats SET total = total + 1 WHERE channel_id = ? AND month_day = ?',
