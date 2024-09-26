@@ -1,4 +1,4 @@
-const StateManager = require('../utils/StateManager');
+const StateManager = require('./StateManager');
 
 async function updateChannelStats(channelId) {
     const stateManager = new StateManager();

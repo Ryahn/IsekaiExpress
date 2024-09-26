@@ -2,7 +2,7 @@ const BaseEvent = require('../../utils/structures/BaseEvent');
 const StateManager = require('../../utils/StateManager');
 const path = require('path');
 const crypto = require('crypto');
-const { updateChannelStats } = require('../../Web/libs/channelStats');
+const { updateChannelStats } = require('../../utils/channelStats');
 
 module.exports = class MessageEvent extends BaseEvent {
     constructor() {
