@@ -1,6 +1,6 @@
 const StateManager = require('./StateManager');
 
-async function updateChannelStats(channelId) {
+async function updateChannelStats(channelId, channelName) {
     const stateManager = new StateManager();
     const filename = 'channelStats.js';
 
@@ -25,7 +25,7 @@ async function updateChannelStats(channelId) {
         } else {
             // If no entry exists, create a new one
             await stateManager.query(
-                'INSERT INTO channel_stats (channel_id, month_day, total) VALUES (?, ?, 1)',
+                'INSERT INTO channel_stats (channel_id, channel_name, month_day, total) VALUES (?, ?, ?, 1)',
                 [channelId, currentDate]
             );
         }

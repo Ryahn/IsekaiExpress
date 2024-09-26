@@ -18,9 +18,8 @@ module.exports = class MessageEvent extends BaseEvent {
         const usedPrefix = message.content.slice(0, prefix.length);
 
         const channelId = message.channelId;
-        console.log(channelId);
         try {
-            await updateChannelStats(channelId);
+            await updateChannelStats(channelId, message.channel.name);
         } catch (error) {
             console.error('Error updating channel stats:', error);
         }
