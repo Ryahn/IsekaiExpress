@@ -5,13 +5,13 @@ const schedule = require('node-schedule');
 const moment = require('moment');
 const StateManager = require('./utils/StateManager');
 const path = require('path');
-
+// const { setupDatabase } = require('./database/setup');
 const client = new Client({
   intents: [
     Intents.FLAGS.GUILDS,
     Intents.FLAGS.GUILD_MESSAGES,
     Intents.FLAGS.GUILD_MEMBERS,
-    Intents.FLAGS.GUILD_BANS
+    Intents.FLAGS.GUILD_BANS,
   ]
 });
 
@@ -23,9 +23,15 @@ const client = new Client({
     console.log('Bot has started!');
     console.log(`Prefix: ${client.prefix}`);
 
+    // console.log('Running migrations...');
+    // if (process.env.MYSQL_RUN_MIGRATIONS === 'true') {
+    //   await setupDatabase();
+    // }
+
 
     client.commands = new Collection();
     client.slashCommands = new Collection();
+    client.afk = new Collection();
     await registerCommands(client, '../commands/chatCommands');
     await registerEvents(client, '../events');
     const stateManager = new StateManager();

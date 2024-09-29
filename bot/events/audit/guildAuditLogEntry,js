@@ -1,0 +1,52 @@
+const BaseEvent = require('../../utils/structures/BaseEvent');
+const { Collection } = require('discord.js');
+const StateManager = require('../../utils/StateManager');
+
+module.exports = class GuildAuditLogEntryEvent extends BaseEvent {
+    constructor() {
+        super('guildAuditLogEntry');
+        this.actionCounts = new Collection();
+        this.ACTION_LIMIT = 3;
+        this.TIME_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+    }
+
+    async run(client, auditLogEntry) {
+        const { executorId, action } = auditLogEntry;
+        
+        const key = `${executorId}-${action}`;
+        
+        const currentCount = this.actionCounts.get(key) || { count: 0, timestamp: Date.now() };
+        
+        if (Date.now() - currentCount.timestamp > this.TIME_WINDOW) {
+            currentCount.count = 0;
+            currentCount.timestamp = Date.now();
+        }
+        
+        currentCount.count++;
+        
+        this.actionCounts.set(key, currentCount);
+
+		const stateManager = new StateManager();
+		const filename = path.basename(__filename);
+        
+        if (currentCount.count > this.ACTION_LIMIT) {
+            try {
+				await stateManager.initPool();
+                const guild = auditLogEntry.guild;
+                const member = await guild.members.fetch(executorId);
+                
+                if (member.bannable) {
+                    await member.ban({ reason: `Exceeded action limit: ${action} performed ${currentCount.count} times in ${this.TIME_WINDOW / 1000 / 60} minutes` });
+                    console.log(`Banned user ${member.user.tag} for exceeding action limit`);
+					await stateManager.query(`INSERT INTO bans (discord_id, username, reason, method, banned_by_id, banned_by_user, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [member.user.id, member.user.tag, `Exceeded action limit: ${action} performed ${currentCount.count} times in ${this.TIME_WINDOW / 1000 / 60} minutes`, 'ban', executorId, member.user.tag, Date.now()]);
+                } else {
+                    console.log(`Unable to ban user ${member.user.tag} due to lack of permissions`);
+                }
+            } catch (error) {
+                console.error('Error banning user:', error);
+            } finally {
+				await stateManager.closePool(filename);
+			}
+        }
+    }
+}

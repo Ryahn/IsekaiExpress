@@ -22,8 +22,8 @@ module.exports = {
                 .setDescription('Year to search')
                 .setRequired(false)),
 
-    async execute(client, interaction) {  // Add client parameter
-        await interaction.deferReply();  // Defer the reply
+    async execute(client,interaction) { 
+        await interaction.deferReply(); 
 
         const stateManager = new StateManager();
 
@@ -36,6 +36,12 @@ module.exports = {
 
             let result;
             let embed = new MessageEmbed().setColor('#0099ff');
+
+			if (!dateInput && !month && !year) {
+				embed.setDescription('No date, month, or year provided. Please provide one of these to search for channel statistics.');
+				await interaction.editReply({ embeds: [embed] });
+				return;
+			}
 
             if (dateInput) {
                 const standardizedDate = standardizeDate(dateInput);

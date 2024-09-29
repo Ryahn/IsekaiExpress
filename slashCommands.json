@@ -1,7 +1,15 @@
 [
   {
+    "name": "afk",
+    "description": "Set your AFK status"
+  },
+  {
     "name": "baka",
     "description": "stupid"
+  },
+  {
+    "name": "bans",
+    "description": "Lists the bans"
   },
   {
     "name": "bite",
@@ -142,6 +150,10 @@
   {
     "name": "tickle",
     "description": "tickle tickle tickle tickle"
+  },
+  {
+    "name": "unban",
+    "description": "Unban a user."
   },
   {
     "name": "warn",
