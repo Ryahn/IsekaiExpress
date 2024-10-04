@@ -12,7 +12,7 @@ module.exports = {
 		applicationId: "1119424948205793452"
 	},
 	session: {
-		secret: "",
+		secret: "YOUR_SESSION_SECRET",
 		expires: 7
 	},
 	mysql: {
@@ -21,7 +21,7 @@ module.exports = {
 		user: "f95bot",
 		password: "f95bot",
 		database: "f95bot",
-		runMigrations: true
+		runMigrations: false
 	},
 	warningSystem: {
 		enabled: true
@@ -39,6 +39,11 @@ module.exports = {
 		apiKey: "anonymous",
 		userId: "9455",
 	},
-	uploadToken: "",
-	currencyApiKey: ""
+	uploadToken: "YOUR_UPLOAD_TOKEN",
+	currencyApiKey: "YOUR_CURRENCY_API_KEY"
 };
+
+/**
+ * uploadToken is used for uploading images to the zonies image hosting.
+ * currencyApiKey is used for the currency conversion command. You get one from exchangeratesapi.io
+ */

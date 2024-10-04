@@ -1,7 +1,6 @@
 const express = require("express");
 const session = require("express-session");
 const passport = require("passport");
-require("dotenv").config();
 const RedisStore = require("connect-redis").default;
 const { createClient } = require("redis");
 const bodyParser = require("body-parser");
@@ -9,6 +8,7 @@ const helmet = require("helmet");
 const path = require('path');
 const { getDiscordAvatarUrl, timestamp, logAudit } = require('./libs/utils');
 const nunjucks = require('nunjucks');
+const config = require('../.config');
 
 // Create a Redis client
 let redisClient = createClient();
@@ -24,17 +24,17 @@ const app = express();
 nunjucks.configure(path.join(__dirname, 'views'), {
   autoescape: true,        // Escape variables by default
   express: app,            // Connect with Express
-  watch: process.env.TEMPLTE_WATCH,             // Watch for file changes (dev environment)
-  noCache: process.env.TEMPLATE_NO_CACHE,           // Disable caching of templates
-  throwOnUndefined: process.env.TEMPLATE_UNDFINED, // Do not throw on undefined variables
-  trimBlocks: true,        // Trim newline after block tags
-  lstripBlocks: process.env.TEMPLATE_STRIP_WHITESPACE,      // Strip leading spaces in block tags
+  watch: config.template.watch,             // Watch for file changes (dev environment)
+  noCache: config.template.noCache,           // Disable caching of templates
+  throwOnUndefined: config.template.undefined, // Do not throw on undefined variables
+  trimBlocks: config.template.trimBlocks,        // Trim newline after block tags
+  lstripBlocks: config.template.lstripBlocks,      // Strip leading spaces in block tags
 });
 
 app.use(
   session({
     store: redisStore,
-    secret: process.env.SESSION_SECRET,
+    secret: config.session.secret,
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false },
@@ -104,4 +104,4 @@ app.get('/', (req, res) => {
 });
 
 
-app.listen(3000, () => console.log("Web panel running on port 3000"));
+app.listen(config.port, () => console.log(`Web panel running on port ${config.port}`));
