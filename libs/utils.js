@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const db = require('./database/db');
+const db = require('../database/db');
 
 const self = module.exports = {
 	hasRole: (roleId) => (req, res, next) => {
@@ -9,8 +9,7 @@ const self = module.exports = {
 			: res.status(403).json({ message: 'Access denied. Insufficient role. Must be staff on F95Zone' });
 	},
 
-	isLoggedIn: (req, res, next) => 
-		req.isAuthenticated() ? next() : res.redirect('/login'),
+	isLoggedIn: (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/login'),
 
 	checkSessionExpiration: (req, res, next) => {
 		if (!req.session || !req.session.expires) {
@@ -49,6 +48,8 @@ const self = module.exports = {
 
 	timestamp: () => Math.floor(Date.now() / 1000),
 
-	generateUniqueId: () => 
-		crypto.randomBytes(9).toString('base64').replace(/[/+]/g, (c) => c === '/' ? '_' : '-').slice(0, 12)
+
+	generateUniqueId: () => crypto.randomBytes(9).toString('base64').replace(/\//g, '_').replace(/\+/g, '-').substr(0, 12),
+
+	getRandomColor: () => Math.floor(Math.random() * 16777215).toString(16),
 };
