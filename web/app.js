@@ -4,15 +4,17 @@ const passport = require("passport");
 const RedisStore = require("connect-redis").default;
 const { createClient } = require("redis");
 const bodyParser = require("body-parser");
-const helmet = require("helmet");
 const path = require('path');
 const { getDiscordAvatarUrl, timestamp, logAudit } = require('./libs/utils');
 const nunjucks = require('nunjucks');
 const config = require('../.config');
+const logger = require('silly-logger');
 
-// Create a Redis client
+logger.startup('Web Panel is starting....')
+
 let redisClient = createClient();
-redisClient.connect().catch(console.error);
+redisClient.connect().catch(logger.error);
+logger.startup('Connected to Redis server....')
 
 let redisStore = new RedisStore({
   client: redisClient,
@@ -22,13 +24,13 @@ let redisStore = new RedisStore({
 const app = express();
 
 nunjucks.configure(path.join(__dirname, 'views'), {
-  autoescape: true,        // Escape variables by default
-  express: app,            // Connect with Express
-  watch: config.template.watch,             // Watch for file changes (dev environment)
-  noCache: config.template.noCache,           // Disable caching of templates
+  autoescape: true,                            // Escape variables by default
+  express: app,                                // Connect with Express
+  watch: config.template.watch,                // Watch for file changes (dev environment)
+  noCache: config.template.noCache,            // Disable caching of templates
   throwOnUndefined: config.template.undefined, // Do not throw on undefined variables
-  trimBlocks: config.template.trimBlocks,        // Trim newline after block tags
-  lstripBlocks: config.template.lstripBlocks,      // Strip leading spaces in block tags
+  trimBlocks: config.template.trimBlocks,      // Trim newline after block tags
+  lstripBlocks: config.template.lstripBlocks,  // Strip leading spaces in block tags
 });
 
 app.use(
@@ -49,7 +51,6 @@ app.set("view engine", "njk");
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((user, done) => {
-    // Remove email and access_token
     const { email, accessToken, ...safeUser } = user;
     done(null, safeUser);
   });
@@ -75,19 +76,18 @@ app.use((req, res, next) => {
 
 const indexRouter = require("./routerIndex");
 
-// Use the index router
 app.use("/", indexRouter);
 
 app.use((req, res, next) => {
   if (req.path === "/auth/login" || req.path === "/auth/discord/callback") {
-    return next(); // Skip the check for these routes
+    return next();
   }
 
   if (req.session && req.session.expires) {
     if (Date.now() > req.session.expires) {
       req.session.destroy((err) => {
         if (err) {
-          console.error("Session destruction error:", err);
+          logger.error("Session destruction error:", err);
         }
         return res.redirect("/auth/login");
       });
@@ -104,4 +104,4 @@ app.get('/', (req, res) => {
 });
 
 
-app.listen(config.port, () => console.log(`Web panel running on port ${config.port}`));
+app.listen(config.port, () => logger.startup(`Web panel started. Running on port ${config.port}`));

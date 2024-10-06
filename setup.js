@@ -21,5 +21,6 @@ configContent = configContent.replace('YOUR_UPLOAD_TOKEN', uploadToken);
 fs.writeFileSync(path.join(__dirname, '.config.js'), configContent, 'utf8');
 
 logger.info('Setup complete. .config.js has been created with new tokens.');
+logger.warn('Update all mysql info.')
 
 setupDatabase();
