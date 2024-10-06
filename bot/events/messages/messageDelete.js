@@ -1,8 +1,8 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
 const axios = require('axios');
 const FormData = require('form-data');
-require('dotenv').config();
 const { MessageEmbed } = require('discord.js');
+const { config } = require('../../../.config');
 
 // Constants
 const IGNORED_ROLES = ['309358485923954689', '358471651341631493'];
@@ -14,6 +14,7 @@ module.exports = class MessageDeleteEvent extends BaseEvent {
     }
 
     async run(client, message) {
+        if (!config.imageArchive.enabled) return;
         if (!this.shouldProcessMessage(message)) return;
 
         const attachments = message.attachments.filter(attachment => IMAGE_TYPES.includes(attachment.contentType));
@@ -51,7 +52,7 @@ module.exports = class MessageDeleteEvent extends BaseEvent {
         const response = await axios.post('https://upload.zonies.xyz/upload.php', form, {
             headers: {
                 ...form.getHeaders(),
-                'Authorization': `Bearer ${process.env.UPLOAD_TOKEN}`
+                'Authorization': `Bearer ${config.imageArchive.uploadToken}`
             }
         });
 

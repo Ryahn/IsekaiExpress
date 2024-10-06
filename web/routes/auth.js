@@ -3,20 +3,20 @@ const passport = require("passport");
 const { Strategy } = require("passport-discord");
 const { Routes } = require("discord-api-types/v10");
 const { REST } = require("@discordjs/rest");
-require("dotenv").config();
+const config = require('../../.config');
 const rest = new REST({ version: "10" }).setToken(
-  process.env.DISCORD_BOT_TOKEN
+  config.discord.botToken
 );
 const router = express.Router();
 const app = express();
 const { daysToSeconds, generateCsrfToken } = require("../libs/utils");
-const db = require("../libs/database/db");
+const db = require("../../database/db");
 passport.use(
 	new Strategy(
 	  {
-		clientID: process.env.DISCORD_CLIENT_ID,
-		clientSecret: process.env.DISCORD_CLIENT_SECRET,
-		callbackURL: process.env.DISCORD_CALLBACK_URL,
+		clientID: config.discord.clientId,
+		clientSecret: config.discord.clientSecret,
+		callbackURL: config.discord.callbackUrl,
 		scope: ["identify", "guilds", "guilds.members.read"],
 	  },
 	  (accessToken, refreshToken, profile, done) => {
@@ -75,4 +75,7 @@ router.post('/logout', (req, res) => {
     });
 });
 
-module.exports = router;
+module.exports = {
+  router: router,
+  requiredRoles: []
+};

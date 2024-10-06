@@ -2,22 +2,27 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
-
-// Path to the routes directory
 const routesPath = path.join(__dirname, 'routes');
 
-// Read all the files in the routes directory
+const checkRoles = (requiredRoles) => {
+  return (req, res, next) => {
+    const userRoles = req.session.roles ? req.session.roles : [];
+    const hasRequiredRole = requiredRoles.some(role => userRoles.includes(role));
+    
+    if (hasRequiredRole) {
+      next();
+    } else {
+      res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    }
+  };
+};
+
 fs.readdirSync(routesPath).forEach(file => {
-  // Only process files that end with .js
   if (file.endsWith('.js')) {
-    // Get the route name by removing the .js extension (e.g., dashboard.js -> /dashboard)
-    const route = '/' + file.slice(0, -3); // Removes the last 3 characters ('.js')
-
-    // Dynamically require the route file
+    const route = '/' + file.slice(0, -3);
     const routeFile = require(path.join(routesPath, file));
-
-    // Use the route (e.g., /dashboard will point to dashboard.js)
-    router.use(route, routeFile);
+    const requiredRoles = routeFile.requiredRoles || [];
+    router.use(route, checkRoles(requiredRoles), routeFile.router || routeFile);
   }
 });
 

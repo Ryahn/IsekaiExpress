@@ -1,12 +1,12 @@
 const express = require("express");
-require("dotenv").config();
 const router = express.Router();
 const { timestamp, getDiscordAvatarUrl, hasRole } = require("../libs/utils");
-const db = require("../libs/database/db");
+const db = require("../../database/db");
 const crypto = require('crypto');
+const config = require('../../.config');
 
 router.get("/", (req, res) => {
-	const allowed = req.session.roles.includes(process.env.DISCORD_STAFF_ROLE_ID);
+	const allowed = req.session.roles.includes(config.roles.staff);
 	res.render('commands', { username: req.session.user.username, avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar), csrfToken: req.session.csrf, allow: allowed });
 });
 
@@ -33,7 +33,7 @@ router.post("/add", async (req, res) => {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
 
-	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+	if (!hasRole(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to add commands' });
 	}
 
@@ -67,7 +67,7 @@ router.post("/edit/:id", async (req, res) => {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
 
-	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+	if (!hasRole(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to edit commands' });
 	}
 
@@ -100,7 +100,7 @@ router.post("/delete/:id", async(req, res) => {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
 
-	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+	if (!hasRole(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to delete commands' });
 	}
 
@@ -122,4 +122,7 @@ router.get('/slashes/list', async (req, res) => {
 	res.json({ commands: commandInfo });
 });
 
-module.exports = router;
+module.exports = {
+	router: router,
+	requiredRoles: [config.roles.staff, config.roles.mod, config.roles.uploader]
+};

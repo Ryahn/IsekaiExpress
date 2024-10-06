@@ -1,12 +1,12 @@
 const express = require("express");
-require("dotenv").config();
 const router = express.Router();
 const { timestamp, getDiscordAvatarUrl, generateUniqueId} = require("../libs/utils");
-const db = require("../libs/database/db");
+const db = require("../../database/db");
 const crypto = require('crypto');
+const config = require('../../.config');
 
 router.get("/", (req, res) => {
-	const allowed = req.session.roles.includes(process.env.DISCORD_STAFF_ROLE_ID);
+	const allowed = req.session.roles.includes(config.roles.staff);
 	res.render('warnings', { username: req.session.user.username,  avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar), csrfToken: req.session.csrf, allow: allowed });
 });
 
@@ -25,7 +25,7 @@ router.post("/add", async (req, res) => {
 	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
-	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+	if (!hasRole(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to add warnings' });
 	}
 
@@ -36,11 +36,11 @@ router.post("/add", async (req, res) => {
 
 	let data = [];
 	data.push(generateUniqueId());  // warn_id
-	data.push(warn_user_id);        // warn_user_id (make sure it's defined)
-	data.push(warn_user);           // warn_user (make sure it's defined)
+	data.push(warn_user_id);        // warn_user_id
+	data.push(warn_user);           // warn_user
 	data.push(req.session.user.id); // warn_by_id
 	data.push(req.session.user.username); // warn_by_user
-	data.push(warn_reason);         // warn_reason (make sure it's defined)
+	data.push(warn_reason);         // warn_reason
 	data.push(timestamp());         // created_at
 	data.push(timestamp());         // updated_at
 
@@ -57,7 +57,7 @@ router.post("/edit/:id", async (req, res) => {
 	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
-	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+	if (!hasRole(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to edit warnings' });
 	}
 
@@ -79,7 +79,7 @@ router.post("/delete/:id", async (req, res) => {
     if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
         return res.status(403).json({ message: 'Invalid CSRF token' });
     }
-	if (!hasRole(process.env.DISCORD_STAFF_ROLE_ID)) {
+	if (!hasRole(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to delete warnings' });
 	}
 
@@ -93,4 +93,7 @@ router.post("/delete/:id", async (req, res) => {
 });
 
 
-module.exports = router;
+module.exports = {
+	router: router,
+	requiredRoles: [config.roles.staff, config.roles.mod, config.roles.uploader]
+};
