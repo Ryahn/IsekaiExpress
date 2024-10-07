@@ -1,7 +1,8 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const StateManager = require('../../utils/StateManager');
-const { timestamp } = require('../../utils/functions');
+const db = require('../../../../database/db');
+const { timestamp } = require('../../../../libs/utils');
+const logger = require('silly-logger');
 module.exports = {
     enable: true,
     data: new SlashCommandBuilder()
@@ -14,17 +15,9 @@ module.exports = {
 
     async execute(client, interaction) {
         const message = interaction.options.getString('message');
-        const stateManager = new StateManager();
-        const filename = 'afk.js';
 
         try {
-            await stateManager.initPool();
-
-            // Store AFK status in the database
-            await stateManager.query(
-                'INSERT INTO afk_users (user_id, guild_id, message, timestamp) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE message = ?, timestamp = ?',
-                [interaction.user.id, interaction.guild.id, message, timestamp(), message, timestamp()]
-            );
+            await db.insertAfkUser(interaction.user.id, interaction.guild.id, message, timestamp());
 
             const embed = new MessageEmbed()
                 .setColor('#00FF00')
@@ -33,10 +26,10 @@ module.exports = {
 
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error setting AFK status:', error);
+            logger.error('Error setting AFK status:', error);
             await interaction.reply('An error occurred while setting your AFK status.');
         } finally {
-            await stateManager.closePool(filename);
+            await db.end();
         }
     },
 };

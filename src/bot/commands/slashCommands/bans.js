@@ -1,7 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const StateManager = require('../../utils/StateManager');
-const path = require('path'); // StateManager usage
+const db = require('../../../../database/db');
 const moment = require('moment');
 
 module.exports = {
@@ -14,27 +13,22 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(client, interaction) {
-        // Check if the user has BAN_MEMBERS permission
         if (!interaction.member.permissions.has("BAN_MEMBERS")) {
             return interaction.reply({ content: 'You do not have permission to list bans.', ephemeral: true });
         }
 
-        // Defer reply to allow time for processing
         await interaction.deferReply();
 
         const pageRequested = interaction.options.getInteger('page') ?? 1;
-        const stateManager = new StateManager();
-        const filename = path.basename(__filename);
 
         try {
-            await stateManager.initPool();
 
             const [totalBansResult, bans] = await Promise.all([
-                stateManager.query(
+                db.query(
                     'SELECT COUNT(*) AS total_bans FROM bans WHERE discord_id = ?',
                     [targetUser.id]
                 ),
-                getBans(stateManager, targetUser.id, pageRequested)
+                getBans(db, targetUser.id, pageRequested)
             ]);
 
             const totalBans = totalBansResult[0].total_bans;
@@ -54,10 +48,10 @@ module.exports = {
     }
 };
 
-async function getBans(stateManager, userId, page) {
+async function getBans(db, userId, page) {
     const itemsPerPage = 5;
     const offset = (page - 1) * itemsPerPage;
-    return stateManager.query(
+    return db.query(
         `SELECT ban_id, username, reason, method, banned_by_user, created_at 
          FROM bans 
          WHERE discord_id = ? 

@@ -2,12 +2,12 @@ const BaseEvent = require('../../utils/structures/BaseEvent');
 const path = require("path");
 const fs = require("node:fs");
 const { Collection } = require("discord.js");
-require('dotenv').config();
-const StateManager = require('../../utils/StateManager');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
-
-const rest = new REST({ version: '9' }).setToken(process.env.DISCORD_BOT_TOKEN);
+const db = require('../../../database/db');
+const config = require('../../../../.config');
+const rest = new REST({ version: '9' }).setToken(config.discord.botToken);
+const logger = require('silly-logger');
 
 module.exports = class ReadyEvent extends BaseEvent {
     constructor() {
@@ -15,7 +15,7 @@ module.exports = class ReadyEvent extends BaseEvent {
     }
 
     async run(client) {
-        console.log(`${client.user.tag} has logged in.`);
+        logger.info(`${client.user.tag} has logged in.`);
 
         client.langs = new Collection();
         client.guildSubReddits = new Collection();
@@ -47,50 +47,45 @@ module.exports = class ReadyEvent extends BaseEvent {
                     );
 
                 } catch (err) {
-                    console.log(err)
+                    logger.error(err)
                 }
-
-
-        const stateManager = new StateManager();
-        const filename = path.basename(__filename);
 
         // Start of checking if all Guild-Ids are in the database
         const guildIds = client.guilds.cache.map(g => g.id);
         let dbGuildIds = [];
 
         try {
-            await stateManager.initPool();
-            const result = await stateManager.query(`SELECT guildId FROM GuildConfigurable`);
+            const result = await db.query(`SELECT guildId FROM GuildConfigurable`);
             dbGuildIds = result.map(row => row.guildId);
         } catch (err) {
-            await stateManager.closePool(filename);
-            console.error("Error fetching guild IDs from the database:", err);
+            await db.end();
+            logger.error("Error fetching guild IDs from the database:", err);
         }
 
         // Insert missing guild IDs into the Guilds and GuildConfigurable tables
         for (const guildId of guildIds) {
             try {
                 if (!dbGuildIds.includes(guildId)) {
-                    await stateManager.query(
+                    await db.query(
                         `INSERT INTO Guilds (guildId, ownerId) VALUES (?, ?)`,
                         [guildId, client.guilds.resolve(guildId).ownerId]
                     );
-                    await stateManager.query(
+                    await db.query(
                         `INSERT INTO GuildConfigurable (guildId) VALUES (?)`,
                         [guildId]
                     );
                     console.log(`Guild ${guildId} added to Guilds and GuildConfigurable.`);
                 }
             } catch (err) {
-                await stateManager.closePool(filename);
-                console.error(`Error inserting guild ${guildId}:`, err);
+                await db.end();
+                logger.error(`Error inserting guild ${guildId}:`, err);
             }
         }
 
         // Start of getting all data out of the database
         try {
             for (const guildId of guildIds) {
-                const result = await stateManager.query(
+                const result = await db.query(
                     `SELECT cmdPrefix, subReddit, guildWelcome, guildVolume, guildLanguage FROM GuildConfigurable WHERE guildId = ?`,
                     [guildId]
                 );
@@ -105,14 +100,14 @@ module.exports = class ReadyEvent extends BaseEvent {
                 }
             }
         } catch (err) {
-            await stateManager.closePool(filename);
-            console.error("Error fetching guild configuration:", err);
+            await db.end();
+            logger.error("Error fetching guild configuration:", err);
         } finally {
-            stateManager.closePool(filename);
+            db.end();
         }
         // End of section
 
         client.user.setActivity(`zonies cry`, { type: 'LISTENING' });
-        console.log('Collection refreshed, no errors occurred while starting the program! SUCCESS!');
+        logger.info('Collection refreshed, no errors occurred while starting the program! SUCCESS!');
     }
 }

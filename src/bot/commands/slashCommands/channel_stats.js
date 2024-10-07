@@ -1,7 +1,8 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const StateManager = require('../../utils/StateManager');
-const moment = require('moment'); // Add this line to import moment.js
+const db = require('../../../../database/db');
+const moment = require('moment');
+const logger = require('silly-logger');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -25,11 +26,7 @@ module.exports = {
     async execute(client,interaction) { 
         await interaction.deferReply(); 
 
-        const stateManager = new StateManager();
-
         try {
-            await stateManager.initPool();
-
             const dateInput = interaction.options.getString('date');
             const month = interaction.options.getInteger('month');
             const year = interaction.options.getInteger('year');
@@ -48,7 +45,7 @@ module.exports = {
                 if (!standardizedDate) {
                     embed.setDescription('Invalid date format. Please use YYYY-MM-DD, DD-MM-YYYY, or similar formats.');
                 } else {
-                    result = await getStatsByDate(stateManager, standardizedDate);
+                    result = await getStatsByDate(db, standardizedDate);
                     if (result.length === 0) {
                         embed.setDescription(`No data found for ${standardizedDate}`);
                     } else {
@@ -57,7 +54,7 @@ module.exports = {
                     }
                 }
             } else if (month && year) {
-                result = await getStatsByMonthYear(stateManager, month, year);
+                result = await getStatsByMonthYear(db, month, year);
                 if (result.length === 0) {
                     embed.setDescription(`No data found for ${month}/${year}`);
                 } else {
@@ -65,17 +62,18 @@ module.exports = {
                         .addFields(result.map(r => ({ name: r.channel_name, value: `Total: ${r.total}` })));
                 }
             } else {
-                result = await getTopChannels(stateManager);
+                result = await getTopChannels(db);
                 embed.setTitle('Top 5 Channels')
                     .addFields(result.map(r => ({ name: r.channel_name, value: `Total: ${r.total}` })));
             }
 
             await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error in channel_stats command:', error);
+            logger.error('Error in channel_stats command:', error);
+            await db.end();
             await interaction.editReply('An error occurred while fetching channel stats.');
         } finally {
-            await stateManager.closePool('channel_stats.js');
+            await db.end();
         }
     },
 };
@@ -111,24 +109,24 @@ function standardizeDate(dateInput) {
     return null;
 }
 
-async function getStatsByDate(stateManager, date) {
-    return stateManager.query(
+async function getStatsByDate(db, date) {
+    return db.query(
         'SELECT channel_name, total FROM channel_stats WHERE month_day = ? ORDER BY total DESC LIMIT 5',
         [date]
     );
 }
 
-async function getStatsByMonthYear(stateManager, month, year) {
+async function getStatsByMonthYear(db, month, year) {
     const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
     const endDate = `${year}-${month.toString().padStart(2, '0')}-31`;
-    return stateManager.query(
+    return db.query(
         'SELECT channel_name, SUM(total) as total FROM channel_stats WHERE month_day BETWEEN ? AND ? GROUP BY channel_id ORDER BY total DESC LIMIT 5',
         [startDate, endDate]
     );
 }
 
-async function getTopChannels(stateManager) {
-    return stateManager.query(
+async function getTopChannels(db) {
+    return db.query(
         'SELECT channel_name, SUM(total) as total FROM channel_stats GROUP BY channel_id ORDER BY total DESC LIMIT 5'
     );
 }

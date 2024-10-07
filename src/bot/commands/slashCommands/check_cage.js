@@ -1,24 +1,18 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const moment = require('moment'); // For easier timestamp handling
-const StateManager = require('../../utils/StateManager');
-const path = require('path'); // StateManager usage
-
+const moment = require('moment');
+const db = require('../../../../database/db');
+const logger = require('silly-logger');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('check_cages')
         .setDescription('Lists all currently caged users.'),
     async execute(client, interaction) {
-        await interaction.deferReply(); // Defer the reply to give the bot time to process
-
-        const stateManager = new StateManager();
-        const filename = path.basename(__filename);
+        await interaction.deferReply();
 
         try {
-            await stateManager.initPool(); // Ensure the pool is initialized
-
-            const currentTime = moment().unix(); // Get the current Unix timestamp
-            const cagedUsers = await stateManager.query(
+            const currentTime = moment().unix();
+            const cagedUsers = await db.query(
                 `SELECT discord_id, expires FROM caged_users WHERE expires = 0 OR expires > ? ORDER BY expires ASC LIMIT 5`,
                 [currentTime]
             );
@@ -36,16 +30,17 @@ module.exports = {
                 const member = await interaction.guild.members.fetch(user.discord_id).catch(() => null);
                 if (member) {
                     const expiresText = user.expires === 0 ? 'Permanent' : `<t:${user.expires}:R>`;
-                    embed.addField(`${member.user.tag} (${member.id})`, `Cage Expires: ${expiresText}`);
+                    embed.addFields(
+                        { name: `${member.user.tag} (${member.id})`, value: `Cage Expires: ${expiresText}` });
                 }
             }
 
             await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error in check_cages command:', error);
+            logger.error('Error in check_cages command:', error);
             await interaction.editReply('An error occurred while processing the command.');
         } finally {
-            await stateManager.closePool(filename);
+            await db.end();
         }
     }
 };

@@ -1,7 +1,7 @@
 const {Client, Intents, MessageEmbed, Formatters} = require('discord.js');
 const BaseCommand = require("../../../utils/structures/BaseCommand");
 const moment = require('moment');
-const { getRandomColor } = require('../../../utils/functions');
+const { getRandomColor } = require('../../../../../libs/utils');
 
 module.exports = class help extends BaseCommand {
     constructor() {
@@ -20,8 +20,6 @@ module.exports = class help extends BaseCommand {
         } catch(err) {
             color = "WHITE";
         }
-
-        const flags = user.flags.toArray();
 
         const sEmbed = new MessageEmbed()
             .setColor(`#${getRandomColor()}`)

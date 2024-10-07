@@ -1,9 +1,9 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
 const moment = require('moment');
-const StateManager = require('../../utils/StateManager');
+const db = require('../../../../database/db');
 const path = require('path');
-const { generateUniqueId } = require('../../utils/functions');
+const { generateUniqueId } = require('../../../../libs/utils');
 
 module.exports = {
     data: new SlashCommandBuilder()

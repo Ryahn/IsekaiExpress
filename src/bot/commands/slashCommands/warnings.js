@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const StateManager = require('../../utils/StateManager');
-const path = require('path'); // StateManager usage
+const db = require('../../../../database/db');
+const path = require('path'); 
 const moment = require('moment');
 
 module.exports = {

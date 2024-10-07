@@ -1,38 +1,21 @@
-const StateManager = require('./StateManager');
+const db = require('../../../database/db');
 
 async function updateChannelStats(channelId, channelName) {
-    const stateManager = new StateManager();
-    const filename = 'channelStats.js';
 
     try {
-        await stateManager.initPool();
-
-        // Get current date in YYYY-MM-DD format
         const currentDate = new Date().toISOString().split('T')[0];
 
-        // Check if an entry for this channel and date already exists
-        const [existingEntry] = await stateManager.query(
-            'SELECT * FROM channel_stats WHERE channel_id = ? AND month_day = ?',
-            [channelId, currentDate]
-        );
+        const [existingEntry] = await db.getChannelStats(channelId, currentDate);
 
         if (existingEntry) {
-            // If entry exists, increment the total
-            await stateManager.query(
-                'UPDATE channel_stats SET total = total + 1 WHERE channel_id = ? AND month_day = ?',
-                [channelId, currentDate]
-            );
+            await db.updateChannelStats(channelId, currentDate);
         } else {
-            // If no entry exists, create a new one
-            await stateManager.query(
-                'INSERT INTO channel_stats (channel_id, channel_name, month_day, total) VALUES (?, ?, ?, 1)',
-                [channelId, channelName, currentDate]
-            );
+            await db.createChannelStats(channelId, channelName, currentDate);
         }
     } catch (error) {
         console.error('Error updating channel stats:', error);
     } finally {
-        await stateManager.closePool(filename);
+        await db.end();
     }
 }
 

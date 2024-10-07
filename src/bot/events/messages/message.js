@@ -1,9 +1,10 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
-const StateManager = require('../../utils/StateManager');
 const path = require('path');
+const db = require('../../../database/db');
 const crypto = require('crypto');
 const { updateChannelStats } = require('../../utils/channelStats');
 const { MessageEmbed } = require('discord.js');
+const logger = require('silly-logger');
 
 module.exports = class MessageEvent extends BaseEvent {
     constructor() {
@@ -13,23 +14,11 @@ module.exports = class MessageEvent extends BaseEvent {
     async run(client, message) {
         if (message.author.bot || !message.guild) return;
 
-        const stateManager = new StateManager();
-        const filename = path.basename(__filename);
-
         try {
-            await stateManager.initPool();
-
-            // Check if the message author is AFK and remove their AFK status
-            const [afkUser] = await stateManager.query(
-                'SELECT * FROM afk_users WHERE user_id = ? AND guild_id = ?',
-                [message.author.id, message.guild.id]
-            );
+            const [afkUser] = await db.getAfkUser(message.author.id, message.guild.id);
 
             if (afkUser) {
-                await stateManager.query(
-                    'DELETE FROM afk_users WHERE user_id = ? AND guild_id = ?',
-                    [message.author.id, message.guild.id]
-                );
+                await db.deleteAfkUser(message.author.id, message.guild.id);
                 const embed = new MessageEmbed()
                     .setColor('#00FF00')
                     .setDescription(`Welcome back, ${message.author}! Your AFK status has been removed.`);
@@ -40,10 +29,7 @@ module.exports = class MessageEvent extends BaseEvent {
             const mentionedUsers = message.mentions.users;
             if (mentionedUsers.size > 0) {
                 for (const [userId, user] of mentionedUsers) {
-                    const [afkMentioned] = await stateManager.query(
-                        'SELECT * FROM afk_users WHERE user_id = ? AND guild_id = ?',
-                        [userId, message.guild.id]
-                    );
+                    const [afkMentioned] = await db.getAfkUser(userId, message.guild.id);
                     if (afkMentioned) {
                         const embed = new MessageEmbed()
                             .setColor('#FFA500')
@@ -62,13 +48,12 @@ module.exports = class MessageEvent extends BaseEvent {
             try {
                 await updateChannelStats(channelId, message.channel.name);
             } catch (error) {
-                console.error('Error updating channel stats:', error);
+                logger.error('Error updating channel stats:', error);
             }
 
             // Check if the message starts with the correct prefix
             if (usedPrefix === prefix) {
                 const [cmdName, ...cmdArgs] = message.content.slice(prefix.length).trim().split(/\s+/);
-                const stateManager = new StateManager();
                 let filename = path.basename(__filename);
                 filename = `${filename} - ${usedPrefix}${cmdName}`;
 
@@ -77,18 +62,15 @@ module.exports = class MessageEvent extends BaseEvent {
                     // Hash the command name using MD5
                     const commandNameHash = crypto.createHash('md5').update(cmdName.toLowerCase()).digest('hex');
                     try {
-                        await stateManager.initPool(); // Ensure the pool is initialized
                     } catch (error) {
-                        console.error('Error initializing database connection pool:', error);
-                         await stateManager.closePool(filename);
+                        logger.error('Error initializing database connection pool:', error);
+                        await db.end();
                         await interaction.editReply('An error occurred while initializing the database connection.');
                         return;
                     }
 
                     // Query to check if the command exists in the custom commands database
-                    const [rows] = await stateManager.query(
-                        'SELECT hash, content, `usage` FROM commands WHERE hash = ?',
-                        [commandNameHash]);
+                    const [rows] = await db.getCommand(commandNameHash);
 
                     if (typeof rows !== 'undefined' && rows) {
                         // Custom command found, send its content and update usage
@@ -116,10 +98,7 @@ module.exports = class MessageEvent extends BaseEvent {
                         message.channel.send(commandContent);
 
                         // Update the usage count
-                        await stateManager.query(
-                            'UPDATE commands SET `usage` = ? WHERE hash = ?',
-                            [newUsageCount, commandNameHash]
-                        );
+                        await db.updateCommandUsage(commandNameHash, newUsageCount);
 
                         return; // Exit here as the custom command has been executed
                     }
@@ -133,28 +112,28 @@ module.exports = class MessageEvent extends BaseEvent {
                             // Execute the regular command
                             await command.run(client, message, cmdArgs);
                         } catch (err) {
-                            console.error(`Error executing command ${cmdName}:`, err);
-                             await stateManager.closePool(filename);
+                            logger.error(`Error executing command ${cmdName}:`, err);
+                            await db.end();
                             message.channel.send('There was an error executing that command.');
                         } finally {
-                            await stateManager.closePool()
+                            await db.end()
                         }
                     } else {
-                         await stateManager.closePool(filename);
+                        await db.end();
                         message.channel.send('Command not found.');
                     }
 
                 } catch (err) {
-                    console.error('Error querying custom commands:', err);
+                    logger.error('Error querying custom commands:', err);
                     message.channel.send('There was an error executing that command.');
                 } finally {
-                     await stateManager.closePool(filename);
+                    await db.end();
                 }
             }
         } catch (error) {
-            console.error('Error in message event:', error);
+            logger.error('Error in message event:', error);
         } finally {
-            await stateManager.closePool(filename);
+            await db.end();
         }
     }
 }
