@@ -1,19 +1,20 @@
 {
   "name": "f95bot",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "F95Zone Bot",
+  "main": "start.js",
   "scripts": {
     "setup": "node setup.js",
-    "start": "node start.js"
+    "devStart": "node start.js",
+    "start:bot": "node src/bot/bot.js",
+    "start:web": "node src/web/app.js"
   },
-  "author": "",
+  "author": "Ryahn",
   "license": "ISC",
   "dependencies": {
     "@discordjs/rest": "^2.4.0",
     "@faker-js/faker": "^9.0.1",
     "@napi-rs/canvas": "^0.1.56",
-    "@sapphire/snowflake": "^3.5.3",
     "axios": "^1.7.7",
     "body-parser": "^1.20.3",
     "chokidar": "^3.6.0",

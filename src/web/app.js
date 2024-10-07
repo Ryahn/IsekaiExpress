@@ -5,9 +5,9 @@ const RedisStore = require("connect-redis").default;
 const { createClient } = require("redis");
 const bodyParser = require("body-parser");
 const path = require('path');
-const { getDiscordAvatarUrl, timestamp, logAudit } = require('./libs/utils');
+const { getDiscordAvatarUrl, timestamp, logAudit } = require('../../libs/utils');
 const nunjucks = require('nunjucks');
-const config = require('../.config');
+const config = require('../../.config');
 const logger = require('silly-logger');
 
 logger.startup('Web Panel is starting....')
@@ -74,7 +74,7 @@ app.use((req, res, next) => {
 });
 
 
-const indexRouter = require("./routerIndex");
+const indexRouter = require("./routes/routerIndex");
 
 app.use("/", indexRouter);
 

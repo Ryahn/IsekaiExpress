@@ -2,3 +2,4 @@
 .env
 slashCommands.json
 .config.js
+**/logs

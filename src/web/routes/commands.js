@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { timestamp, getDiscordAvatarUrl, hasRole } = require("../libs/utils");
-const db = require("../../database/db");
+const { timestamp, getDiscordAvatarUrl, hasRole } = require("../../../libs/utils");
+const db = require("../../../database/db");
 const crypto = require('crypto');
-const config = require('../../.config');
+const config = require('../../../.config');
 
 router.get("/", (req, res) => {
 	const allowed = req.session.roles.includes(config.roles.staff);
@@ -118,11 +118,9 @@ router.get('/slashes', async (req, res) => {
 });
 
 router.get('/slashes/list', async (req, res) => {
-	const commandInfo = require('../../slashCommands.json');
+	const commandInfo = require('../../../slashCommands.json');
 	res.json({ commands: commandInfo });
 });
 
-module.exports = {
-	router: router,
-	requiredRoles: [config.roles.staff, config.roles.mod, config.roles.uploader]
-};
+module.exports = router;
+module.exports.requiredRoles = [config.roles.staff, config.roles.mod, config.roles.uploader];

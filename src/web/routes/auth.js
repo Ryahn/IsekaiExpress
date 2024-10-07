@@ -3,14 +3,14 @@ const passport = require("passport");
 const { Strategy } = require("passport-discord");
 const { Routes } = require("discord-api-types/v10");
 const { REST } = require("@discordjs/rest");
-const config = require('../../.config');
+const config = require('../../../.config');
 const rest = new REST({ version: "10" }).setToken(
   config.discord.botToken
 );
 const router = express.Router();
 const app = express();
-const { daysToSeconds, generateCsrfToken } = require("../libs/utils");
-const db = require("../../database/db");
+const { daysToSeconds, generateCsrfToken } = require("../../../libs/utils");
+const db = require("../../../database/db");
 passport.use(
 	new Strategy(
 	  {
@@ -75,7 +75,5 @@ router.post('/logout', (req, res) => {
     });
 });
 
-module.exports = {
-  router: router,
-  requiredRoles: []
-};
+module.exports = router;
+module.exports.requiredRoles = [];
