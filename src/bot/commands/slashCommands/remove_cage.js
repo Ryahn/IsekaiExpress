@@ -1,7 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const db = require('../../../../database/db');
-const path = require('path');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -13,16 +11,13 @@ module.exports = {
                 .setRequired(true)),
 
     async execute(client, interaction) {
-        await interaction.deferReply();
-
-        const userToUncage = interaction.options.getUser('user');
-        const stateManager = new StateManager();
-        const filename = path.basename(__filename);
 
         try {
-            await stateManager.initPool();
+            await interaction.deferReply();
+            const userToUncage = interaction.options.getUser('user');
 
-            const [cagedUser] = await stateManager.query(
+
+            const [cagedUser] = await client.db.query(
                 'SELECT old_roles FROM caged_users WHERE discord_id = ?',
                 [userToUncage.id]
             );
@@ -42,7 +37,7 @@ module.exports = {
             await guildMember.roles.set(oldRoles);
 
             // Remove the user from the caged_users table
-            await stateManager.query('DELETE FROM caged_users WHERE discord_id = ?', [userToUncage.id]);
+            await client.db.query('DELETE FROM caged_users WHERE discord_id = ?', [userToUncage.id]);
 
             const embed = new MessageEmbed()
                 .setTitle('Cage Removed')
@@ -51,10 +46,8 @@ module.exports = {
 
             await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-            console.error(`Failed to remove cage from user ${userToUncage.id}:`, error);
+            client.logger.error(`Failed to remove cage from user ${userToUncage.id}:`, error);
             await interaction.editReply({ content: 'An error occurred while trying to remove the cage.', ephemeral: true });
-        } finally {
-            await stateManager.closePool(filename);
         }
     }
 };

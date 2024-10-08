@@ -10,21 +10,29 @@ module.exports = {
         .setDescription("no u"),
 
     async execute(client, interaction) {
+        const { getRandomColor } = client.utils;
+        try {
+            await interaction.deferReply();
 
-        async function fetchImage() {
-            const response = await fetchRandom('pout');
-            return response.results[0].url;
-        }
+            async function fetchImage() {
+                const response = await fetchRandom('pout');
+                return response.results[0].url;
+            }
 
-        const img = await fetchImage();
+            const img = await fetchImage();
 
     
-        const embed = new MessageEmbed()
-            .setDescription(`no u`)
-            .setColor(`#${getRandomColor()}`)
-            .setImage(img);
+            const embed = new MessageEmbed()
+                .setDescription(`no u`)
+                .setColor(`#${getRandomColor()}`)
+                .setImage(img);
 
-        await interaction.reply({ embeds: [embed] });
-
+            await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+            client.logger.error('Error executing the pout command:', error);
+            if (!interaction.replied) {
+                await interaction.editReply('Something went wrong.');
+            }
+        }
     },
 };

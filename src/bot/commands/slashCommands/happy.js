@@ -1,5 +1,4 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { getRandomColor } = require('../../../../libs/utils');
 const { MessageEmbed } = require('discord.js');
 const { fetchRandom } = require('nekos-best.js');
 
@@ -10,20 +9,26 @@ module.exports = {
         .setDescription("Feelin' happy?"),
 
     async execute(client, interaction) {
+        const { getRandomColor } = client.utils;
 
-        async function fetchImage() {
-            const response = await fetchRandom('happy');
-            return response.results[0].url;
+        try {
+            await interaction.deferReply();
+            async function fetchImage() {
+                const response = await fetchRandom('happy');
+                return response.results[0].url;
+            }
+
+            const img = await fetchImage();
+
+            const embed = new MessageEmbed()
+                .setDescription(`${interaction.user} is veri happi`)
+                .setColor(`#${getRandomColor()}`)
+                .setImage(img);
+
+            await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+            client.logger.error('Error fetching happy image:', error);
+            await interaction.editReply('Failed to fetch a happy image.');
         }
-
-        const img = await fetchImage();
-
-        const embed = new MessageEmbed()
-            .setDescription(`${interaction.user} is veri happi`)
-            .setColor(`#${getRandomColor()}`)
-            .setImage(img);
-
-        await interaction.reply({ embeds: [embed] });
-
     },
 };

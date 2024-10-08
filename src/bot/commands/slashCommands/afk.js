@@ -1,8 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const db = require('../../../../database/db');
-const { timestamp } = require('../../../../libs/utils');
-const logger = require('silly-logger');
 module.exports = {
     enable: true,
     data: new SlashCommandBuilder()
@@ -15,21 +12,21 @@ module.exports = {
 
     async execute(client, interaction) {
         const message = interaction.options.getString('message');
+        const { timestamp } = client.utils;
 
         try {
-            await db.insertAfkUser(interaction.user.id, interaction.guild.id, message, timestamp());
+            await interaction.deferReply();
+            await client.db.insertAfkUser(interaction.user.id, interaction.guild.id, message, timestamp());
 
             const embed = new MessageEmbed()
                 .setColor('#00FF00')
                 .setTitle('AFK Status Set')
                 .setDescription(`You are now AFK: ${message}`);
 
-            await interaction.reply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-            logger.error('Error setting AFK status:', error);
-            await interaction.reply('An error occurred while setting your AFK status.');
-        } finally {
-            await db.end();
+            client.logger.error('Error setting AFK status:', error);
+            await interaction.editReply('An error occurred while setting your AFK status.');
         }
     },
 };

@@ -1,7 +1,6 @@
 const {Client, Intents, MessageEmbed, Formatters} = require('discord.js');
 const BaseCommand = require("../../../utils/structures/BaseCommand");
 const moment = require('moment');
-const { getRandomColor } = require('../../../../../libs/utils');
 
 module.exports = class help extends BaseCommand {
     constructor() {
@@ -9,6 +8,7 @@ module.exports = class help extends BaseCommand {
     }
 
     async run(client, message) {
+        const { getRandomColor } = client.utils;
         const lang = client.langs.get(message.guild.id);
         const { userinfo } = require(`../../../utils/langs/${lang}.json`)
         let member = message.mentions.members.first() || message.member,

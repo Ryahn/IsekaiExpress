@@ -1,8 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
 const moment = require('moment');
-const db = require('../../../../database/db');
-const path = require('path');
 const { generateUniqueId } = require('../../../../libs/utils');
 
 module.exports = {
@@ -19,33 +17,28 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(client, interaction) {
-        if (process.env.WARNING_SYSTEM_ENABLED !== 'true') {
+        if (!client.config.warningSystem.enabled) {
             return interaction.reply('The warning system is not enabled.');
         }
-
-        await interaction.deferReply();
-
-        if (!interaction.member.permissions.has("BAN_MEMBERS")) {
-            return interaction.followUp('You do not have permission to warn users.');
-        }
-
-        const targetUser = interaction.options.getUser('user');
-        const reason = interaction.options.getString('reason') || 'No reason provided';
-
-        if (targetUser.id === interaction.user.id) {
-            return interaction.followUp('You cannot warn yourself.');
-        }
-
-        const stateManager = new StateManager();
-        const filename = path.basename(__filename);
-
         try {
-            await stateManager.initPool();
+
+            await interaction.deferReply();
+
+            if (!interaction.member.permissions.has("BAN_MEMBERS")) {
+                return interaction.followUp('You do not have permission to warn users.');
+            }
+
+            const targetUser = interaction.options.getUser('user');
+            const reason = interaction.options.getString('reason') || 'No reason provided';
+
+            if (targetUser.id === interaction.user.id) {
+                return interaction.followUp('You cannot warn yourself.');
+            }
 
             const warningId = generateUniqueId();
             const staff = interaction.user;
 
-            await stateManager.query(
+            await client.db.query(
                 `INSERT INTO warnings (warn_id, warn_user_id, warn_user, warn_by_user, warn_by_id, warn_reason, created_at, updated_at) 
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                 [warningId, targetUser.id, targetUser.username, staff.username, staff.id, reason, moment().unix(), moment().unix()]
@@ -77,14 +70,12 @@ module.exports = {
                     .setTimestamp();
                 await modChannel.send({ embeds: [modEmbed] });
             } else {
-                console.error('Moderator chat channel not found!');
+                client.logger.error('Moderator chat channel not found!');
             }
 
         } catch (err) {
-            console.error(err);
+            client.logger.error(err);
             await interaction.followUp(`An error occurred while trying to warn user <@${targetUser.id}>.`);
-        } finally {
-            await stateManager.closePool(filename);
         }
     }
 };

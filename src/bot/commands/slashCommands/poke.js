@@ -1,5 +1,4 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { getRandomColor } = require('../../../../libs/utils');
 const { MessageEmbed } = require('discord.js');
 const { fetchRandom } = require('nekos-best.js');
 
@@ -11,7 +10,10 @@ module.exports = {
         .addUserOption(option => option.setName('target').setDescription('The user you want to poke')),
 
     async execute(client, interaction) {
-        let targetUser = interaction.options.getUser('target');
+        const { getRandomColor } = client.utils;
+        try {
+            await interaction.deferReply();
+            let targetUser = interaction.options.getUser('target');
 
         async function fetchImage() {
             const response = await fetchRandom('poke');
@@ -42,6 +44,11 @@ module.exports = {
             .setImage(img);
 
         await interaction.reply({ embeds: [embed] });
-
+    } catch (error) {
+        client.logger.error('Error executing the poke command:', error);
+        if (!interaction.replied) {
+            await interaction.reply('Something went wrong.');
+        }
+    }
     },
 };

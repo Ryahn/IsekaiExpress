@@ -1,8 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
 const moment = require('moment');
-const db = require('../../../../database/db');
-const logger = require('silly-logger');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('check_cages')
@@ -12,7 +10,7 @@ module.exports = {
 
         try {
             const currentTime = moment().unix();
-            const cagedUsers = await db.query(
+            const cagedUsers = await client.db.query(
                 `SELECT discord_id, expires FROM caged_users WHERE expires = 0 OR expires > ? ORDER BY expires ASC LIMIT 5`,
                 [currentTime]
             );
@@ -37,10 +35,8 @@ module.exports = {
 
             await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-            logger.error('Error in check_cages command:', error);
+            client.logger.error('Error in check_cages command:', error);
             await interaction.editReply('An error occurred while processing the command.');
-        } finally {
-            await db.end();
         }
     }
 };

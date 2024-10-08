@@ -1,5 +1,4 @@
 const { MessageEmbed, MessageAttachment } = require("discord.js");
-const StateManager = require("../../utils/StateManager");
 const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
 const moment = require('moment');
 const crypto = require('crypto');

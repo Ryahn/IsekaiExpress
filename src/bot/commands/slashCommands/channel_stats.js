@@ -1,8 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const db = require('../../../../database/db');
 const moment = require('moment');
-const logger = require('silly-logger');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -25,6 +23,7 @@ module.exports = {
 
     async execute(client,interaction) { 
         await interaction.deferReply(); 
+        const db = client.db;
 
         try {
             const dateInput = interaction.options.getString('date');
@@ -69,11 +68,8 @@ module.exports = {
 
             await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-            logger.error('Error in channel_stats command:', error);
-            await db.end();
+            client.logger.error('Error in channel_stats command:', error);
             await interaction.editReply('An error occurred while fetching channel stats.');
-        } finally {
-            await db.end();
         }
     },
 };

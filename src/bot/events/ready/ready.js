@@ -40,7 +40,7 @@ module.exports = class ReadyEvent extends BaseEvent {
 
                 try {
                     await rest.put(
-                        Routes.applicationGuildCommands(process.env.APPLICATION_ID, process.env.DISCORD_GUILD_ID),
+                        Routes.applicationGuildCommands(client.config.discord.applicationId, client.config.discord.guildId),
                         { body: commands },
                     );
 

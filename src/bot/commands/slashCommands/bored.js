@@ -1,5 +1,4 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { getRandomColor } = require('../../../../libs/utils');
 const { MessageEmbed } = require('discord.js');
 const { fetchRandom } = require('nekos-best.js');
 
@@ -10,20 +9,28 @@ module.exports = {
         .setDescription("show the world how bored you are"),
 
     async execute(client, interaction) {
-        async function fetchImage() {
-            const response = await fetchRandom('bored');
-            return response.results[0].url;
+        const { getRandomColor } = client.utils;
+        try {
+            await interaction.deferReply();
+            async function fetchImage() {
+                const response = await fetchRandom('bored');
+                return response.results[0].url;
+            }
+
+            const img = await fetchImage();
+
+
+            const embed = new MessageEmbed()
+                .setDescription(`${interaction.user} is bored so do something or they will stab you`)
+                .setColor(`#${getRandomColor()}`)
+                .setImage(img);
+
+            await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+            client.logger.error('Error executing the bored command:', error);
+            if (!interaction.replied) {
+                await interaction.editReply('Something went wrong.');
+            }
         }
-
-        const img = await fetchImage();
-
-
-        const embed = new MessageEmbed()
-            .setDescription(`${interaction.user} is bored so do something or they will stab you`)
-            .setColor(`#${getRandomColor()}`)
-            .setImage(img);
-
-        await interaction.reply({ embeds: [embed] });
-
     },
 };

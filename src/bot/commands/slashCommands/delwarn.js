@@ -1,7 +1,4 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-// const db = require('../../../../database/db');
-const logger = require('silly-logger');
-const config = require('../../../../.config');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -13,7 +10,7 @@ module.exports = {
                 .setRequired(true)),
 
     async execute(client, interaction) {
-        if (!config.warningSystem.enabled) {
+        if (!client.config.warningSystem.enabled) {
             return interaction.reply('The warning system is not enabled.');
         }
 
@@ -37,14 +34,10 @@ module.exports = {
 
 
             } catch (err) {
-                logger.error(err);
-                await client.db.end();
+                client.logger.error(err);
                 await interaction.followUp(`An error occurred while trying to delete warning \`${warnId}\`.`);
-            } finally {
-                await client.db.end();
-            }   
+            }  
         } else {
-            await client.db.end();
             await interaction.followUp('Please provide a valid warning ID.');
         }
     }

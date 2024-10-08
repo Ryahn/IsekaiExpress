@@ -64,6 +64,10 @@
     "description": "a gif can say more than a thousand words"
   },
   {
+    "name": "fake_cage",
+    "description": "fake cage someone"
+  },
+  {
     "name": "feed",
     "description": "pls give me food"
   },
@@ -74,10 +78,6 @@
   {
     "name": "fuck",
     "description": "bang someone really hard"
-  },
-  {
-    "name": "fake_cage",
-    "description": "fake cage someone"
   },
   {
     "name": "furry_license",
@@ -106,5 +106,81 @@
   {
     "name": "laugh",
     "description": "laugh"
+  },
+  {
+    "name": "lolilicense",
+    "description": "Get a qualified loli license"
+  },
+  {
+    "name": "magik",
+    "description": "create magik"
+  },
+  {
+    "name": "pat",
+    "description": "pat pat"
+  },
+  {
+    "name": "poke",
+    "description": "poke poke poke poke poke"
+  },
+  {
+    "name": "pout",
+    "description": "no u"
+  },
+  {
+    "name": "remove_cage",
+    "description": "Removes the cage from a user and restores their roles."
+  },
+  {
+    "name": "shrug",
+    "description": "ツ"
+  },
+  {
+    "name": "slap",
+    "description": "SCHLAP"
+  },
+  {
+    "name": "sleep",
+    "description": "go 2 bed"
+  },
+  {
+    "name": "smile",
+    "description": "（*＾-＾*）"
+  },
+  {
+    "name": "smug",
+    "description": "I don't like where this is going"
+  },
+  {
+    "name": "stare",
+    "description": "STaLKER!"
+  },
+  {
+    "name": "think",
+    "description": "thonk"
+  },
+  {
+    "name": "tickle",
+    "description": "tickle tickle tickle tickle"
+  },
+  {
+    "name": "unban",
+    "description": "Unban a user."
+  },
+  {
+    "name": "warn",
+    "description": "Issue a warning to a user."
+  },
+  {
+    "name": "warnings",
+    "description": "Lists the warnings for a user."
+  },
+  {
+    "name": "wave",
+    "description": "EllO!/GudBaYe"
+  },
+  {
+    "name": "wink",
+    "description": "are you able to read?"
   }
 ]

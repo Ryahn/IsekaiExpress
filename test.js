@@ -1,3 +1,8 @@
-const { generateUniqueId } = require('./libs/utils');
+const db = require('./database/db');
 
-console.log(generateUniqueId());
+async function test() {
+	const result = await db.query(`SELECT guildId FROM GuildConfigurable`);
+	console.log(result);
+}
+
+test();

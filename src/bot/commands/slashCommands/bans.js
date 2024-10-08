@@ -1,6 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const db = require('../../../../database/db');
 const moment = require('moment');
 
 module.exports = {
@@ -24,11 +23,11 @@ module.exports = {
         try {
 
             const [totalBansResult, bans] = await Promise.all([
-                db.query(
+                client.db.query(
                     'SELECT COUNT(*) AS total_bans FROM bans WHERE discord_id = ?',
                     [targetUser.id]
                 ),
-                getBans(db, targetUser.id, pageRequested)
+                getBans(client.db, targetUser.id, pageRequested)
             ]);
 
             const totalBans = totalBansResult[0].total_bans;

@@ -1,8 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { Permissions, MessageEmbed } = require('discord.js');
 const moment = require('moment');
-const db = require('../../../../database/db');
-const logger = require('silly-logger');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -83,7 +81,7 @@ module.exports = {
 
             // Store the roles in the database before removing them
             const rolesJson = JSON.stringify(rolesToStrip);
-            await db.query(
+            await client.db.query(
                 `INSERT INTO caged_users (discord_id, old_roles, expires, caged_by_user, caged_by_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
                 [userToCage.id, rolesJson, expires, interaction.user.tag, interaction.user.id, moment().unix()]
             );
@@ -109,13 +107,11 @@ module.exports = {
             if (modChannel) {
                 await modChannel.send({ embeds: [modEmbed] });
             } else {
-                logger.error('Moderator chat channel not found!');
+                client.logger.error('Moderator chat channel not found!');
             }
         } catch (error) {
-            logger.error('Error:', error);
+            client.logger.error('Error:', error);
             await interaction.reply({ content: 'An error occurred while processing the command.', ephemeral: true });
-        } finally {
-            await db.end();
         }
     }
 };

@@ -1,5 +1,6 @@
 const mysql = require('mysql2/promise');
 const config = require('../.config');
+const logger = require('silly-logger');
 // Create a connection pool
 const pool = mysql.createPool({
   host: config.mysql.host,
@@ -15,15 +16,18 @@ const pool = mysql.createPool({
 // Test the connection
 pool.getConnection()
   .then(connection => {
-    console.log('MySQL pool established');
+    logger.info('MySQL pool established');
     connection.release();
   })
   .catch(err => {
-    console.error('Error connecting to the database:', err);
+    logger.error('Error connecting to the database:', err);
   });
 
 module.exports = {
-  query: (sql, params) => pool.query(sql, params),
+  query: async (sql, params) => {
+    const [rows] = await pool.query(sql, params);
+    return rows;
+  },
 
   getUserXP: async (userId) => {
     const [rows] = await pool.query('SELECT * FROM user_xp WHERE user_id = ?', [userId]);

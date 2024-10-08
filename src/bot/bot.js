@@ -29,6 +29,7 @@ const client = new Client({
     client.db = db;
     client.logger = logger;
     client.config = config;
+    client.utils = require('../../libs/utils');
 
 schedule.scheduleJob('*/1 * * * *', async () => {
     

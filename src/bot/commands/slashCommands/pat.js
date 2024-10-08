@@ -1,5 +1,4 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { getRandomColor } = require('../../../../libs/utils');
 const { MessageEmbed } = require('discord.js');
 const { fetchRandom } = require('nekos-best.js');
 
@@ -11,7 +10,13 @@ module.exports = {
         .addUserOption(option => option.setName('target').setDescription('The user you want to headpat')),
 
     async execute(client, interaction) {
-        let targetUser = interaction.options.getUser('target');
+        const { getRandomColor } = client.utils;
+        try {
+            await interaction.deferReply();
+            let target = interaction.options.getUser('target') || interaction.user;
+            const avatar = target.displayAvatarURL({ size: 512, format: 'jpg', dynamic: false });
+            const response = await fetch(`https://nekobot.xyz/api/imagegen?type=magik&image=${avatar}`);
+            const data = await response.json();
 
         async function fetchImage() {
             const response = await fetchRandom('pat');
@@ -33,7 +38,6 @@ module.exports = {
             'a waifu',
             'a husbando'];
         let random = Math.floor(Math.random() * people.length);
-       
 
         let headPatTarget = targetUser ? `${targetUser}` : people[random];
         const embed = new MessageEmbed()
@@ -42,6 +46,11 @@ module.exports = {
             .setImage(img);
 
         await interaction.reply({ embeds: [embed] });
-
+    } catch (error) {
+        client.logger.error('Error executing the pat command:', error);
+        if (!interaction.replied) {
+            await interaction.reply('Something went wrong.');
+        }
+    }
     },
 };

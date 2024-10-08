@@ -1,7 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
 const fetch = require('node-fetch');
-const { getRandomColor } = require('../../../../libs/utils');
 
 
 module.exports = {
@@ -12,6 +11,7 @@ module.exports = {
         .addUserOption(option => option.setName('target').setDescription('user to magik').setRequired(false)),
 
     async execute(client, interaction) {
+        const { getRandomColor } = client.utils;
         try {
             await interaction.deferReply();
             let target = interaction.options.getUser('target') || interaction.user;
