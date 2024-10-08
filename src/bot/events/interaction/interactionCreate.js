@@ -1,5 +1,4 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
-const path = require('path');
 
 module.exports = class InteractionEvent extends BaseEvent {
     constructor() {
@@ -15,7 +14,7 @@ module.exports = class InteractionEvent extends BaseEvent {
         try {
             await command.execute(client, interaction)
         } catch (err) {
-            console.log(err)
+            client.logger.error(err)
 
             await interaction.reply({
                 content: `An error occurred while executing this command.`,

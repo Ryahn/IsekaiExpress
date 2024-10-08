@@ -3,7 +3,8 @@ const {registerCommands, registerEvents} = require('./utils/register');
 const schedule = require('node-schedule');
 const config = require('../../.config');
 const db = require('../../database/db');
-const { timestamp} = require('../../libs/utils');
+const { timestamp } = require('../../libs/utils');
+const logger = require('silly-logger');
 const client = new Client({
   intents: [
     Intents.FLAGS.GUILDS,
@@ -15,17 +16,19 @@ const client = new Client({
 
 (async () => {
 
-    console.log('Bot is starting...');
+    logger.startup('Bot is starting...');
     client.login(config.discord.botToken);
     client.prefix = config.discord.prefix;
-    console.log('Bot has started!');
-    console.log(`Prefix: ${client.prefix}`);
+    logger.startup('Bot has started!');
+    logger.info(`Prefix: ${client.prefix}`);
 
     client.commands = new Collection();
     client.slashCommands = new Collection();
-    await registerCommands(client, './commands/chatCommands');
-    await registerEvents(client, './events');
+    await registerCommands(client, '../commands/chatCommands');
+    await registerEvents(client, '../events');
     client.db = db;
+    client.logger = logger;
+    client.config = config;
 
 schedule.scheduleJob('*/1 * * * *', async () => {
     
@@ -35,7 +38,7 @@ schedule.scheduleJob('*/1 * * * *', async () => {
 
         const guild = client.guilds.cache.get(config.discord.guildId);
         if (!guild) {
-            console.error('Guild not found');
+            logger.error('Guild not found');
             return;
         }
 
@@ -46,16 +49,14 @@ schedule.scheduleJob('*/1 * * * *', async () => {
                     const oldRoles = JSON.parse(user.old_roles);
                     await member.roles.set(oldRoles);
                     await db.removeCage(user.discord_id);
-                    console.log(`Removed cage from user ${user.discord_id}`);
+                    logger.info(`Removed cage from user ${user.discord_id}`);
                 }
             } catch (error) {
-                console.error(`Error processing user ${user.discord_id}:`, error);
-                await db.end();
+                logger.error(`Error processing user ${user.discord_id}:`, error);
             }
         }
     } catch (error) {
-        console.error('Error in scheduled job:', error);
-        await db.end();
+        logger.error('Error in scheduled job:', error);
     }
 });
 

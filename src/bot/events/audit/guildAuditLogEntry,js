@@ -1,7 +1,5 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
 const { Collection } = require('discord.js');
-const db = require('../../../database/db');
-const logger = require('silly-logger');
 
 module.exports = class GuildAuditLogEntryEvent extends BaseEvent {
     constructor() {
@@ -34,16 +32,14 @@ module.exports = class GuildAuditLogEntryEvent extends BaseEvent {
                 
                 if (member.bannable) {
                     await member.ban({ reason: `Exceeded action limit: ${action} performed ${currentCount.count} times in ${this.TIME_WINDOW / 1000 / 60} minutes` });
-                    logger.success(`Banned user ${member.user.tag} for exceeding action limit`);
-                    await db.createBan(member.user.id, member.user.tag, `Exceeded action limit: ${action} performed ${currentCount.count} times in ${this.TIME_WINDOW / 1000 / 60} minutes`, 'ban', executorId, member.user.tag, Date.now());
+                    client.logger.success(`Banned user ${member.user.tag} for exceeding action limit`);
+                    await client.db.createBan(member.user.id, member.user.tag, `Exceeded action limit: ${action} performed ${currentCount.count} times in ${this.TIME_WINDOW / 1000 / 60} minutes`, 'ban', executorId, member.user.tag, Date.now());
                 } else {
-                    logger.error(`Unable to ban user ${member.user.tag} due to lack of permissions`);
+                    client.logger.error(`Unable to ban user ${member.user.tag} due to lack of permissions`);
                 }
             } catch (error) {
-                logger.error('Error banning user:', error);
-            } finally {
-				await db.end();
-			}
+                client.logger.error('Error banning user:', error);
+            }
         }
     }
 }

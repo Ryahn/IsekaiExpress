@@ -2,9 +2,7 @@ const BaseEvent = require('../../utils/structures/BaseEvent');
 const axios = require('axios');
 const FormData = require('form-data');
 const { MessageEmbed } = require('discord.js');
-const { config } = require('../../../.config');
 
-// Constants
 const IGNORED_ROLES = ['309358485923954689', '358471651341631493'];
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/jfif', 'image/jpg', 'video/mp4', 'video/webm'];
 
@@ -14,7 +12,7 @@ module.exports = class MessageDeleteEvent extends BaseEvent {
     }
 
     async run(client, message) {
-        if (!config.imageArchive.enabled) return;
+        if (!client.config.imageArchive.enabled) return;
         if (!this.shouldProcessMessage(message)) return;
 
         const attachments = message.attachments.filter(attachment => IMAGE_TYPES.includes(attachment.contentType));
@@ -40,7 +38,7 @@ module.exports = class MessageDeleteEvent extends BaseEvent {
             const embed = this.createEmbed(message, attachment, uploadedImageUrl);
             await logChannel.send({ embeds: [embed] });
         } catch (error) {
-            console.error('Error processing attachment:', error);
+            client.logger.error('Error processing attachment:', error);
         }
     }
 

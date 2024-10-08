@@ -4,10 +4,6 @@ const fs = require("node:fs");
 const { Collection } = require("discord.js");
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
-const db = require('../../../database/db');
-const config = require('../../../../.config');
-const rest = new REST({ version: '9' }).setToken(config.discord.botToken);
-const logger = require('silly-logger');
 
 module.exports = class ReadyEvent extends BaseEvent {
     constructor() {
@@ -15,7 +11,9 @@ module.exports = class ReadyEvent extends BaseEvent {
     }
 
     async run(client) {
-        logger.info(`${client.user.tag} has logged in.`);
+        const rest = new REST({ version: '9' }).setToken(client.config.discord.botToken);
+
+        client.logger.info(`${client.user.tag} has logged in.`);
 
         client.langs = new Collection();
         client.guildSubReddits = new Collection();
@@ -47,45 +45,40 @@ module.exports = class ReadyEvent extends BaseEvent {
                     );
 
                 } catch (err) {
-                    logger.error(err)
+                    client.logger.error(err)
                 }
 
-        // Start of checking if all Guild-Ids are in the database
         const guildIds = client.guilds.cache.map(g => g.id);
         let dbGuildIds = [];
 
         try {
-            const result = await db.query(`SELECT guildId FROM GuildConfigurable`);
+            const result = await client.db.query(`SELECT guildId FROM GuildConfigurable`);
             dbGuildIds = result.map(row => row.guildId);
         } catch (err) {
-            await db.end();
-            logger.error("Error fetching guild IDs from the database:", err);
+            client.logger.error("Error fetching guild IDs from the database:", err);
         }
 
-        // Insert missing guild IDs into the Guilds and GuildConfigurable tables
         for (const guildId of guildIds) {
             try {
                 if (!dbGuildIds.includes(guildId)) {
-                    await db.query(
+                    await client.db.query(
                         `INSERT INTO Guilds (guildId, ownerId) VALUES (?, ?)`,
                         [guildId, client.guilds.resolve(guildId).ownerId]
                     );
-                    await db.query(
+                    await client.db.query(
                         `INSERT INTO GuildConfigurable (guildId) VALUES (?)`,
                         [guildId]
                     );
                     console.log(`Guild ${guildId} added to Guilds and GuildConfigurable.`);
                 }
             } catch (err) {
-                await db.end();
-                logger.error(`Error inserting guild ${guildId}:`, err);
+                client.logger.error(`Error inserting guild ${guildId}:`, err);
             }
         }
 
-        // Start of getting all data out of the database
         try {
             for (const guildId of guildIds) {
-                const result = await db.query(
+                const result = await client.db.query(
                     `SELECT cmdPrefix, subReddit, guildWelcome, guildVolume, guildLanguage FROM GuildConfigurable WHERE guildId = ?`,
                     [guildId]
                 );
@@ -100,14 +93,10 @@ module.exports = class ReadyEvent extends BaseEvent {
                 }
             }
         } catch (err) {
-            await db.end();
-            logger.error("Error fetching guild configuration:", err);
-        } finally {
-            db.end();
+            client.logger.error("Error fetching guild configuration:", err);
         }
-        // End of section
 
         client.user.setActivity(`zonies cry`, { type: 'LISTENING' });
-        logger.info('Collection refreshed, no errors occurred while starting the program! SUCCESS!');
+        client.logger.info('Collection refreshed, no errors occurred while starting the program! SUCCESS!');
     }
 }
