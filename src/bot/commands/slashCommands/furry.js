@@ -12,7 +12,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('furry_license')
         .setDescription('Get a qualified furry license'),
-    enable: true,
+    
 
     async execute(client, interaction) {
         await interaction.deferReply();

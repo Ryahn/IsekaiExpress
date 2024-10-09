@@ -69,7 +69,7 @@ module.exports = class ReadyEvent extends BaseEvent {
                         `INSERT INTO GuildConfigurable (guildId) VALUES (?)`,
                         [guildId]
                     );
-                    console.log(`Guild ${guildId} added to Guilds and GuildConfigurable.`);
+                    client.logger.info(`Guild ${guildId} added to Guilds and GuildConfigurable.`);
                 }
             } catch (err) {
                 client.logger.error(`Error inserting guild ${guildId}:`, err);

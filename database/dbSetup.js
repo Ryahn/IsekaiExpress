@@ -4,6 +4,8 @@ const mysql = require('mysql2/promise');
 const config = require('../.config');
 const logger = require('silly-logger');
 
+const excludedTables = ['dmca', 'games', 'uploaders'];
+
 async function seedTable(table) {
   if (!fs.existsSync(path.join(__dirname, 'schemas', `${table}.json`))) {
     logger.info(`No data to seed for table '${table}'.`);
@@ -43,14 +45,15 @@ async function seedTable(table) {
   }
 }
 
-async function setupDatabase() {
+async function setupDatabase(skipLockFile = false) {
 	const lockFilePath = path.join(__dirname, 'db_setup.lock');
 
 	try {
-		// Check if the lock file exists
-		if (fs.existsSync(lockFilePath)) {
+		if (fs.existsSync(lockFilePath) && !skipLockFile) {
 			logger.info('Database setup has already been completed. Skipping...');
 			return;
+		} else if (skipLockFile) {
+			logger.info('--skip-lock flag detected. Skipping lock file creation.');
 		}
 
 		const connection = await mysql.createConnection({
@@ -62,29 +65,57 @@ async function setupDatabase() {
 		const [rows] = await connection.query(`SHOW DATABASES LIKE '${config.mysql.database}'`);
 		const databaseExists = rows.length > 0;
 
-		if (databaseExists) {
+		if (databaseExists && !skipLockFile) {
 			logger.info(`Database '${config.mysql.database}' already exists.`);
 		} else {
 			await connection.query(`CREATE DATABASE IF NOT EXISTS ${config.mysql.database}`);
-			logger.info(`Database '${config.mysql.database}' created.`);
+			logger.info(`Database '${config.mysql.database}' created or already exists.`);
 			await connection.query(`USE ${config.mysql.database}`);
 			logger.info(`Using database '${config.mysql.database}'.`);
 
-			fs.readdirSync(path.join(__dirname, 'schemas')).forEach(async (file) => {
-				logger.info(`Creating schema from file '${file}'...`);
-				const sql = fs.readFileSync(path.join(__dirname, 'schemas', file), 'utf8');
-				await connection.query(sql);
-        logger.info(`Schema from file '${file}' created.`);
-				await seedTable(file);
-			});
-			logger.info(`All schemas created.`);
+			for (const file of fs.readdirSync(path.join(__dirname, 'schemas'))) {
+				if (file.endsWith('.sql')) {
+					const tableName = path.basename(file, '.sql');
+					if (excludedTables.includes(tableName)) {
+						logger.info(`Table '${tableName}' is excluded. Skipping...`);
+						continue;
+					}
+
+					logger.info(`Processing schema file '${file}'...`);
+					const sql = fs.readFileSync(path.join(__dirname, 'schemas', file), 'utf8');
+					
+					const statements = sql.split(';').filter(statement => statement.trim() !== '');
+					const [rows] = await connection.query(`SHOW TABLES LIKE '${tableName}'`);
+					if (rows.length > 0) {
+						logger.info(`Table '${tableName}' already exists. Skipping creation.`);
+						continue;
+					} else {
+						for (const statement of statements) {
+							const trimmedStatement = statement.trim();
+							if (trimmedStatement) {
+								try {
+									logger.info(`Executing statement: ${trimmedStatement.substring(0, 50)}...`);
+									await connection.query(trimmedStatement);
+									logger.info(`Statement executed successfully.`);
+								} catch (error) {
+									logger.error(`Error executing statement from '${file}':`, error);
+									logger.error(`Full problematic SQL statement: ${trimmedStatement}`);
+								}
+							}
+						}
+						await seedTable(tableName);
+						logger.info(`Schema file '${file}' processed.`);
+					}
+				}
+			}
+			logger.info(`All schema files processed.`);
+
+			fs.writeFileSync(lockFilePath, 'Database setup completed');
+			logger.info('Database setup completed successfully.');
 		}
 
 		await connection.end();
 
-		// Create lock file after successful setup
-		fs.writeFileSync(lockFilePath, 'Database setup completed');
-		logger.info('Database setup completed successfully.');
 	} catch (error) {
 		logger.error('Error during database setup:', error);
 		throw error;

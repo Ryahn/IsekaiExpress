@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 
 module.exports = {
-    enable: true,
+    
     data: new SlashCommandBuilder()
         .setName('fake_cage')
         .setDescription("fake cage someone")

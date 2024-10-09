@@ -12,7 +12,52 @@ module.exports = class MessageEvent extends BaseEvent {
     async run(client, message) {
         if (message.author.bot || !message.guild) return;
 
+        /************************************
+         * XP SYSTEM
+         ************************************/
+        function isWeekend(weekendDays) {
+            const today = new Date().toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase();
+            return weekendDays.split(',').includes(today);
+        }
+        
         try {
+            const user = await client.db.getUserXP(message.author.id);
+            const settings = await client.db.getXPSettings();
+            user.message_count++;
+
+            if (user.message_count >= settings.messages_per_xp) {
+                user.message_count = 0;
+                let xpGain = Math.floor(Math.random() * (settings.max_xp_per_gain - settings.min_xp_per_gain + 1)) + settings.min_xp_per_gain;
+
+                if (settings.double_xp_enabled || isWeekend(settings.weekend_days)) {
+                    xpGain *= settings.weekend_multiplier;
+                }
+
+                user.xp += xpGain;
+
+                // Check for level up
+                const newLevel = client.utils.calculateLevel(user.xp);
+                if (newLevel > user.level) {
+                    user.level = newLevel;
+                    // this.sendLevelUpMessage(message.channel, message.author, newLevel);
+                }
+
+                await client.db.updateUserXPAndLevel(message.author.id, user.xp, user.level, user.message_count);
+                client.logger.info(`${message.author.username} gained ${xpGain} XP and is now level ${user.level}`);
+            } else {
+                await client.db.updateUserMessageCount(message.author.id, user.message_count);
+            }
+        } catch (error) {
+            client.logger.error('Error in XP system:', error);
+        }
+        /************************************
+         * END XP SYSTEM
+         ************************************/
+
+        try {
+            /************************************
+             * AFK SYSTEM
+             ************************************/
             const [afkUser] = await client.db.getAfkUser(message.author.id, message.guild.id);
 
             if (afkUser) {
@@ -35,16 +80,25 @@ module.exports = class MessageEvent extends BaseEvent {
                     }
                 }
             }
+            /************************************
+             * ENDAFK SYSTEM
+             ************************************/
+
+            /************************************
+             * CUSTOM COMMANDS
+             ************************************/
 
             let prefix = client.guildCommandPrefixes.get(message.guild.id) || 'o!';
 
             const usedPrefix = message.content.slice(0, prefix.length);
 
-            const channelId = message.channelId;
-            try {
-                await updateChannelStats(channelId, message.channel.name);
-            } catch (error) {
-                client.logger.error('Error updating channel stats:', error);
+             if (client.config.channelStats.enabled) {
+                const channelId = message.channelId;
+                try {
+                    await updateChannelStats(channelId, message.channel.name);
+                } catch (error) {
+                    client.logger.error('Error updating channel stats:', error);
+                }
             }
 
             if (usedPrefix === prefix) {
@@ -83,6 +137,9 @@ module.exports = class MessageEvent extends BaseEvent {
 
                         return;
                     }
+                    /************************************
+                     * END CUSTOM COMMANDS
+                     ************************************/
 
                     const command = client.commands.get(cmdName.toLowerCase()) || 
                                     client.commands.find(cmd => cmd.aliases && cmd.aliases.includes(cmdName.toLowerCase()));
@@ -92,11 +149,9 @@ module.exports = class MessageEvent extends BaseEvent {
                             await command.run(client, message, cmdArgs);
                         } catch (err) {
                             client.logger.error(`Error executing command ${cmdName}:`, err);
-                            await client.db.end();
                             message.channel.send('There was an error executing that command.');
                         }
                     } else {
-                        await client.db.end();
                         message.channel.send('Command not found.');
                     }
 
@@ -109,4 +164,15 @@ module.exports = class MessageEvent extends BaseEvent {
             client.logger.error('Error in message event:', error);
         }
     }
+
+    sendLevelUpMessage(channel, user, newLevel) {
+        const embed = new MessageEmbed()
+            .setTitle('Level Up!')
+            .setDescription(`Congratulations ${user.username}! You've reached level ${newLevel}!`)
+            .setColor('#00FF00')
+            .setThumbnail(user.displayAvatarURL());
+        
+        channel.send({ embeds: [embed] });
+    }
+
 }

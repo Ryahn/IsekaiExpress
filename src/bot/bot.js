@@ -2,6 +2,7 @@ const {Client, Intents, Collection} = require('discord.js');
 const {registerCommands, registerEvents} = require('./utils/register');
 const schedule = require('node-schedule');
 const config = require('../../.config');
+// const { sequelize, models } = require('../../database/sequelize');
 const db = require('../../database/db');
 const { timestamp } = require('../../libs/utils');
 const logger = require('silly-logger');
@@ -11,6 +12,7 @@ const client = new Client({
     Intents.FLAGS.GUILD_MESSAGES,
     Intents.FLAGS.GUILD_MEMBERS,
     Intents.FLAGS.GUILD_BANS,
+    Intents.FLAGS.GUILD_PRESENCES,
   ]
 });
 

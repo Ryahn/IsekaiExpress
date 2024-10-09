@@ -4,7 +4,7 @@ const fetch = require('node-fetch');
 
 
 module.exports = {
-    enable: true,
+    
     data: new SlashCommandBuilder()
         .setName('magik')
         .setDescription('create magik')

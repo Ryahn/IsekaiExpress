@@ -3,7 +3,7 @@ const { MessageEmbed } = require('discord.js');
 const { fetchRandom } = require('nekos-best.js');
 
 module.exports = {
-    enable: true,
+    
     data: new SlashCommandBuilder()
         .setName('smug')
         .setDescription("I don't like where this is going")

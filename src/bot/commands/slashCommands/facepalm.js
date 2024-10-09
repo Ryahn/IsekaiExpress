@@ -3,7 +3,7 @@ const { MessageEmbed } = require('discord.js');
 const { fetchRandom } = require('nekos-best.js');
 
 module.exports = {
-    enable: true,
+    
     data: new SlashCommandBuilder()
         .setName('facepalm')
         .setDescription("a gif can say more than a thousand words"),

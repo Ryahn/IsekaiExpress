@@ -33,13 +33,27 @@ module.exports = {
     const [rows] = await pool.query('SELECT * FROM user_xp WHERE user_id = ?', [userId]);
     if (rows.length === 0) {
       await pool.query('INSERT INTO user_xp (user_id) VALUES (?)', [userId]);
-      return { xp: 0, message_count: 0 };
+      return { xp: 0, level: 1, message_count: 0 };
     }
     return rows[0];
   },
 
+  getUserRank: async (userId) => {
+    const [rows] = await pool.query(`
+        SELECT COUNT(*) + 1 AS \`rank\`
+        FROM user_xp
+        WHERE xp > (SELECT xp FROM user_xp WHERE user_id = ?)
+    `, [userId]);
+
+    return rows[0].rank;
+  },
+
   updateUserXP: async (userId, xp, messageCount) => {
     await pool.query('UPDATE user_xp SET xp = ?, message_count = ? WHERE user_id = ?', [xp, messageCount, userId]);
+  },
+
+  updateUserXPAndLevel: async (userId, xp, level, messageCount) => {
+    await pool.query('UPDATE user_xp SET xp = ?, level = ?, message_count = ? WHERE user_id = ?', [xp, level, messageCount, userId]);
   },
 
   updateUserMessageCount: async (userId, messageCount) => {
@@ -134,6 +148,20 @@ module.exports = {
 
   updateCommandUsage: async (commandNameHash, newUsageCount) => {
     await pool.query('UPDATE commands SET `usage` = ? WHERE hash = ?', [newUsageCount, commandNameHash]);
+  },
+
+  getLeaderboard: async (limit = 10) => {
+    const [rows] = await pool.query('SELECT user_id, xp, level FROM user_xp ORDER BY xp DESC LIMIT ?', [limit]);
+    const leaderboard = [];
+    for (const row of rows) {
+      const user = await client.users.fetch(row.user_id);
+      leaderboard.push({
+        username: user.username,
+        xp: row.xp,
+        level: row.level
+      });
+    }
+    return leaderboard;
   },
 
   end: () => pool.end()

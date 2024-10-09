@@ -2,7 +2,7 @@ const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
 
 module.exports = {
-    enable: true,
+    
     data: new SlashCommandBuilder()
         .setName('convert')
         .setDescription("Convert between different units")

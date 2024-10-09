@@ -60,6 +60,10 @@
     "description": "Deletes a warning by its ID."
   },
   {
+    "name": "enable_doublexp",
+    "description": "Enable double XP"
+  },
+  {
     "name": "facepalm",
     "description": "a gif can say more than a thousand words"
   },
@@ -100,12 +104,20 @@
     "description": "huggies"
   },
   {
+    "name": "import_rank",
+    "description": "import_rank"
+  },
+  {
     "name": "kiss",
     "description": "now that's lewd"
   },
   {
     "name": "laugh",
     "description": "laugh"
+  },
+  {
+    "name": "level",
+    "description": "Check your level"
   },
   {
     "name": "lolilicense",

@@ -3,7 +3,7 @@ const { MessageEmbed } = require('discord.js');
 const fetch = require('node-fetch');
 
 module.exports = {
-    enable: true,
+    
     data: new SlashCommandBuilder()
         .setName('fuck')
         .setDescription('bang someone really hard')

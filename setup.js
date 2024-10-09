@@ -8,19 +8,22 @@ function generateToken(length = 32) {
   return crypto.randomBytes(length).toString('hex');
 }
 
-fs.renameSync(path.join(__dirname, '.config-example.js'), path.join(__dirname, '.config.js'));
+const args = process.argv.slice(2);
+const skipLock = args.includes('--skip-lock');
 
-let configContent = fs.readFileSync(path.join(__dirname, '.config.js'), 'utf8');
+// fs.renameSync(path.join(__dirname, '.config-example.js'), path.join(__dirname, '.config.js'));
 
-const sessionSecret = generateToken();
-const uploadToken = generateToken();
+// let configContent = fs.readFileSync(path.join(__dirname, '.config.js'), 'utf8');
 
-configContent = configContent.replace('YOUR_SESSION_SECRET', sessionSecret);
-configContent = configContent.replace('YOUR_UPLOAD_TOKEN', uploadToken);
+// const sessionSecret = generateToken();
+// const uploadToken = generateToken();
 
-fs.writeFileSync(path.join(__dirname, '.config.js'), configContent, 'utf8');
+// configContent = configContent.replace('YOUR_SESSION_SECRET', sessionSecret);
+// configContent = configContent.replace('YOUR_UPLOAD_TOKEN', uploadToken);
+
+// fs.writeFileSync(path.join(__dirname, '.config.js'), configContent, 'utf8');
 
 logger.info('Setup complete. .config.js has been created with new tokens.');
 logger.warn('Update all mysql info.')
 
-setupDatabase();
+setupDatabase(skipLock);

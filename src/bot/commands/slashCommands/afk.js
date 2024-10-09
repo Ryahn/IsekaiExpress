@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
 module.exports = {
-    enable: true,
+    
     data: new SlashCommandBuilder()
         .setName('afk')
         .setDescription("Set your AFK status")
