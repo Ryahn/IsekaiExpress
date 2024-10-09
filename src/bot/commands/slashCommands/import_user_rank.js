@@ -14,8 +14,8 @@ module.exports = {
 		.addUserOption(option => option.setName('target').setDescription('The user you want to import the rank for').setRequired(true)),
 
     async execute(client, interaction) {
-        try {
-			if (!interaction.member.permissions.has(Permissions.FLAGS.ADMINISTRATOR)) {
+        // try {
+			if (!interaction.member.permissions.has("ADMINISTRATOR")) {
 				await interaction.reply('You do not have permission to use this command.');
 				return;
 			}
@@ -119,12 +119,12 @@ module.exports = {
 					await interaction.followUp('Failed to extract XP or username. Please try again.');
 				}
 			});
-        } catch (error) {
-            client.logger.error('Error executing the blush command:', error);
-            if (!interaction.replied) {
-                await interaction.followUp('Something went wrong.');
-            }
-        }
+        // } catch (error) {
+        //     client.logger.error('Error executing the blush command:', error);
+        //     if (!interaction.replied) {
+        //         await interaction.editReply('Something went wrong.');
+        //     }
+        // }
     },
 };
 

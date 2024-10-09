@@ -105,7 +105,11 @@
   },
   {
     "name": "import_rank",
-    "description": "import_rank"
+    "description": "Import your rank from an image URL. Be sure to run ?level first to get the rank from ZoneMaster."
+  },
+  {
+    "name": "import_user_rank",
+    "description": "Import a user's rank from an image URL. Be sure to run ?level first to get the rank from ZoneMaster."
   },
   {
     "name": "kiss",
