@@ -5,12 +5,13 @@ const canvacord = require("canvacord");
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('level')
-        .setDescription("Check your level"),
+        .setDescription("Check your level")
+		.addUserOption(option => option.setName('target').setDescription('The user you want to check the level of').setRequired(false)),
 
     async execute(client, interaction) {
         try {
             await interaction.deferReply();
-            const user = interaction.user;
+            const user = interaction.options.getUser('target') || interaction.user;
             const avatar = user.avatar 
                 ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=1024` 
                 : 'https://cdn.discordapp.com/embed/avatars/0.png';
