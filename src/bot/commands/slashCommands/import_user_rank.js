@@ -8,8 +8,8 @@ const sharp = require('sharp');
 module.exports = {
     
     data: new SlashCommandBuilder()
-        .setName('import_rank')
-        .setDescription("Import your rank from an image URL. Be sure to run ?level first to get the rank from ZoneMaster.")
+        .setName('import_user_rank')
+        .setDescription("Import a user's rank from an image URL. Be sure to run ?level first to get the rank from ZoneMaster.")
 		.addStringOption(option => option.setName('url').setDescription('The url to import the rank from').setRequired(true))
 		.addUserOption(option => option.setName('target').setDescription('The user you want to import the rank for').setRequired(true)),
 
