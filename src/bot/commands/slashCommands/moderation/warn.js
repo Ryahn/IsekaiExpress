@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
 const moment = require('moment');
-const { generateUniqueId } = require('../../../../libs/utils');
+const { generateUniqueId } = require('../../../../../libs/utils');
 
 module.exports = {
     data: new SlashCommandBuilder()

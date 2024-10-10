@@ -39,10 +39,10 @@ module.exports = {
   },
 
   
-  createCage: async (userId, expires, cagedBy, cagedById, timestamp, reason) => {
+  createCage: async (userId, expires_at, cagedBy, cagedById, timestamp, reason) => {
     await db.table('caged_users').insert({
       discord_id: userId,
-      expires: expires,
+      expires_at: expires_at,
       caged_by_user: cagedBy,
       caged_by_id: cagedById,
       created_at: timestamp,
@@ -138,17 +138,17 @@ module.exports = {
   },
 
   getExpiredCagedUsers: async (currentTime) => {
-    const [rows] = await db.table('caged_users').where('expires', '>', 0).andWhere('expires', '<=', currentTime);
+    const [rows] = await db.table('caged_users').where('expires_at', '>', 0).andWhere('expires_at', '<=', currentTime);
     return rows;
   },
 
   getCage: async (userId) => {
-    const [rows] = await db.table('caged_users').select('discord_id', 'expires').where({discord_id: userId});
+    const [rows] = await db.table('caged_users').select('discord_id', 'expires_at').where({discord_id: userId});
     return rows;
   },
 
   getCagedUsers: async (currentTime) => {
-    const rows = await db.table('caged_users').select('discord_id', 'expires').where({expires: 0}).orWhere('expires', '>', currentTime).orderBy('expires', 'asc').limit(5);
+    const rows = await db.table('caged_users').select('discord_id', 'expires_at').where({expires_at: 0}).orWhere('expires_at', '>', currentTime).orderBy('expires_at', 'asc').limit(5);
     return rows;
   },
 
@@ -219,7 +219,7 @@ module.exports = {
   },
 
   updateUserXPAndLevel: async (userId, xp, level, messageCount) => {
-    await db.table('user_xp').update({xp: xp, message_count: messageCount}).where({user_id: userId});
+    await db.table('user_xp').update({xp: xp, message_count: messageCount, level: level}).where({user_id: userId});
   },
 
   updateUserMessageCount: async (userId, messageCount) => {

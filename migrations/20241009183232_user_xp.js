@@ -6,7 +6,7 @@ exports.up = function(knex) {
 	return knex.schema.hasTable('user_xp').then((exists) => {
 		if(!exists) {
 			return knex.schema.createTable('user_xp', (table) => {
-				table.bigInteger('user_id').primary().references('id').inTable('users');
+				table.integer('user_id').primary().references('id').inTable('users');
 				table.bigInteger('xp').defaultTo(0);
 				table.integer('message_count').defaultTo(0);
 			});

@@ -22,29 +22,45 @@ module.exports = class ReadyEvent extends BaseEvent {
         const commands = [];
         const commandInfo = [];
         const slashCommands = path.join(__dirname, '../../commands/slashCommands');
-        const commandFiles = fs.readdirSync(slashCommands).filter(file => file.endsWith('.js'));
 
+        function getCommandFiles(dir) {
+            const files = fs.readdirSync(dir);
+            let commandFiles = [];
 
-                for (const file of commandFiles) {
-                    const command = require(`${slashCommands}/${file}`);
-                    commands.push(command.data.toJSON());
-                    commandInfo.push({
-                        name: command.data.name,
-                        description: command.data.description,
-                    });
-                    client.slashCommands.set(command.data.name, command);
-                    fs.writeFileSync('slashCommands.json', JSON.stringify(commandInfo, null, 2));
+            for (const file of files) {
+                const filePath = path.join(dir, file);
+                if (fs.statSync(filePath).isDirectory()) {
+                    commandFiles = commandFiles.concat(getCommandFiles(filePath));
+                } else if (file.endsWith('.js')) {
+                    commandFiles.push(filePath);
                 }
+            }
 
-                try {
-                    await rest.put(
-                        Routes.applicationGuildCommands(client.config.discord.applicationId, client.config.discord.guildId),
-                        { body: commands },
-                    );
+            return commandFiles;
+        }
 
-                } catch (err) {
-                    client.logger.error(err)
-                }
+        const commandFiles = getCommandFiles(slashCommands);
+
+        for (const file of commandFiles) {
+            const command = require(file);
+            commands.push(command.data.toJSON());
+            commandInfo.push({
+                name: command.data.name,
+                description: command.data.description,
+            });
+            client.slashCommands.set(command.data.name, command);
+            fs.writeFileSync('slashCommands.json', JSON.stringify(commandInfo, null, 2));
+        }
+
+        try {
+            await rest.put(
+                Routes.applicationGuildCommands(client.config.discord.applicationId, client.config.discord.guildId),
+                { body: commands },
+            );
+
+        } catch (err) {
+            client.logger.error(err)
+        }
 
         const guildIds = client.guilds.cache.map(g => g.id);
         let dbGuildIds = [];

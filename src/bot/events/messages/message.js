@@ -3,7 +3,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { updateChannelStats } = require('../../utils/channelStats');
 const { MessageEmbed } = require('discord.js');
-
+const { xpSystem } = require('../../../../libs/xpSystem');
+const { afkSystem } = require('../../../../libs/afkSystem');
 module.exports = class MessageEvent extends BaseEvent {
     constructor() {
         super('messageCreate');
@@ -11,85 +12,17 @@ module.exports = class MessageEvent extends BaseEvent {
 
     async run(client, message) {
         if (message.author.bot || !message.guild) return;
-
-        /************************************
-         * XP SYSTEM
-         ************************************/
-        function isWeekend(weekendDays) {
-            const today = new Date().toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase();
-            return weekendDays.split(',').includes(today);
-        }
         
         try {
-            client.db.checkUser(message.author);
-            const user = await client.db.getUserXP(message.author.id);
-            const settings = await client.db.getXPSettings();
-            user.message_count++;
-
-            if (user.message_count >= settings.messages_per_xp) {
-                user.message_count = 0;
-                let xpGain = Math.floor(Math.random() * (settings.max_xp_per_gain - settings.min_xp_per_gain + 1)) + settings.min_xp_per_gain;
-
-                if (settings.double_xp_enabled || isWeekend(settings.weekend_days)) {
-                    xpGain *= settings.weekend_multiplier;
-                }
-
-                user.xp += xpGain;
-
-                const newLevel = client.utils.calculateLevel(user.xp);
-                if (newLevel > user.level) {
-                    user.level = newLevel;
-                    // this.sendLevelUpMessage(message.channel, message.author, newLevel);
-                }
-
-                await client.db.updateUserXPAndLevel(message.author.id, user.xp, user.level, user.message_count);
-                client.logger.info(`${message.author.username} gained ${xpGain} XP and is now level ${user.level}`);
-            } else {
-                await client.db.updateUserMessageCount(message.author.id, user.message_count);
-            }
-        } catch (error) {
-            client.logger.error('Error in XP system:', error);
-        }
-        /************************************
-         * END XP SYSTEM
-         ************************************/
-
-        try {
-            /************************************
-             * AFK SYSTEM
-             ************************************/
-            const afkUser = await client.db.getAfkUser(message.author.id, message.guild.id);
-
-            if (afkUser.length > 0) {
-                await client.db.deleteAfkUser(message.author.id, message.guild.id);
-                const embed = new MessageEmbed()
-                    .setColor('#00FF00')
-                    .setDescription(`Welcome back, ${message.author}! Your AFK status has been removed.`);
-                await message.reply({ embeds: [embed] });
-            }
-
-            const mentionedUsers = message.mentions.users;
-            if (mentionedUsers.size > 0) {
-                for (const [userId, user] of mentionedUsers) {
-                    const [afkMentioned] = await client.db.getAfkUser(userId, message.guild.id);
-                    if (afkMentioned) {
-                        const embed = new MessageEmbed()
-                            .setColor('#FFA500')
-                            .setDescription(`${user} is currently AFK: ${afkMentioned.message}`);
-                        await message.reply({ embeds: [embed] });
-                    }
-                }
-            }
-            /************************************
-             * ENDAFK SYSTEM
-             ************************************/
+           
+            await xpSystem(client, message);
+            await afkSystem(client, message);
 
             /************************************
              * CUSTOM COMMANDS
              ************************************/
 
             let prefix = client.guildCommandPrefixes.get(message.guild.id) || 'o!';
-
             const usedPrefix = message.content.slice(0, prefix.length);
 
             if (client.config.channelStats.enabled) {
@@ -109,7 +42,6 @@ module.exports = class MessageEvent extends BaseEvent {
 
                 try {
                     const commandNameHash = crypto.createHash('md5').update(cmdName.toLowerCase()).digest('hex');
-
                     const [customCmd] = await client.db.getCommand(commandNameHash);
 
                     if (typeof customCmd !== 'undefined' && customCmd) {
@@ -163,16 +95,6 @@ module.exports = class MessageEvent extends BaseEvent {
         } catch (error) {
             client.logger.error('Error in message event:', error);
         }
-    }
-
-    sendLevelUpMessage(channel, user, newLevel) {
-        const embed = new MessageEmbed()
-            .setTitle('Level Up!')
-            .setDescription(`Congratulations ${user.username}! You've reached level ${newLevel}!`)
-            .setColor('#00FF00')
-            .setThumbnail(user.displayAvatarURL());
-        
-        channel.send({ embeds: [embed] });
     }
 
 }

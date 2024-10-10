@@ -1,5 +1,4 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { getRandomColor } = require('../../../../libs/utils');
 const { MessageEmbed } = require('discord.js');
 const { fetchRandom } = require('nekos-best.js');
 
