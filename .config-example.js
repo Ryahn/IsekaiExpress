@@ -31,11 +31,11 @@ module.exports = {
 		// The port for the mysql database
 		port: 3306,
 		// The user for the mysql database
-		user: "f95bot",
+		user: "NOTSET",
 		// The password for the mysql database
-		password: "f95bot",
+		password: "NOTSET",
 		// The database for the mysql database
-		database: "f95bot",
+		database: "NOTSET",
 		// Whether to run the migrations
 		runMigrations: false
 	},

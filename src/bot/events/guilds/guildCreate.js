@@ -14,8 +14,8 @@ module.exports = class GuildCreateEvent extends BaseEvent {
 
             const result = await db.getGuildConfigurable(guild.id);
 
-            if (result.length > 0 && result[0].cmdPrefix) {
-                const prefix = result[0].cmdPrefix;
+            if (result.length > 0 && result.cmdPrefix) {
+                const prefix = result.cmdPrefix;
                 client.guildCommandPrefixes.set(guild.id, prefix);
                 client.logger.success(`Guild ${guild.id} added with prefix ${prefix}`);
             } else {

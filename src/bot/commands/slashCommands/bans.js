@@ -23,11 +23,8 @@ module.exports = {
         try {
 
             const [totalBansResult, bans] = await Promise.all([
-                client.db.query(
-                    'SELECT COUNT(*) AS total_bans FROM bans WHERE discord_id = ?',
-                    [targetUser.id]
-                ),
-                getBans(client.db, targetUser.id, pageRequested)
+                client.db.query.table('bans').count('* as total_bans'),
+                getBans(client.db.query, pageRequested)
             ]);
 
             const totalBans = totalBansResult[0].total_bans;
@@ -35,32 +32,27 @@ module.exports = {
             const totalPages = Math.ceil(totalBans / itemsPerPage);
             const currentPage = Math.min(Math.max(pageRequested - 1, 0), totalPages - 1);
 
-            const embed = createBansEmbed(targetUser, totalBans, bans, currentPage, totalPages);
+            const embed = createBansEmbed(totalBans, bans, currentPage, totalPages);
             await interaction.editReply({ embeds: [embed] });
 
         } catch (err) {
             console.error('Error in warnings command:', err);
             await interaction.editReply('An error occurred while processing your request.');
-        } finally {
-            await stateManager.closePool(filename);
         }
     }
 };
 
-async function getBans(db, userId, page) {
+async function getBans(db, page) {
     const itemsPerPage = 5;
     const offset = (page - 1) * itemsPerPage;
-    return db.query(
-        `SELECT ban_id, username, reason, method, banned_by_user, created_at 
-         FROM bans 
-         WHERE discord_id = ? 
-         ORDER BY created_at DESC 
-         LIMIT ? OFFSET ?`,
-        [userId, itemsPerPage, offset]
-    );
+    return db('bans')
+        .select('ban_id', 'discord_id', 'username', 'reason', 'banned_by_id', 'banned_by_user', 'created_at')
+        .orderBy('created_at', 'desc')
+        .limit(itemsPerPage)
+        .offset(offset);
 }
 
-function createBansEmbed(targetUser, totalBans, bans, currentPage, totalPages) {
+function createBansEmbed(totalBans, bans, currentPage, totalPages) {
     const fields = bans.map(ban => ({
         name: `Ban ID: ${ban.ban_id}`,
         value: `Moderator: <@${ban.banned_by_id}>\nReason: ${ban.reason}\nDate: ${moment.unix(ban.created_at).format('MMMM Do YYYY, h:mm:ss a')}`,
@@ -70,7 +62,7 @@ function createBansEmbed(targetUser, totalBans, bans, currentPage, totalPages) {
     return new MessageEmbed()
         .setColor('RED')
         .setTitle('User Bans')
-        .setDescription(`<@${targetUser.id}> has a total of **${totalBans}** bans.`)
+        .setDescription(`**${totalBans}** bans.`)
         .addFields(fields)
         .setFooter({ text: `Page ${currentPage + 1} of ${totalPages}` })
         .setTimestamp();

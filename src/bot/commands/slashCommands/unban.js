@@ -34,7 +34,7 @@ module.exports = {
                 return interaction.followUp('You cannot target yourself.');
             }
         
-			await client.db.query(`DELETE FROM bans WHERE discord_id = ?`, [userId]);
+			await client.db.removeBan(userId);
 			await interaction.guild.members.unban(userId);
 			await interaction.followUp(`User <@${userId}> has been unbanned.`);
 

@@ -38,11 +38,7 @@ module.exports = {
             const warningId = generateUniqueId();
             const staff = interaction.user;
 
-            await client.db.query(
-                `INSERT INTO warnings (warn_id, warn_user_id, warn_user, warn_by_user, warn_by_id, warn_reason, created_at, updated_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [warningId, targetUser.id, targetUser.username, staff.username, staff.id, reason, moment().unix(), moment().unix()]
-            );
+            await client.db.createWarning(warningId, targetUser.id, targetUser.username, staff.username, staff.id, reason, client.utils.timestamp());
 
             const embed = new MessageEmbed()
                 .setColor('RED')

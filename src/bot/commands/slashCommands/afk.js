@@ -16,7 +16,7 @@ module.exports = {
 
         try {
             await interaction.deferReply();
-            await client.db.insertAfkUser(interaction.user.id, interaction.guild.id, message, timestamp());
+            await client.db.createAfkUser(interaction.user.id, interaction.guild.id, message, timestamp());
 
             const embed = new MessageEmbed()
                 .setColor('#00FF00')

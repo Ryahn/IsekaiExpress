@@ -1,162 +1,189 @@
-const mysql = require('mysql2/promise');
+const knex = require('knex');
 const config = require('../.config');
 const logger = require('silly-logger');
-// Create a connection pool
-const pool = mysql.createPool({
-  host: config.mysql.host,
-  user: config.mysql.user,
-  password: config.mysql.password,
-  database: config.mysql.database,
-  port: config.mysql.port,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+
+const db = knex({
+  client: 'mysql2',
+  connection: {
+    host: config.mysql.host,
+    user: config.mysql.user,
+    password: config.mysql.password,
+    database: config.mysql.database,
+    port: config.mysql.port
+  },
+  pool: { min: 2, max: 10 }
 });
 
-// Test the connection
-pool.getConnection()
-  .then(connection => {
-    logger.info('MySQL pool established');
-    connection.release();
+db.raw('SELECT 1')
+  .then(() => {
+    logger.info('Knex pool established');
   })
   .catch(err => {
     logger.error('Error connecting to the database:', err);
   });
 
 module.exports = {
-  query: async (sql, params) => {
-    const [rows] = await pool.query(sql, params);
-    return rows;
+  query: db,
+  end: () => db.destroy(),
+
+  checkUser: async (user) => {
+    const userId = user.id;
+    const username = user.username;
+
+    const row = await db.table('users').where({discord_id: userId});
+    if (row.length === 0) {
+      await db.table('users').insert({discord_id: userId, username: username});
+    } else {
+      await db.table('users').update({username: username}).where({discord_id: userId});
+    }
+  },
+
+  
+  createCage: async (userId, expires, cagedBy, cagedById, timestamp, reason) => {
+    await db.table('caged_users').insert({
+      discord_id: userId,
+      expires: expires,
+      caged_by_user: cagedBy,
+      caged_by_id: cagedById,
+      created_at: timestamp,
+      reason: reason
+    });
+  },
+
+  
+  createChannelStats: async (channelId, channelName, currentDate) => {
+    await db.table('channel_stats').insert({channel_id: channelId, channel_name: channelName, month_day: currentDate, total: 1});
+  },
+
+  createBan: async (discordId, username, reason, method, bannedById, bannedByUser, createdAt) => {
+    await db.table('bans').insert({ 
+      discord_id: discordId, 
+      username: username, 
+      reason: reason, 
+      method: method, 
+      banned_by_id: bannedById, 
+      banned_by_user: bannedByUser, 
+      created_at: createdAt 
+    });
+  },
+
+  createGuild: async (guildId, ownerId) => {
+    await db.table('Guilds').insert({guildId: guildId, owner_id: ownerId});
+  },
+
+  createGuildConfigurable: async (guildId) => {
+    await db.table('GuildConfigurable').insert({guildId: guildId});
+  },
+
+  
+  createWarning: async (warn_id, warn_user_id, warn_user, warn_by_user, warn_by_id, warn_reason, timestamp) => {
+    await db.table('warnings').insert({
+      warn_id: warn_id,
+      warn_user_id: warn_user_id,
+      warn_user: warn_user,
+      warn_by_user: warn_by_user,
+      warn_by_id: warn_by_id,
+      warn_reason: warn_reason,
+      created_at: timestamp,
+      updated_at: timestamp
+    });
+  },
+
+  createAfkUser: async (userId, guildId, message, timestamp) => {
+    await db.table('afk_users').insert({
+      user_id: userId,
+      guild_id: guildId,
+      message: message,
+      timestamp: timestamp
+    }).onConflict(['user_id', 'guild_id']).merge({ message: message, timestamp: timestamp });
+  },
+
+  deleteWarning: async (warnId) => {
+    await db.table('warnings').where({warn_id: warnId}).delete();
+  },
+  
+  deleteAfkUser: async (userId, guildId) => {
+    await db.table('afk_users').where({user_id: userId}).andWhere({guild_id: guildId}).delete();
+  },
+  
+  deleteGuild: async (guildId) => {
+    await db.table('Guilds').where({guildId: guildId}).delete();
+  },
+
+  deleteGuildConfigurable: async (guildId) => {
+    await db.table('GuildConfigurable').where({guildId: guildId}).delete();
   },
 
   getUserXP: async (userId) => {
-    const [rows] = await pool.query('SELECT * FROM user_xp WHERE user_id = ?', [userId]);
+    const rows = await db.table('user_xp').where({ user_id: userId });
     if (rows.length === 0) {
-      await pool.query('INSERT INTO user_xp (user_id) VALUES (?)', [userId]);
+      await db.table('user_xp').insert({ user_id: userId });
       return { xp: 0, level: 1, message_count: 0 };
     }
     return rows[0];
   },
 
   getUserRank: async (userId) => {
-    const [rows] = await pool.query(`
-        SELECT COUNT(*) + 1 AS \`rank\`
-        FROM user_xp
-        WHERE xp > (SELECT xp FROM user_xp WHERE user_id = ?)
-    `, [userId]);
+    const rows = await db.table('user_xp')
+      .count('* as rank')
+      .where('xp', '>', db('user_xp').select('xp').where({user_id: userId}))
+      .then(count => count[0].rank + 1);
 
-    return rows[0].rank;
-  },
-
-  updateUserXP: async (userId, xp, messageCount) => {
-    await pool.query('UPDATE user_xp SET xp = ?, message_count = ? WHERE user_id = ?', [xp, messageCount, userId]);
-  },
-
-  updateUserXPAndLevel: async (userId, xp, level, messageCount) => {
-    await pool.query('UPDATE user_xp SET xp = ?, level = ?, message_count = ? WHERE user_id = ?', [xp, level, messageCount, userId]);
-  },
-
-  updateUserMessageCount: async (userId, messageCount) => {
-    await pool.query('UPDATE user_xp SET message_count = ? WHERE user_id = ?', [messageCount, userId]);
+    return rows;
   },
 
   getXPSettings: async () => {
-    const [rows] = await pool.query('SELECT * FROM xp_settings LIMIT 1');
-    return rows[0];
-  },
-
-  updateXPSettings: async (settings) => {
-    await pool.query('UPDATE xp_settings SET ? WHERE id = 1', [settings]);
-  },
-
-  toggleDoubleXP: async (enabled) => {
-    await pool.query('UPDATE xp_settings SET double_xp_enabled = ? WHERE id = 1', [enabled]);
+    const [rows] = await db.table('xp_settings').select('*').limit(1);
+    return rows;
   },
 
   getExpiredCagedUsers: async (currentTime) => {
-    const [rows] = await pool.query('SELECT * FROM caged_users WHERE expires > 0 AND expires <= ?', [currentTime]);
+    const [rows] = await db.table('caged_users').where('expires', '>', 0).andWhere('expires', '<=', currentTime);
     return rows;
   },
 
-  removeCage: async (userId) => {
-    await pool.query('DELETE FROM caged_users WHERE discord_id = ?', [userId]);
+  getCage: async (userId) => {
+    const [rows] = await db.table('caged_users').select('discord_id', 'expires').where({discord_id: userId});
+    return rows;
+  },
+
+  getCagedUsers: async (currentTime) => {
+    const rows = await db.table('caged_users').select('discord_id', 'expires').where({expires: 0}).orWhere('expires', '>', currentTime).orderBy('expires', 'asc').limit(5);
+    return rows;
   },
 
   getChannelStats: async (channelId, currentDate) => {
-    const [rows] = await pool.query('SELECT * FROM channel_stats WHERE channel_id = ? AND month_day = ?', [channelId, currentDate]);
+    const [rows] = await db.table('channel_stats').where({channel_id: channelId}).andWhere({month_day: currentDate}).select('*');
     return rows;
-  },
-
-  updateChannelStats: async (channelId, currentDate) => {
-    await pool.query('UPDATE channel_stats SET total = total + 1 WHERE channel_id = ? AND month_day = ?', [channelId, currentDate]);
-  },
-
-  createChannelStats: async (channelId, channelName, currentDate) => {
-    await pool.query('INSERT INTO channel_stats (channel_id, channel_name, month_day, total) VALUES (?, ?, ?, 1)', [channelId, channelName, currentDate]);
-  },
-
-  createBan: async (discordId, username, reason, method, bannedById, bannedByUser, createdAt) => {
-    await pool.query('INSERT INTO bans (discord_id, username, reason, method, banned_by_id, banned_by_user, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [discordId, username, reason, method, bannedById, bannedByUser, createdAt]);
-  },
-
-  createGuild: async (guildId, ownerId) => {
-    await pool.query('INSERT INTO Guilds (guild_id, owner_id) VALUES (?, ?)', [guildId, ownerId]);
-  },
-
-  createGuildConfigurable: async (guildId) => {
-    await pool.query('INSERT INTO GuildConfigurable (guild_id) VALUES (?)', [guildId]);
   },
 
   getGuildConfigurable: async (guildId) => {
-    const [rows] = await pool.query('SELECT cmd_prefix FROM GuildConfigurable WHERE guild_id = ?', [guildId]);
+    const [rows] = await db.table('GuildConfigurable').select('*').where({guildId: guildId});
     return rows;
-  },
-
-  deleteGuild: async (guildId) => {
-    await pool.query('DELETE FROM Guilds WHERE guild_id = ?', [guildId]);
-  },
-
-  deleteGuildConfigurable: async (guildId) => {
-    await pool.query('DELETE FROM GuildConfigurable WHERE guild_id = ?', [guildId]);
   },
 
   getAfkUser: async (userId, guildId) => {
-    const [rows] = await pool.query('SELECT * FROM afk_users WHERE user_id = ? AND guild_id = ?', [userId, guildId]);
+    const rows = await db.table('afk_users').select('*').where({user_id: userId}).andWhere({guild_id: guildId});
     return rows;
   },
 
-  deleteAfkUser: async (userId, guildId) => {
-    await pool.query('DELETE FROM afk_users WHERE user_id = ? AND guild_id = ?', [userId, guildId]);
-  },
-
-  insertAfkUser: async (userId, guildId, message, timestamp) => {
-    await pool.query(
-      'INSERT INTO afk_users (user_id, guild_id, message, timestamp) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE message = ?, timestamp = ?',
-      [userId, guildId, message, timestamp, message, timestamp]
-    );
-  },
-
   getChannelStats: async (channelId, currentDate) => {
-    const [rows] = await pool.query('SELECT * FROM channel_stats WHERE channel_id = ? AND month_day = ?', [channelId, currentDate]);
+    const [rows] = await db.table('channel_stats').select('*').where({channel_id: channelId}).andWhere({month_day: currentDate});
     return rows;
   },
 
   getCommand: async (commandNameHash) => {
-    const [rows] = await pool.query('SELECT hash, content, `usage` FROM commands WHERE hash = ?', [commandNameHash]);
+    const rows = await db.table('commands').select('hash', 'content', 'usage').where({hash: commandNameHash});
     return rows;
   },
 
-  updateCommandUsage: async (commandNameHash, newUsageCount) => {
-    await pool.query('UPDATE commands SET `usage` = ? WHERE hash = ?', [newUsageCount, commandNameHash]);
-  },
-
   getLeaderboard: async (limit = 10) => {
-    const [rows] = await pool.query('SELECT user_id, xp, level FROM user_xp ORDER BY xp DESC LIMIT ?', [limit]);
+    const [rows] = await db('user_xp').join('users', 'user_xp.user_id','=', 'users.discord_id').select('user_xp.*', 'users.username').limit(limit);
     const leaderboard = [];
     for (const row of rows) {
-      const user = await client.users.fetch(row.user_id);
       leaderboard.push({
-        username: user.username,
+        user_id: row.user_id,
+        username: row.username,
         xp: row.xp,
         level: row.level
       });
@@ -164,5 +191,51 @@ module.exports = {
     return leaderboard;
   },
 
-  end: () => pool.end()
+  getWarningsOffset: async (userId, itemsPerPage, offset) => {
+    const rows = await db.table('warnings')
+        .select('warn_id', 'warn_by_user', 'warn_by_id', 'warn_reason', 'created_at')
+        .where({ warn_user_id: userId })
+        .orderBy('created_at', 'desc')
+        .limit(itemsPerPage)
+        .offset(offset);
+    return rows;
+  },
+  
+  removeBan: async (discordId) => {
+    await db.table('bans').where({discord_id: discordId}).delete();
+  },
+
+  removeCage: async (userId) => {
+    await db.table('caged_users').where({discord_id: userId}).delete()
+  },
+  
+  toggleDoubleXP: async (enabled) => {
+    await db.table('xp_settings').update({double_xp_enabled: enabled}).where({id: 1});
+  },
+
+  updateUserXP: async (userId, xp, messageCount = 0, level = 1) => {
+    xp = xp || 0;
+    await db.table('user_xp').where({user_id: userId}).update({xp: xp, message_count: messageCount, level: level});
+  },
+
+  updateUserXPAndLevel: async (userId, xp, level, messageCount) => {
+    await db.table('user_xp').update({xp: xp, message_count: messageCount}).where({user_id: userId});
+  },
+
+  updateUserMessageCount: async (userId, messageCount) => {
+    await db.table('user_xp').update({message_count: messageCount}).where({user_id: userId});
+  },
+  
+  updateXPSettings: async (settings) => {
+    await db.table('xp_settings').update(settings).where({ id: 1 });
+  },
+
+  updateChannelStats: async (channelId, currentDate) => {
+    await db.table('channel_stats').update({total: total+1}).where({channel_id: channelId}).andWhere({month_day: currentDate});
+  },
+  
+  updateCommandUsage: async (commandNameHash, newUsageCount) => {
+    await db.table('commands').update({usage: newUsageCount}).where({hash: commandNameHash});
+  },
+
 };

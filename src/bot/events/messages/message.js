@@ -21,6 +21,7 @@ module.exports = class MessageEvent extends BaseEvent {
         }
         
         try {
+            client.db.checkUser(message.author);
             const user = await client.db.getUserXP(message.author.id);
             const settings = await client.db.getXPSettings();
             user.message_count++;
@@ -35,7 +36,6 @@ module.exports = class MessageEvent extends BaseEvent {
 
                 user.xp += xpGain;
 
-                // Check for level up
                 const newLevel = client.utils.calculateLevel(user.xp);
                 if (newLevel > user.level) {
                     user.level = newLevel;
@@ -58,9 +58,9 @@ module.exports = class MessageEvent extends BaseEvent {
             /************************************
              * AFK SYSTEM
              ************************************/
-            const [afkUser] = await client.db.getAfkUser(message.author.id, message.guild.id);
+            const afkUser = await client.db.getAfkUser(message.author.id, message.guild.id);
 
-            if (afkUser) {
+            if (afkUser.length > 0) {
                 await client.db.deleteAfkUser(message.author.id, message.guild.id);
                 const embed = new MessageEmbed()
                     .setColor('#00FF00')
@@ -92,7 +92,7 @@ module.exports = class MessageEvent extends BaseEvent {
 
             const usedPrefix = message.content.slice(0, prefix.length);
 
-             if (client.config.channelStats.enabled) {
+            if (client.config.channelStats.enabled) {
                 const channelId = message.channelId;
                 try {
                     await updateChannelStats(channelId, message.channel.name);
@@ -110,11 +110,11 @@ module.exports = class MessageEvent extends BaseEvent {
                 try {
                     const commandNameHash = crypto.createHash('md5').update(cmdName.toLowerCase()).digest('hex');
 
-                    const [rows] = await client.db.getCommand(commandNameHash);
+                    const [customCmd] = await client.db.getCommand(commandNameHash);
 
-                    if (typeof rows !== 'undefined' && rows) {
-                        let commandContent = rows.content;
-                        const newUsageCount = rows.usage + 1;
+                    if (typeof customCmd !== 'undefined' && customCmd) {
+                        let commandContent = customCmd.content;
+                        const newUsageCount = customCmd.usage + 1;
 
                         function parseCommandContent(content, message) {
                             const randomPattern = /\{random:(.*?)\}/g;

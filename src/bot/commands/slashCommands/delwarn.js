@@ -25,10 +25,7 @@ module.exports = {
         if (warnId && warnId.length === 12) {
 			
             try {
-                await client.db.query(
-                    `DELETE FROM warnings WHERE warn_id = ?`,
-                    [warnId]
-                );
+                await client.db.deleteWarning(warnId);
 
                 await interaction.followUp(`Warning with ID \`${warnId}\` has been deleted.`);
 

@@ -44,7 +44,7 @@ module.exports = {
                 if (!standardizedDate) {
                     embed.setDescription('Invalid date format. Please use YYYY-MM-DD, DD-MM-YYYY, or similar formats.');
                 } else {
-                    result = await getStatsByDate(db, standardizedDate);
+                    result = await getStatsByDate(client.db.query, standardizedDate);
                     if (result.length === 0) {
                         embed.setDescription(`No data found for ${standardizedDate}`);
                     } else {
@@ -53,7 +53,7 @@ module.exports = {
                     }
                 }
             } else if (month && year) {
-                result = await getStatsByMonthYear(db, month, year);
+                result = await getStatsByMonthYear(client.db.query, month, year);
                 if (result.length === 0) {
                     embed.setDescription(`No data found for ${month}/${year}`);
                 } else {
@@ -61,7 +61,7 @@ module.exports = {
                         .addFields(result.map(r => ({ name: r.channel_name, value: `Total: ${r.total}` })));
                 }
             } else {
-                result = await getTopChannels(db);
+                result = await getTopChannels(client.db.query);
                 embed.setTitle('Top 5 Channels')
                     .addFields(result.map(r => ({ name: r.channel_name, value: `Total: ${r.total}` })));
             }
@@ -106,23 +106,26 @@ function standardizeDate(dateInput) {
 }
 
 async function getStatsByDate(db, date) {
-    return db.query(
-        'SELECT channel_name, total FROM channel_stats WHERE month_day = ? ORDER BY total DESC LIMIT 5',
-        [date]
-    );
+    return await db('channel_stats').select('channel_name', 'total').where({month_day: date}).orderBy('total', 'desc').limit(5);
 }
 
 async function getStatsByMonthYear(db, month, year) {
     const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
     const endDate = `${year}-${month.toString().padStart(2, '0')}-31`;
-    return db.query(
-        'SELECT channel_name, SUM(total) as total FROM channel_stats WHERE month_day BETWEEN ? AND ? GROUP BY channel_id ORDER BY total DESC LIMIT 5',
-        [startDate, endDate]
-    );
+    return await db('channel_stats')
+        .select('channel_name')
+        .sum('total as total')
+        .whereBetween('month_day', [startDate, endDate])
+        .groupBy('channel_id')
+        .orderBy('total', 'desc')
+        .limit(5);
 }
 
 async function getTopChannels(db) {
-    return db.query(
-        'SELECT channel_name, SUM(total) as total FROM channel_stats GROUP BY channel_id ORDER BY total DESC LIMIT 5'
-    );
+    return await db('channel_stats')
+        .select('channel_name')
+        .sum('total as total')
+        .groupBy('channel_name')
+        .orderBy('total', 'desc')
+        .limit(5);
 }

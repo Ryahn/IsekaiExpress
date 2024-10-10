@@ -11,16 +11,17 @@ module.exports = {
                 .setRequired(true)),
 
     async execute(client, interaction) {
+        const userToUncage = interaction.options.getUser('user');
 
         try {
             await interaction.deferReply();
-            const userToUncage = interaction.options.getUser('user');
 
+            const cageRole = interaction.guild.roles.cache.find(role => role.name === 'Caged');
+            if (!cageRole) {
+                return interaction.reply({ content: 'Caged role does not exist.', ephemeral: true });
+            }
 
-            const [cagedUser] = await client.db.query(
-                'SELECT old_roles FROM caged_users WHERE discord_id = ?',
-                [userToUncage.id]
-            );
+            const cagedUser = await client.db.getCage(userToUncage.id);
 
             if (!cagedUser) {
                 return interaction.editReply({ content: 'This user is not currently caged.', ephemeral: true });
@@ -32,12 +33,8 @@ module.exports = {
                 return interaction.editReply({ content: 'User not found in the guild.', ephemeral: true });
             }
 
-            // Restore old roles
-            const oldRoles = JSON.parse(cagedUser.old_roles);
-            await guildMember.roles.set(oldRoles);
-
-            // Remove the user from the caged_users table
-            await client.db.query('DELETE FROM caged_users WHERE discord_id = ?', [userToUncage.id]);
+            await client.db.removeCage(userToUncage.id);
+            await guildMember.roles.remove(cageRole.id);
 
             const embed = new MessageEmbed()
                 .setTitle('Cage Removed')

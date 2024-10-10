@@ -13,8 +13,6 @@ module.exports = class ReadyEvent extends BaseEvent {
     async run(client) {
         const rest = new REST({ version: '9' }).setToken(client.config.discord.botToken);
 
-        client.logger.info(`${client.user.tag} has logged in.`);
-
         client.langs = new Collection();
         client.guildSubReddits = new Collection();
         client.guildCommandPrefixes = new Collection();
@@ -52,7 +50,7 @@ module.exports = class ReadyEvent extends BaseEvent {
         let dbGuildIds = [];
 
         try {
-            const result = await client.db.query(`SELECT guildId FROM GuildConfigurable`);
+            const result = await client.db.query.table('GuildConfigurable').select('guildId');
             dbGuildIds = result.map(row => row.guildId);
         } catch (err) {
             client.logger.error("Error fetching guild IDs from the database:", err);
@@ -61,14 +59,8 @@ module.exports = class ReadyEvent extends BaseEvent {
         for (const guildId of guildIds) {
             try {
                 if (!dbGuildIds.includes(guildId)) {
-                    await client.db.query(
-                        `INSERT INTO Guilds (guildId, ownerId) VALUES (?, ?)`,
-                        [guildId, client.guilds.resolve(guildId).ownerId]
-                    );
-                    await client.db.query(
-                        `INSERT INTO GuildConfigurable (guildId) VALUES (?)`,
-                        [guildId]
-                    );
+                    await client.db.createGuild(guildId, client.guilds.resolve(guildId).ownerId);
+                    await client.db.createGuildConfigurable(guildId);
                     client.logger.info(`Guild ${guildId} added to Guilds and GuildConfigurable.`);
                 }
             } catch (err) {
@@ -78,14 +70,10 @@ module.exports = class ReadyEvent extends BaseEvent {
 
         try {
             for (const guildId of guildIds) {
-                const result = await client.db.query(
-                    `SELECT cmdPrefix, subReddit, guildWelcome, guildVolume, guildLanguage FROM GuildConfigurable WHERE guildId = ?`,
-                    [guildId]
-                );
+                const result = await client.db.getGuildConfigurable(guildId);
                 
-                if (result.length > 0) {
-                    const { cmdPrefix, subReddit, guildWelcome, guildLanguage } = result[0];
-                    
+                if (result) {
+                    const { cmdPrefix, subReddit, guildWelcome, guildLanguage } = result;                    
                     client.guildSubReddits.set(guildId, subReddit);
                     client.langs.set(guildId, guildLanguage);
                     client.guildCommandPrefixes.set(guildId, cmdPrefix);
@@ -97,6 +85,7 @@ module.exports = class ReadyEvent extends BaseEvent {
         }
 
         client.user.setActivity(`zonies cry`, { type: 'LISTENING' });
+        client.logger.info(`${client.user.tag} has logged in. Using prefix: ${client.guildCommandPrefixes.get(client.config.discord.guildId)}`);
         client.logger.info('Collection refreshed, no errors occurred while starting the program! SUCCESS!');
     }
 }

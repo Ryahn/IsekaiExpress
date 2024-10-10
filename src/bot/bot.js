@@ -2,7 +2,6 @@ const {Client, Intents, Collection} = require('discord.js');
 const {registerCommands, registerEvents} = require('./utils/register');
 const schedule = require('node-schedule');
 const config = require('../../.config');
-// const { sequelize, models } = require('../../database/sequelize');
 const db = require('../../database/db');
 const { timestamp } = require('../../libs/utils');
 const logger = require('silly-logger');
@@ -28,7 +27,7 @@ const client = new Client({
     client.slashCommands = new Collection();
     await registerCommands(client, '../commands/chatCommands');
     await registerEvents(client, '../events');
-    client.db = db;
+    client.db = require('../../database/db');
     client.logger = logger;
     client.config = config;
     client.utils = require('../../libs/utils');
@@ -41,7 +40,11 @@ schedule.scheduleJob('*/1 * * * *', async () => {
 
         const guild = client.guilds.cache.get(config.discord.guildId);
         if (!guild) {
-            logger.error('Guild not found');
+            logger.error('Guild not found - Caged Schedule');
+            return;
+        }
+
+        if (!expiredUsers) {
             return;
         }
 

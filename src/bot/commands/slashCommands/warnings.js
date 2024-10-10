@@ -34,10 +34,7 @@ module.exports = {
         try {
 
             const [totalWarningsResult, warnings] = await Promise.all([
-                client.db.query(
-                    'SELECT COUNT(*) AS total_warnings FROM warnings WHERE warn_user_id = ?',
-                    [targetUser.id]
-                ),
+                client.db.query('warnings').count('* as total_warnings').where({warn_user_id: targetUser.id}),
                 getWarnings(client.db, targetUser.id, pageRequested)
             ]);
 
@@ -59,14 +56,7 @@ module.exports = {
 async function getWarnings(db, userId, page) {
     const itemsPerPage = 5;
     const offset = (page - 1) * itemsPerPage;
-    return db.query(
-        `SELECT warn_id, warn_by_user, warn_by_id, warn_reason, created_at 
-         FROM warnings 
-         WHERE warn_user_id = ? 
-         ORDER BY created_at DESC 
-         LIMIT ? OFFSET ?`,
-        [userId, itemsPerPage, offset]
-    );
+    return db.getWarningsOffset(userId, itemsPerPage, offset);
 }
 
 function createWarningsEmbed(targetUser, totalWarnings, warnings, currentPage, totalPages) {

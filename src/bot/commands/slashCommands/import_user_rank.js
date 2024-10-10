@@ -109,7 +109,7 @@ module.exports = {
 					if (targetUser.username === usernameValue) {
 
 						level = client.utils.calculateLevel(xpValue);
-						await client.db.query('UPDATE user_xp SET xp = ?, level = ? WHERE user_id = ?', [xpValue, level, targetUser.id]);
+						await client.db.updateUserXP(targetUser.id, xpValue, 0, level);
 
 						await interaction.followUp(`Imported XP: ${xpValue}\nImported Level: ${level}\nImported for ${targetUser}`);
 					} else {

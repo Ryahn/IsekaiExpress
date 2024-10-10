@@ -1,6 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const moment = require('moment');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('check_cages')
@@ -9,13 +8,9 @@ module.exports = {
         await interaction.deferReply();
 
         try {
-            const currentTime = moment().unix();
-            const cagedUsers = await client.db.query(
-                `SELECT discord_id, expires FROM caged_users WHERE expires = 0 OR expires > ? ORDER BY expires ASC LIMIT 5`,
-                [currentTime]
-            );
+            const cagedUsers = await client.db.getCagedUsers(client.utils.timestamp());
 
-            if (cagedUsers.length === 0) {
+            if (!cagedUsers) {
                 return await interaction.editReply('No active caged users found.');
             }
 
