@@ -11,6 +11,13 @@ module.exports = {
       user: config.mysql.user,
       password: config.mysql.password,
       database: config.mysql.database
+    },
+    pool: {
+      min: 2,
+      max: 10
+    },
+    migrations: {
+      tableName: 'knex_migrations'
     }
   },
 

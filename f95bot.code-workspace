@@ -2,11 +2,19 @@
 	"folders": [
 		{
 			"name": "Web",
-			"path": "./web"
+			"path": "./src/web"
 		},
 		{
 			"name": "Bot",
-			"path": "./bot"
+			"path": "./src/bot"
+		},
+		{
+			"name": "Migrations",
+			"path": "./migrations"
+		},
+		{
+			"name": "Database",
+			"path": "./database"
 		},
 		{
 			"name": "Root",
