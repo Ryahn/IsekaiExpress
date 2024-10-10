@@ -1,6 +1,5 @@
 **/node_modules
-.env
-slashCommands.json
 .config.js
 **/logs
 **/level_card.png
+slashCommands.json
