@@ -65,82 +65,60 @@ module.exports = {
 
         const { getRandomColor } = client.utils;
 
-        // try {
-            await interaction.deferReply();
-			let optionName = '';
-			let setValue = '';
+        await interaction.deferReply();
 
-			if (interaction.options.getString('messages_per_xp')) {
-				let messagePerXpValue = interaction.options.getString('messages_per_xp');
-				optionName = 'Messages Per XP';
-				setValue = messagePerXpValue;
-				await setMessagesPerXP(messagePerXpValue);
-			}
+        const xpSettings = await client.db.query('xp_settings').first();
+		console.log(xpSettings);
+        const data = {
+            messages_per_xp: xpSettings.messages_per_xp,
+            weekend_multiplier: xpSettings.weekend_multiplier,
+            min_xp_per_gain: xpSettings.min_xp_per_gain,
+            max_xp_per_gain: xpSettings.max_xp_per_gain,
+            weekend_days: xpSettings.weekend_days,
+        };
+		console.log(data);
 
-			if (interaction.options.getString('xp_multiplier')) {
-				let xpMultiplierValue = interaction.options.getString('xp_multiplier');
-				optionName = 'XP Multiplier';
-				setValue = xpMultiplierValue;
-				await setXPMultiplier(xpMultiplierValue);
-			}
+        if (interaction.options.getString('messages_per_xp')) {
+            let messagePerXpValue = interaction.options.getString('messages_per_xp');
+			data.messages_per_xp = messagePerXpValue;
+        }
 
-			if (interaction.options.getString('min_xp_per_message')) {
-				let minXpPerMessageValue = interaction.options.getString('min_xp_per_message');
-				optionName = 'Min XP Per Message';
-				setValue = minXpPerMessageValue;
-				await setMinXPPerMessage(minXpPerMessageValue);
-			}
+        if (interaction.options.getString('xp_multiplier')) {
+            let xpMultiplierValue = interaction.options.getString('xp_multiplier');
+			data.weekend_multiplier = xpMultiplierValue;
+        }
 
-			if (interaction.options.getString('max_xp_per_message')) {
-				let maxXpPerMessageValue = interaction.options.getString('max_xp_per_message');
-				optionName = 'Max XP Per Message';
-				setValue = maxXpPerMessageValue;
-				await setMaxXPPerMessage(maxXpPerMessageValue);
-			}
+        if (interaction.options.getString('min_xp_per_message')) {
+            let minXpPerMessageValue = interaction.options.getString('min_xp_per_message');
+			data.min_xp_per_gain = minXpPerMessageValue;
+        }
 
-			if (interaction.options.getString('double_xp_days')) {
-				let doubleXpDaysValue = interaction.options.getString('double_xp_days');	
-				optionName = 'Double XP Days';
-				setValue = doubleXpDaysValue;
-				await setDoubleXPDays(doubleXpDaysValue);
-			}
-			
+        if (interaction.options.getString('max_xp_per_message')) {
+            let maxXpPerMessageValue = interaction.options.getString('max_xp_per_message');
+			data.max_xp_per_gain = maxXpPerMessageValue;
+        }
 
-			await interaction.editReply(`${optionName} has been updated`);
+        if (interaction.options.getString('double_xp_days')) {
+            let doubleXpDaysValue = interaction.options.getString('double_xp_days');	
+            let days = doubleXpDaysValue.split(',').map(day => day.toLowerCase()).join(',');
+            data.weekend_days = days;
+        }
 
-			async function setMessagesPerXP(value) {
-				await client.db.query('xp_settings').update({ messages_per_xp: value }).where('id', 1);
-			}
 
-			async function setXPMultiplier(value) {
-				await client.db.query('xp_settings').update({ weekend_multiplier: value }).where('id', 1);
-			}
+        await client.db.query('xp_settings').update(data).where('id', 1);
+        const fields = [
+			{ name: 'Messages Per XP', value: String(data.messages_per_xp) || 'Not set' },
+			{ name: 'XP Multiplier', value: String(data.xp_multiplier) || 'Not set' }, 
+			{ name: 'Min XP Per Message', value: String(data.min_xp_per_message) || 'Not set' }, 
+			{ name: 'Max XP Per Message', value: String(data.max_xp_per_message) || 'Not set' },
+			{ name: 'Double XP Days', value: String(data.double_xp_days) || 'Not set' },
+		];
 
-			async function setMinXPPerMessage(value) {
-				await client.db.query('xp_settings').update({ min_xp_per_gain: value }).where('id', 1);
-			}
+        const embed = new MessageEmbed()
+            .setDescription(`XP settings have been updated`)
+            .setColor(`#${getRandomColor()}`)
+            .addFields(...fields);
 
-			async function setMaxXPPerMessage(value) {
-				await client.db.query('xp_settings').update({ max_xp_per_gain: value }).where('id', 1);
-			}
-
-			async function setDoubleXPDays(value) {
-				let days = value.split(',').map(day => day.toLowerCase()).join(',');
-				await client.db.query('xp_settings').update({ weekend_days: days }).where('id', 1);
-			}
-
-            const embed = new MessageEmbed()
-                .setDescription(`${optionName} has been updated`)
-                .setColor(`#${getRandomColor()}`)
-				.addFields(
-					{ name: 'Option', value: optionName },
-					{ name: 'Value', value: setValue },
-				);
-
-            await interaction.editReply({ embeds: [embed] });
-        // } catch (error) {
-        //     client.logger.error('Error in xp_settings command:', error);
-        //     await interaction.editReply('An error occurred while processing your request.');
-        // }
+        await interaction.followUp({ embeds: [embed] });
     },
 };

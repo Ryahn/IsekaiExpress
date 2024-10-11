@@ -34,7 +34,7 @@ const client = new Client({
 
 schedule.scheduleJob('*/1 * * * *', async () => {
     
-    try {
+    // try {
         
         const expiredUsers = await db.getExpiredCagedUsers(timestamp());
 
@@ -61,9 +61,9 @@ schedule.scheduleJob('*/1 * * * *', async () => {
                 logger.error(`Error processing user ${user.discord_id}:`, error);
             }
         }
-    } catch (error) {
-        logger.error('Error in scheduled job:', error);
-    }
+    // } catch (error) {
+    //     logger.error('Error in scheduled job:', error);
+    // }
 });
 
 })();

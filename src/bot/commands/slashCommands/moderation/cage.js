@@ -6,6 +6,17 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('cage')
         .setDescription('Apply the cage role to a user, stripping all other roles.')
+        .addStringOption(option => 
+            option.setName('cage_type')
+                .setDescription('Select the type of cage')
+                .setChoices(
+                    { name: 'Cage-OnTopic', value: '672595882562158592' },
+                    { name: 'Cage-Porn', value: '443850934850945054' },
+                    { name: 'Cage Memes', value: '790681121926938674' },
+                    { name: 'Cage VC', value: '985741349267570718' },
+                    { name: 'Server Cage', value: '330806236821848065' }
+                )
+        )
         .addUserOption(option =>
             option.setName('user')
                 .setDescription('The user to cage')
@@ -29,14 +40,16 @@ module.exports = {
             const duration = interaction.options.getString('duration');
             const guildMember = await interaction.guild.members.fetch(userToCage.id);
             const reason = interaction.options.getString('reason');
+            const cageValue = interaction.guild.roles.cache.get(interaction.options.getString('cage_type'));
+
 
             if (!guildMember) {
                 return interaction.reply({ content: 'User not found in this server.', ephemeral: true });
             }
 
-            const cageRole = interaction.guild.roles.cache.find(role => role.name === 'Caged');
+            const cageRole = interaction.guild.roles.cache.find(role => role.id === cageValue);
             if (!cageRole) {
-                return interaction.reply({ content: 'Caged role does not exist.', ephemeral: true });
+                return interaction.reply({ content: `Cage role: ${cageRole.name} does not exist.`, ephemeral: true });
             }
 
             if (!interaction.guild.members.me.permissions.has(Permissions.FLAGS.MANAGE_ROLES)) {
@@ -75,11 +88,9 @@ module.exports = {
 
             await client.db.createCage(userToCage.id, expires, interaction.user.tag, interaction.user.id, client.utils.timestamp(), reason);
 
-            // Attempt to add the cage role
             await guildMember.roles.add(cageRole.id);
-            await interaction.reply({ content: `${userToCage.tag} has been caged successfully.` });
+            await interaction.reply({ content: `${userToCage.tag} has been caged with role: ${cageRole.name} successfully.` });
 
-            // Set up the expiration text and mod message
             let expiresText = expires === 0 ? 'Permanent' : `<t:${expires}:R>`;
 
             const modChannel = interaction.guild.channels.cache.find(ch => ch.name === 'moderator-chat');

@@ -72,35 +72,22 @@ client.once('ready', async () => {
     const staff_data = path.join(__dirname, './src/bot/tcg/staff_data.json');
     const retired_data = path.join(__dirname, './src/bot/tcg/retired_data.json');
 
-    const filteredUploaders = uploaders.filter(uploader => {
-      const hasModRole = mods.some(mod => mod.discord_id === uploader.discord_id);
-      const hasStaffRole = staff.some(staff => staff.discord_id === uploader.discord_id);
+    const filteredUploaders = uploaders.filter(uploaderMember => {
+      const hasModRole = mods.some(modMember => modMember.discord_id === uploaderMember.discord_id);
+      const hasStaffRole = staff.some(staffMember => staffMember.discord_id === uploaderMember.discord_id);        
       return !hasModRole && !hasStaffRole;
     });
 
-    const filteredMods =  mods.filter(mod => {
-      const hasUploaderRole = uploaders.some(uploader => uploader.discord_id === mod.discord_id);
-      const hasStaffRole = staff.some(staff => staff.discord_id === mod.discord_id);
-      return !hasUploaderRole && !hasStaffRole;
-    });
-
-    const filteredStaff =  staff.filter(staff => {
-      const hasUploaderRole = uploaders.some(uploader => uploader.discord_id === staff.discord_id);
-      const hasModRole = mods.some(mod => mod.discord_id === staff.discord_id);
-      return !hasUploaderRole && !hasModRole;
-    });
-
-    const filteredRetired =  retired.filter(retired => {
-      const hasUploaderRole = uploaders.some(uploader => uploader.discord_id === retired.discord_id);
-      const hasModRole = mods.some(mod => mod.discord_id === retired.discord_id);
-      const hasStaffRole = staff.some(staff => staff.discord_id === retired.discord_id);
-      return !hasUploaderRole && !hasModRole && !hasStaffRole;
+    const filteredMods =  mods.filter(modMember => {
+      const hasStaffRole = staff.some(staffMember => staffMember.discord_id === modMember.discord_id);
+      return !hasStaffRole;
     });
 
     let UploaderJson = []
     let ModsJson = []
     let StaffJson = []
     let RetiredJson = []
+
     for (const uploader of filteredUploaders) {
       UploaderJson.push({
         name: uploader.username,
@@ -151,15 +138,15 @@ client.once('ready', async () => {
       });
     }
 
-    for (const staff of filteredStaff) {
+    for (const staffMember of staff) {
       StaffJson.push({
-        name: staff.username,
-        discord_id: staff.discord_id,
+        name: staffMember.username,
+        discord_id: staffMember.discord_id,
         type: "hero",
         class: getRandomClass(),
         level: getRandomLevel(),
         power: getRandomPower(),
-        avatar: getAvatar(staff.avatar, staff.user_id),
+        avatar: getAvatar(staffMember.avatar, staffMember.user_id),
         rarity: {
             UR: 1,
             SUR: 1,
@@ -176,15 +163,15 @@ client.once('ready', async () => {
       });
     }
 
-    for (const retired of filteredRetired) {
+    for (const retiredMember of retired) {
       RetiredJson.push({
-        name: retired.username,
-        discord_id: retired.discord_id,
+        name: retiredMember.username,
+        discord_id: retiredMember.discord_id,
         type: "hero",
         class: getRandomClass(),
         level: getRandomLevel(),
         power: getRandomPower(),
-        avatar: getAvatar(retired.avatar, retired.user_id),
+        avatar: getAvatar(retiredMember.avatar, retiredMember.user_id),
         rarity: {
             UR: 1,
             SUR: 1,

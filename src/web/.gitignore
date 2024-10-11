@@ -1,3 +1,7 @@
 **/node_modules
 .env
 slashCommands.json
+tcg/uploader_data.json
+tcg/staff_data.json
+tcg/retired_data.json
+tcg/mods_data.json

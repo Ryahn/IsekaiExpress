@@ -4,3 +4,13 @@
 **/level_card.png
 test.js
 slashCommands.json
+**/src/bot/media/cards/games/*
+**/src/bot/media/cards/hero/*
+**/src/bot/tcg/staff_data.json
+**/src/bot/tcg/retired_data.json
+**/src/bot/tcg/mods_data.json
+**/src/bot/tcg/uploader_data.json
+src/bot/tcg/mods_data.json
+src/bot/tcg/retired_data.json
+src/bot/tcg/staff_data.json
+src/bot/tcg/uploader_data.json
