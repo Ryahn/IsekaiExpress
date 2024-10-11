@@ -7,9 +7,9 @@ exports.up = function(knex) {
 		if (!exists) {
 			return knex.schema.createTable('card_trades', function(table) {
 				table.bigIncrements('trade_id').primary();
-				table.integer('sender_id').references('id').inTable('users');
-				table.integer('receiver_id').references('id').inTable('users');
-				table.integer('card_id').references('card_id').inTable('card_data');
+				table.bigInteger('sender_id').unsigned().references('id').inTable('users');
+				table.bigInteger('receiver_id').unsigned().references('id').inTable('users');
+				table.bigInteger('card_id').unsigned().references('card_id').inTable('card_data');
 				table.bigInteger('quantity');
 				table.enum('status', ['pending', 'accepted', 'rejected']).defaultTo('pending');
 				table.bigInteger('updated_at');
