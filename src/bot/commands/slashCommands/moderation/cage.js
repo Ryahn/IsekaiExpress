@@ -36,22 +36,24 @@ module.exports = {
             return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
         }
 
-        try {
+        // try {
             const userToCage = interaction.options.getUser('user');
             const duration = interaction.options.getString('duration');
             const guildMember = await interaction.guild.members.fetch(userToCage.id);
             const reason = interaction.options.getString('reason');
-            const cageValue = interaction.guild.roles.cache.get(interaction.options.getString('cage_type'));
-
+            const cageValue = interaction.options.getString('cage_type');
 
             if (!guildMember) {
                 return interaction.reply({ content: 'User not found in this server.', ephemeral: true });
             }
 
+            const guild = client.guilds.cache.get(client.config.discord.guildId);
             const cageRole = interaction.guild.roles.cache.find(role => role.id === cageValue);
             if (!cageRole) {
-                return interaction.reply({ content: `Cage role: ${cageRole.name} does not exist.`, ephemeral: true });
+                return interaction.reply({ content: `Cage role: ${cageValue} does not exist.`, ephemeral: true });
             }
+
+            const cageName = guild.roles.cache.get(cageValue);
 
             if (!interaction.guild.members.me.permissions.has(Permissions.FLAGS.MANAGE_ROLES)) {
                 return interaction.reply({ content: 'I do not have permission to manage roles.', ephemeral: true });
@@ -87,10 +89,10 @@ module.exports = {
                 expires = moment().unix() + durationInSeconds;
             }
 
-            await client.db.createCage(userToCage.id, expires, interaction.user.tag, interaction.user.id, client.utils.timestamp(), reason);
+            await client.db.createCage(userToCage.id, expires, interaction.user.tag, interaction.user.id, client.utils.timestamp(), reason, cageValue);
 
-            await guildMember.roles.add(cageRole.id);
-            await interaction.reply({ content: `${userToCage.tag} has been caged with role: ${cageRole.name} successfully.` });
+            await guildMember.roles.add(cageValue);
+            await interaction.reply({ content: `<@${userToCage.id}> has been caged with role: ${cageName.name} successfully.` });
 
             let expiresText = expires === 0 ? 'Permanent' : `<t:${expires}:R>`;
 
@@ -101,7 +103,9 @@ module.exports = {
                 .addFields([
                     { name: 'User', value: `<@${userToCage.id}>`, inline: true },
                     { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
-                    { name: 'Expires', value: expiresText, inline: false }
+                    { name: 'Expires', value: expiresText, inline: false },
+                    { name: 'Reason', value: reason, inline: false },
+                    { name: 'Cage Type', value: cageName.name, inline: false }
                 ])
                 .setTimestamp();
 
@@ -110,9 +114,9 @@ module.exports = {
             } else {
                 client.logger.error('Moderator chat channel not found!');
             }
-        } catch (error) {
-            client.logger.error('Error:', error);
-            await interaction.reply({ content: 'An error occurred while processing the command.', ephemeral: true });
-        }
+        // } catch (error) {
+        //     client.logger.error('Error:', error);
+        //     await interaction.reply({ content: 'An error occurred while processing the command.', ephemeral: true });
+        // }
     }
 };

@@ -32,38 +32,45 @@ const client = new Client({
     client.config = config;
     client.utils = require('../../libs/utils');
 
-schedule.scheduleJob('*/1 * * * *', async () => {
-    
-    // try {
+    client.on('ready', () => {
+
+        schedule.scheduleJob('*/1 * * * *', async () => {
         
-        const expiredUsers = await db.getExpiredCagedUsers(timestamp());
-
-        const guild = client.guilds.cache.get(config.discord.guildId);
-        if (!guild) {
-            logger.error('Guild not found - Caged Schedule');
-            return;
-        }
-
-        if (!expiredUsers) {
-            return;
-        }
-
-        for (const user of expiredUsers) {
             try {
-                const member = await guild.members.fetch(user.discord_id);
-                if (member) {
-                    const oldRoles = JSON.parse(user.old_roles);
-                    await member.roles.set(oldRoles);
-                    await db.removeCage(user.discord_id);
-                    logger.info(`Removed cage from user ${user.discord_id}`);
+                
+                const expiredUsers = await db.getExpiredCagedUsers(timestamp());
+
+                if (!expiredUsers) {
+                    return;
+                }
+        
+                const guild = client.guilds.cache.get(config.discord.guildId);
+                if (!guild) {
+                    logger.error('[SCHEDULE] Guild not found - Caged Schedule');
+                    return;
+                }
+        
+                if (!expiredUsers) {
+                    return;
+                }
+        
+                for (const user of expiredUsers) {
+                    try {
+                        const member = await guild.members.fetch(user.discord_id);
+                        if (member) {
+                            await member.roles.remove(user.role_id);
+                            await db.removeCage(user.discord_id);
+                            logger.info(`[SCHEDULE] Removed cage from user ${user.discord_id}`);
+                        }
+                    } catch (error) {
+                        logger.error(`[SCHEDULE] Error processing schedule job for user ${user.discord_id}:`, error);
+                    }
                 }
             } catch (error) {
-                logger.error(`Error processing user ${user.discord_id}:`, error);
+                logger.error('[SCHEDULE] Error in scheduled job:', error);
             }
-        }
-    // } catch (error) {
-    //     logger.error('Error in scheduled job:', error);
-    // }
-});
+        });
+
+    });
 
 })();
