@@ -138,12 +138,12 @@ module.exports = {
   },
 
   getExpiredCagedUsers: async (currentTime) => {
-    const [rows] = await db.table('caged_users').where('expires_at', '>', 0).andWhere('expires_at', '<=', currentTime);
+    const [rows] = await db.table('caged_users').where('expires', '>', 0).andWhere('expires', '<=', currentTime);
     return rows;
   },
 
   getCage: async (userId) => {
-    const [rows] = await db.table('caged_users').select('discord_id', 'expires_at').where({discord_id: userId});
+    const [rows] = await db.table('caged_users').select('discord_id', 'expires').where({discord_id: userId});
     return rows;
   },
 
