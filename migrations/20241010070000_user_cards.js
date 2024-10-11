@@ -7,8 +7,8 @@ exports.up = function(knex) {
 		if (!exists) {
 			return knex.schema.createTable('user_cards', function(table) {
 				table.bigIncrements('user_card_id').primary();
-				table.integer('user_id').references('id').inTable('users');
-				table.integer('card_id').references('card_id').inTable('card_data');
+				table.bigInteger('user_id').unsigned().references('id').inTable('users');
+				table.bigInteger('card_id').unsigned().references('card_id').inTable('card_data');
 				table.integer('quantity').defaultTo(1);
 				table.bigInteger('updated_at');
 				table.bigInteger('created_at');
