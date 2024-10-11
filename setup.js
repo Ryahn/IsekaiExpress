@@ -42,10 +42,15 @@ db.migrate.latest({
   directory: './migrations',
 }).then(() => {
   logger.info('Migrations complete');
+  return db.seed.run({
+    directory: './seeds',
+  });
+}).then(() => {
+  logger.info('Seeds complete');
 }).catch((err) => {
-  logger.error('Error running migrations', err);
+  logger.error('Error running migrations or seeds', err);
+}).finally(() => {
+  db.destroy();
 });
-db.destroy();
 
 logger.info('Setup complete. .config.js has been created with new tokens.');
-logger.warn('Update all mysql info.')
