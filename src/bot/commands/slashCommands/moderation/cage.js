@@ -12,13 +12,9 @@ module.exports = {
                 .setRequired(true)
             )
         .addStringOption(option =>
-            option.setName('duration')
-                .setDescription('Duration of the cage (e.g. 1h, 1d). Leave empty for permanent.')
-                .setRequired(false))
-        .addStringOption(option =>
             option.setName('reason')
                 .setDescription('Reason for the cage')
-                .setRequired(false))
+                .setRequired(true))
         .addStringOption(option => 
             option.setName('cage_type')
                 .setDescription('Select the type of cage')
@@ -29,7 +25,11 @@ module.exports = {
                     { name: 'Cage VC', value: '985741349267570718' },
                     { name: 'Server Cage', value: '330806236821848065' }
                 ).setRequired(true)
-            ),
+            )
+        .addStringOption(option =>
+            option.setName('duration')
+                .setDescription('Duration of the cage (e.g. 1h, 1d). Leave empty for permanent.')
+                .setRequired(false)),
 
     async execute(client, interaction) {
         if (!interaction.member.permissions.has(Permissions.FLAGS.MANAGE_ROLES)) {
