@@ -6,6 +6,19 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('cage')
         .setDescription('Apply the cage role to a user, stripping all other roles.')
+        .addUserOption(option =>
+            option.setName('user')
+                .setDescription('The user to cage')
+                .setRequired(true)
+            )
+        .addStringOption(option =>
+            option.setName('duration')
+                .setDescription('Duration of the cage (e.g. 1h, 1d). Leave empty for permanent.')
+                .setRequired(false))
+        .addStringOption(option =>
+            option.setName('reason')
+                .setDescription('Reason for the cage')
+                .setRequired(false))
         .addStringOption(option => 
             option.setName('cage_type')
                 .setDescription('Select the type of cage')
@@ -16,19 +29,7 @@ module.exports = {
                     { name: 'Cage VC', value: '985741349267570718' },
                     { name: 'Server Cage', value: '330806236821848065' }
                 )
-        )
-        .addUserOption(option =>
-            option.setName('user')
-                .setDescription('The user to cage')
-                .setRequired(true))
-        .addStringOption(option =>
-            option.setName('duration')
-                .setDescription('Duration of the cage (e.g. 1h, 1d). Leave empty for permanent.')
-                .setRequired(false))
-        .addStringOption(option =>
-            option.setName('reason')
-                .setDescription('Reason for the cage')
-                .setRequired(false)),
+            ),
 
     async execute(client, interaction) {
         if (!interaction.member.permissions.has(Permissions.FLAGS.MANAGE_ROLES)) {
