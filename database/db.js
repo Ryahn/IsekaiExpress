@@ -148,7 +148,7 @@ module.exports = {
   },
 
   getCagedUsers: async (currentTime) => {
-    const rows = await db.table('caged_users').select('discord_id', 'expires_at').where({expires_at: 0}).orWhere('expires_at', '>', currentTime).orderBy('expires_at', 'asc').limit(5);
+    const rows = await db.table('caged_users').select('discord_id', 'expires').where({expires_at: 0}).orWhere('expires', '>', currentTime).orderBy('expires', 'asc').limit(5);
     return rows;
   },
 
