@@ -28,7 +28,7 @@ module.exports = {
                     { name: 'Cage Memes', value: '790681121926938674' },
                     { name: 'Cage VC', value: '985741349267570718' },
                     { name: 'Server Cage', value: '330806236821848065' }
-                )
+                ).setRequired(true)
             ),
 
     async execute(client, interaction) {
