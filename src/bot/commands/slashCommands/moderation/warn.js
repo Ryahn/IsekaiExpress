@@ -1,9 +1,11 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
-const moment = require('moment');
-const { generateUniqueId } = require('../../../../../libs/utils');
+const crypto = require('crypto');
+const path = require('path');
 
 module.exports = {
+    category: path.basename(__dirname),
+
     data: new SlashCommandBuilder()
         .setName('warn')
         .setDescription('Issue a warning to a user.')
@@ -17,6 +19,22 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(client, interaction) {
+
+        const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
+		const allowedChannel = await client.db.getAllowedChannel(hash);
+		const guild = client.guilds.cache.get(interaction.guild.id);
+		const member = await guild.members.fetch(interaction.user.id);
+		const roles = member.roles.cache.map(role => role.id);
+
+		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
+			if (!roles.some(role => client.allowed.includes(role))) {
+				return interaction.reply({ 
+					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
+					ephemeral: true 
+				});
+			}
+		}
+
         if (!client.config.warningSystem.enabled) {
             return interaction.reply('The warning system is not enabled.');
         }
@@ -35,7 +53,7 @@ module.exports = {
                 return interaction.followUp('You cannot warn yourself.');
             }
 
-            const warningId = generateUniqueId();
+            const warningId = client.utils.generateUniqueId();
             const staff = interaction.user;
 
             await client.db.createWarning(warningId, targetUser.id, targetUser.username, staff.username, staff.id, reason, client.utils.timestamp());

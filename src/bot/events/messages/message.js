@@ -5,6 +5,10 @@ const { updateChannelStats } = require('../../utils/channelStats');
 const { MessageEmbed } = require('discord.js');
 const { xpSystem } = require('../../../../libs/xpSystem');
 const { afkSystem } = require('../../../../libs/afkSystem');
+const { getCachedAllowedChannel } = require('../../utils/cache');
+const { checkCommandCooldown, setCooldown } = require('../../middleware/commandMiddleware');
+const { executeWithRateLimit } = require('../../middleware/apiMiddleware');
+
 module.exports = class MessageEvent extends BaseEvent {
     constructor() {
         super('messageCreate');
@@ -14,7 +18,6 @@ module.exports = class MessageEvent extends BaseEvent {
         if (message.author.bot || !message.guild) return;
         
         try {
-           
             await xpSystem(client, message);
             await afkSystem(client, message);
 
@@ -38,7 +41,6 @@ module.exports = class MessageEvent extends BaseEvent {
                 const [cmdName, ...cmdArgs] = message.content.slice(prefix.length).trim().split(/\s+/);
                 let filename = path.basename(__filename);
                 filename = `${filename} - ${usedPrefix}${cmdName}`;
-
 
                 try {
                     const commandNameHash = crypto.createHash('md5').update(cmdName.toLowerCase()).digest('hex');
@@ -78,7 +80,38 @@ module.exports = class MessageEvent extends BaseEvent {
 
                     if (command) {
                         try {
-                            await command.run(client, message, cmdArgs);
+                            // Check cooldown
+                            const cooldownCheck = checkCommandCooldown(client, message.author.id, command.name);
+                            
+                            if (cooldownCheck.onCooldown) {
+                                return message.reply(`You are on cooldown! Please wait ${cooldownCheck.remainingTime.toFixed(1)} more seconds.`);
+                            }
+                            
+                            // Check if command is restricted to specific channels
+                            const commandNameHash = crypto.createHash('md5').update(cmdName.toLowerCase()).digest('hex');
+                            const allowedChannel = await getCachedAllowedChannel(client, commandNameHash);
+                            
+                            if (allowedChannel && allowedChannel.length > 0) {
+                                // Command is restricted to specific channels
+                                const channelIds = allowedChannel.map(ch => ch.channel_id);
+                                
+                                if (!channelIds.includes(message.channel.id)) {
+                                    // Command used in a non-allowed channel
+                                    const allowedChannelMentions = channelIds
+                                        .map(id => `<#${id}>`)
+                                        .join(', ');
+                                    
+                                    return message.reply(`This command can only be used in: ${allowedChannelMentions}`);
+                                }
+                            }
+                            
+                            // Execute command with rate limiting for API calls
+                            await executeWithRateLimit(client, 'discord-api', async () => {
+                                await command.run(client, message, cmdArgs);
+                            });
+                            
+                            // Set cooldown after successful execution
+                            setCooldown(client, message.author.id, command.name);
                         } catch (err) {
                             client.logger.error(`Error executing command ${cmdName}:`, err);
                             message.channel.send('There was an error executing that command.');
@@ -96,5 +129,4 @@ module.exports = class MessageEvent extends BaseEvent {
             client.logger.error('Error in message event:', error);
         }
     }
-
-}
+};

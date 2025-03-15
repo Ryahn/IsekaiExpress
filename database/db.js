@@ -1,6 +1,10 @@
 const knex = require('knex');
 const config = require('../.config');
 const logger = require('silly-logger');
+const { timestamp } = require('../libs/utils');
+const { Model } = require('objection');
+const fs = require('fs');
+const path = require('path');
 
 const db = knex({
   client: 'mysql2',
@@ -14,6 +18,18 @@ const db = knex({
   pool: { min: 2, max: 10 }
 });
 
+Model.knex(db);
+
+const models = {};
+const modelsPath = path.join(__dirname, './models');
+
+fs.readdirSync(modelsPath).forEach(file => {
+  if (file.endsWith('.js')) {
+    const modelName = file.split('.')[0];
+    models[modelName] = require(path.join(modelsPath, file));
+  }
+});
+
 db.raw('SELECT 1')
   .then(() => {
     logger.info('Knex pool established');
@@ -22,8 +38,10 @@ db.raw('SELECT 1')
     logger.error('Error connecting to the database:', err);
   });
 
-module.exports = {
+const self =module.exports = {
+  ...models,
   query: db,
+  db: db,
   end: () => db.destroy(),
 
   checkUser: async (user) => {
@@ -127,6 +145,39 @@ module.exports = {
       return { xp: 0, level: 1, message_count: 0 };
     }
     return rows[0];
+  },
+
+  updateCardDescription: async (uuid, description) => {
+    await db.table('card_data').where('uuid', uuid).update({ description: description });
+    const card = await db.table('card_data').where('uuid', uuid).first();
+    return card;
+  },
+
+  createCommandSettings: async (name, hash, category = 'misc', channelId = '351435045921357824',) => {
+    await db.table('command_settings').insert({name: name, hash: hash, channel_id: channelId, category: category, created_at: timestamp(), updated_at: timestamp()}).onConflict('hash').ignore();
+  },
+
+  getAllowedChannel: async (hash) => {
+    const [rows] = await db.table('command_settings').select('channel_id').where({hash: hash});
+    return rows;
+  },
+
+  getCommandSettingsByHash: async (hash) => {
+    const [rows] = await db.table('command_settings').select('*').where({hash: hash});
+    return rows;
+  },
+
+  getCommandSettings: async (itemsPerPage = 10, offset = 0) => {
+    const rows = await db.table('command_settings').select('*').orderBy('name', 'asc').limit(itemsPerPage).offset(offset);
+    return rows;
+  },
+
+  updateCommandSettings: async (hash, channelId) => {
+    await db.table('command_settings').update({channel_id: channelId}).where({hash: hash});
+  },
+
+  createCard: async (card) => {
+    await db.table('card_data').insert(card).onConflict('uuid').merge();
   },
 
   getUserRank: async (userId) => {

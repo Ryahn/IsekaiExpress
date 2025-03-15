@@ -1,8 +1,11 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
 const fetch = require('node-fetch');
+const crypto = require('crypto');
+const path = require('path');
 
 module.exports = {
+    category: path.basename(__dirname),
     
     data: new SlashCommandBuilder()
         .setName('fuck')
@@ -10,6 +13,30 @@ module.exports = {
         .addUserOption(option => option.setName('target').setDescription('the person you want to bang').setRequired(true)),
 
     async execute(client, interaction) {
+
+        const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
+		const allowedChannel = await client.db.getAllowedChannel(hash);
+		const guild = client.guilds.cache.get(interaction.guild.id);
+		const member = await guild.members.fetch(interaction.user.id);
+		const roles = member.roles.cache.map(role => role.id);
+
+		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
+			if (!roles.some(role => client.allowed.includes(role))) {
+				return interaction.reply({ 
+					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
+					ephemeral: true 
+				});
+			}
+		}
+
+        const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'fuck');
+        if (cooldownTime) {
+            return interaction.reply({ 
+                content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
+                ephemeral: true 
+            });
+        }
+        
         const { getRandomColor } = client.utils;
         try {
             await interaction.deferReply();
@@ -17,7 +44,9 @@ module.exports = {
 
 
             if (interaction.channel.nsfw) {
-                const response = await fetch('https://eckigerluca.com/api/fuck');
+                const response = await client.rateLimitHandler.executeWithRateLimit('eckigerluca-api', async () => {
+                    return await fetch('https://eckigerluca.com/api/fuck');
+                });
                 const data = await response.json();
 
                 const embed = new MessageEmbed()

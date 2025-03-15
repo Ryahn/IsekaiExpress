@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const { Collection } = require("discord.js");
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
+const crypto = require('crypto');
 
 module.exports = class ReadyEvent extends BaseEvent {
     constructor() {
@@ -43,24 +44,35 @@ module.exports = class ReadyEvent extends BaseEvent {
 
         for (const file of commandFiles) {
             const command = require(file);
-            commands.push(command.data.toJSON());
+            const commandData = typeof command.data === 'function' ? await command.data(client) : command.data;
+
+            commands.push(commandData.toJSON());
             commandInfo.push({
-                name: command.data.name,
-                description: command.data.description,
+                name: commandData.name,
+                description: commandData.description,
             });
-            client.slashCommands.set(command.data.name, command);
+            client.slashCommands.set(commandData.name, command);
+            const hash = crypto.createHash('md5').update(commandData.name).digest('hex');
+
+            if (command.category === 'moderation') {
+                await client.db.createCommandSettings(commandData.name, hash, command.category, '370603031361749004');
+            } else if (commandData.name === 'level' || commandData.name === 'import_rank') {
+                await client.db.createCommandSettings(commandData.name, hash, command.category);
+            } else {
+                await client.db.createCommandSettings(commandData.name, hash, command.category, 'all');
+            }
             fs.writeFileSync('slashCommands.json', JSON.stringify(commandInfo, null, 2));
         }
 
-        try {
+        // try {
             await rest.put(
                 Routes.applicationGuildCommands(client.config.discord.applicationId, client.config.discord.guildId),
                 { body: commands },
             );
 
-        } catch (err) {
-            client.logger.error(err)
-        }
+        // } catch (err) {
+        //     client.logger.error(err)
+        // }
 
         const guildIds = client.guilds.cache.map(g => g.id);
         let dbGuildIds = [];

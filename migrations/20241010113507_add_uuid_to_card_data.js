@@ -8,7 +8,7 @@ exports.up = function(knex) {
 			knex.schema.hasColumn('card_data', 'uuid').then(function(exists) {
 				if (!exists) {
 					return knex.schema.table('card_data', function(table) {
-						table.string('uuid');
+						table.string('uuid').unique();
 					});
 				}
 			});

@@ -5,6 +5,10 @@ const config = require('../../.config');
 const db = require('../../database/db');
 const { timestamp } = require('../../libs/utils');
 const logger = require('silly-logger');
+const process = require('process');
+const cooldownManager = require('./utils/cooldownManager');
+const rateLimitHandler = require('./utils/rateLimitHandler');
+
 const client = new Client({
   intents: [
     Intents.FLAGS.GUILDS,
@@ -31,6 +35,18 @@ const client = new Client({
     client.logger = logger;
     client.config = config;
     client.utils = require('../../libs/utils');
+    client.cooldownManager = cooldownManager;
+    client.rateLimitHandler = rateLimitHandler;
+    client.cache = {
+        allowedChannels: new Map(),
+        allowedRoles: new Map(),
+        allowedUsers: new Map(),
+    }
+    client.allowed = [
+        config.discord.ownerId,
+        config.roles.mod,
+        config.roles.staff
+    ];
 
     client.on('ready', () => {
 
@@ -71,6 +87,25 @@ const client = new Client({
             }
         });
 
+    });
+
+    client.on('rateLimit', (rateLimitInfo) => {
+        client.logger.warn(`Rate limit hit! Timeout: ${rateLimitInfo.timeout}ms, Limit: ${rateLimitInfo.limit}, Method: ${rateLimitInfo.method}, Path: ${rateLimitInfo.path}, Route: ${rateLimitInfo.route}`);
+        
+    });
+
+    process.on('SIGINT', async () => {
+        logger.info('Received SIGINT. Shutting down gracefully...');
+        await db.end();
+        client.destroy();
+        process.exit(0);
+    });
+    
+    process.on('SIGTERM', async () => {
+        logger.info('Received SIGTERM. Shutting down gracefully...');
+        await db.end();
+        client.destroy();
+        process.exit(0);
     });
 
 })();

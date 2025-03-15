@@ -1,7 +1,11 @@
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+const { v5: uuidv5 } = require('uuid');
+const NAMESPACE = uuidv5.URL;
 const path = require('path');
+const db = require('./database/db');
+const config = require('./.config');
+const { timestamp } = require('./libs/utils');
 
 GlobalFonts.registerFromPath('./src/bot/tcg/fonts/Mukta_Malar_NAME.woff2', 'CharacterNameFont');
 GlobalFonts.registerFromPath('./src/bot/tcg/fonts/Libre_Franklin_TYPE.woff2', 'ClassFont');
@@ -9,12 +13,18 @@ GlobalFonts.registerFromPath('./src/bot/tcg/fonts/Character_Power_LEVEL_POWER.tt
 
 let baseImagePath = './src/bot/tcg/base_card.png';
 
-function makeCardFileName(name, rarity, id) {
+function makeCardFileName(name, rarity) {
     const safeName = name.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
-    return `${safeName}_${rarity}_${id}.png`;
+    return `${safeName}_${rarity}.png`;
 }
 
-async function generateCard(characterName, rarity, className, level = '1', power = '0', starCount = 1, avatar, type) {
+function generateUUID(characterName, rarity, discordId) {
+    const inputString = `${characterName}-${rarity}-${discordId}`;
+    return uuidv5(inputString, NAMESPACE);
+}
+
+async function generateCard(characterName, rarity, className, level, power, avatar, type, discordId) {
+    const uuid = generateUUID(characterName, rarity, discordId);
     let canvas = createCanvas(768, 1073);
     let ctx = canvas.getContext('2d');
 
@@ -48,7 +58,7 @@ async function generateCard(characterName, rarity, className, level = '1', power
     // Add level
     ctx.font = 'bold 80px Onepiecetcg_power';
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(level, 70, 95);
+    ctx.fillText(String(level), 70, 95);
 
     // Add power
     if (power > 9999) {
@@ -57,12 +67,48 @@ async function generateCard(characterName, rarity, className, level = '1', power
         ctx.font = 'bold 60px Onepiecetcg_power';
     }
     ctx.fillStyle = '#000000';
-    ctx.fillText(power, canvas.width - 178, 70);
+    ctx.fillText(String(power), canvas.width - 178, 70);
 
     // Add stars
     let star = await loadImage('./src/bot/tcg/star.png');
     let starWidth = 18;
     let starHeight = 18;
+
+    switch(rarity) {
+        case 'UR':
+            starCount = 11;
+            break;
+        case 'SUR':
+            starCount = 10;
+            break;
+        case 'SSR':
+            starCount = 9;
+            break;
+        case 'SR':
+            starCount = 8;
+            break;
+        case 'L':
+            starCount = 7;
+            break;
+        case 'M':
+            starCount = 6;
+            break;
+        case 'U':
+            starCount = 5;
+            break;
+        case 'R':
+            starCount = 4;
+            break;
+        case 'UC':
+            starCount = 3;
+            break;
+        case 'C':
+            starCount = 2;
+            break;
+        case 'N':
+            starCount = 1;
+            break;
+    }
 
     if (starCount > 10) {
         starWidth = 18;
@@ -81,7 +127,7 @@ async function generateCard(characterName, rarity, className, level = '1', power
         ctx.drawImage(star, x, 900, starWidth, starHeight); // Adjust the y-position as needed
     }
 
-    let fileName = makeCardFileName(characterName, rarity, uuidv4().split('-')[0]);
+    let fileName = makeCardFileName(characterName, rarity);
     let outputDir = path.join(__dirname, `./src/bot/media/cards/${type}`);
     if (!fs.existsSync(outputDir)) {
       logger.info(`Creating output directory: ${outputDir}`);
@@ -94,6 +140,22 @@ async function generateCard(characterName, rarity, className, level = '1', power
     let buffer = canvas.toBuffer('image/png');
 
     fs.writeFileSync(outputPath, buffer);
+
+    let card = {
+        discord_id: discordId,
+        uuid: uuid,
+        stars: starCount,
+        name: characterName,
+        rarity: rarity,
+        class: className,
+        level: level,
+        power: power,
+        image_url: `${config.cardUrl}/${type}/${fileName}`,
+        created_at: timestamp(),
+        updated_at: timestamp(),
+    }
+
+    await db.createCard(card);
 
     // Clear memory-intensive objects manually
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -111,7 +173,7 @@ async function generateCard(characterName, rarity, className, level = '1', power
     return {
         fileName,
         outputPath,
-        file_id: uuidv4(),
+        file_id: uuid,
     };
 }
 

@@ -14,7 +14,7 @@ logger.startup(`Processing batch from ${batchFilePath}...`);
       logger.info(`Processing character: ${character.name}`);
       for (const [key, value] of Object.entries(character.rarity)) {
         if (value) {
-          const card = await generateCard(character.name, key, character.class, character.level, character.power, 11, character.avatar, character.type);
+          const card = await generateCard(character.name, key, character.class, character.level, character.power, character.avatar, character.type, character.discord_id);
           logger.info(`Generated card: ${card.fileName}`);
         }
       }

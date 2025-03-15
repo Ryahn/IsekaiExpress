@@ -1,8 +1,11 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
+const crypto = require('crypto');
+const path = require('path');
 
 module.exports = {
-    
+    category: path.basename(__dirname),
+	
     data: new SlashCommandBuilder()
 	.setName('xp_settings')
 	.setDescription("Change xp settings")
@@ -63,55 +66,68 @@ module.exports = {
             return interaction.reply({ content: 'You do not have permission to change XP settings.', ephemeral: true });
         }
 
+		const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
+		const allowedChannel = await client.db.getAllowedChannel(hash);
+		const guild = client.guilds.cache.get(interaction.guild.id);
+		const member = await guild.members.fetch(interaction.user.id);
+		const roles = member.roles.cache.map(role => role.id);
+
+		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
+			if (!roles.some(role => client.allowed.includes(role))) {
+				return interaction.reply({ 
+					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
+					ephemeral: true 
+				});
+			}
+		}
+
         const { getRandomColor } = client.utils;
 
         await interaction.deferReply();
 
         const xpSettings = await client.db.query('xp_settings').first();
-		console.log(xpSettings);
         const data = {
-            messages_per_xp: xpSettings.messages_per_xp,
-            weekend_multiplier: xpSettings.weekend_multiplier,
-            min_xp_per_gain: xpSettings.min_xp_per_gain,
-            max_xp_per_gain: xpSettings.max_xp_per_gain,
-            weekend_days: xpSettings.weekend_days,
+            messages_per_xp: Number(xpSettings.messages_per_xp),
+            weekend_multiplier: Number(xpSettings.weekend_multiplier),
+            min_xp_per_gain: Number(xpSettings.min_xp_per_gain),
+            max_xp_per_gain: Number(xpSettings.max_xp_per_gain),
+            weekend_days: String(xpSettings.weekend_days),
         };
-		console.log(data);
 
         if (interaction.options.getString('messages_per_xp')) {
             let messagePerXpValue = interaction.options.getString('messages_per_xp');
-			data.messages_per_xp = messagePerXpValue;
+			data.messages_per_xp = Number(messagePerXpValue);
         }
 
         if (interaction.options.getString('xp_multiplier')) {
             let xpMultiplierValue = interaction.options.getString('xp_multiplier');
-			data.weekend_multiplier = xpMultiplierValue;
+			data.weekend_multiplier = Number(xpMultiplierValue);
         }
 
         if (interaction.options.getString('min_xp_per_message')) {
             let minXpPerMessageValue = interaction.options.getString('min_xp_per_message');
-			data.min_xp_per_gain = minXpPerMessageValue;
+			data.min_xp_per_gain = Number(minXpPerMessageValue);
         }
 
         if (interaction.options.getString('max_xp_per_message')) {
             let maxXpPerMessageValue = interaction.options.getString('max_xp_per_message');
-			data.max_xp_per_gain = maxXpPerMessageValue;
+			data.max_xp_per_gain = Number(maxXpPerMessageValue);
         }
 
         if (interaction.options.getString('double_xp_days')) {
             let doubleXpDaysValue = interaction.options.getString('double_xp_days');	
             let days = doubleXpDaysValue.split(',').map(day => day.toLowerCase()).join(',');
-            data.weekend_days = days;
+            data.weekend_days = String(days);
         }
 
 
         await client.db.query('xp_settings').update(data).where('id', 1);
         const fields = [
 			{ name: 'Messages Per XP', value: String(data.messages_per_xp) || 'Not set' },
-			{ name: 'XP Multiplier', value: String(data.xp_multiplier) || 'Not set' }, 
-			{ name: 'Min XP Per Message', value: String(data.min_xp_per_message) || 'Not set' }, 
-			{ name: 'Max XP Per Message', value: String(data.max_xp_per_message) || 'Not set' },
-			{ name: 'Double XP Days', value: String(data.double_xp_days) || 'Not set' },
+			{ name: 'XP Multiplier', value: String(data.weekend_multiplier) || 'Not set' }, 
+			{ name: 'Min XP Per Message', value: String(data.min_xp_per_gain) || 'Not set' }, 
+			{ name: 'Max XP Per Message', value: String(data.max_xp_per_gain) || 'Not set' },
+			{ name: 'Double XP Days', value: String(data.weekend_days) || 'Not set' },
 		];
 
         const embed = new MessageEmbed()

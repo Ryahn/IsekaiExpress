@@ -20,5 +20,5 @@ exports.up = function(knex) {
  * @returns { Promise<void> }
  */
 exports.down = function(knex) {
-	return knex.schema.dropTable('channel_stats');
+	return knex.schema.dropTableIfExists('channel_stats');
 };

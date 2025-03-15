@@ -9,28 +9,41 @@ const path = require('path');
 const cooldowns = new Map();
 
 module.exports = {
+    category: path.basename(__dirname),
+    
     data: new SlashCommandBuilder()
         .setName('lolilicense')
         .setDescription('Get a qualified loli license'),
     
 
     async execute(client, interaction) {
+
+        const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
+		const allowedChannel = await client.db.getAllowedChannel(hash);
+		const guild = client.guilds.cache.get(interaction.guild.id);
+		const member = await guild.members.fetch(interaction.user.id);
+		const roles = member.roles.cache.map(role => role.id);
+
+		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
+			if (!roles.some(role => client.allowed.includes(role))) {
+				return interaction.reply({ 
+					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
+					ephemeral: true 
+				});
+			}
+		}
+        
         await interaction.deferReply();
 
-        const cooldownTime = 2000; // 2 seconds cooldown
         const user = interaction.user;
 
-        // Check if user is on cooldown
-        if (cooldowns.has(user.id)) {
-            const expirationTime = cooldowns.get(user.id) + cooldownTime;
-            if (Date.now() < expirationTime) {
-                const timeLeft = (expirationTime - Date.now()) / 1000;
-                return interaction.reply(`You are on cooldown! Please wait ${timeLeft.toFixed(1)} more seconds.`);
-            }
+        const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'lolilicense');
+        if (cooldownTime) {
+            return interaction.reply({ 
+                content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
+                ephemeral: true 
+            });
         }
-
-        // Set new cooldown
-        cooldowns.set(user.id, Date.now());
 
         // Default avatar if user has none
         const avatar = user.avatar 

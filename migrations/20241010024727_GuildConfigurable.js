@@ -24,5 +24,5 @@ exports.up = function(knex) {
  * @returns { Promise<void> }
  */
 exports.down = function(knex) {
-	return knex.schema.dropTable('GuildConfigurable');
+	return knex.schema.dropTableIfExists('GuildConfigurable');
 };

@@ -1,8 +1,12 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { Permissions, MessageEmbed } = require('discord.js');
 const moment = require('moment');
+const crypto = require('crypto');
+const path = require('path');
 
 module.exports = {
+    category: path.basename(__dirname),
+
     data: new SlashCommandBuilder()
         .setName('cage')
         .setDescription('Apply the cage role to a user, stripping all other roles.')
@@ -36,6 +40,21 @@ module.exports = {
             return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
         }
 
+        const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
+		const allowedChannel = await client.db.getAllowedChannel(hash);
+		const guild = client.guilds.cache.get(interaction.guild.id);
+		const member = await guild.members.fetch(interaction.user.id);
+		const roles = member.roles.cache.map(role => role.id);
+
+		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
+			if (!roles.some(role => client.allowed.includes(role))) {
+				return interaction.reply({ 
+					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
+					ephemeral: true 
+				});
+			}
+		}
+
         // try {
             const userToCage = interaction.options.getUser('user');
             const duration = interaction.options.getString('duration');
@@ -47,7 +66,6 @@ module.exports = {
                 return interaction.reply({ content: 'User not found in this server.', ephemeral: true });
             }
 
-            const guild = client.guilds.cache.get(client.config.discord.guildId);
             const cageRole = interaction.guild.roles.cache.find(role => role.id === cageValue);
             if (!cageRole) {
                 return interaction.reply({ content: `Cage role: ${cageValue} does not exist.`, ephemeral: true });

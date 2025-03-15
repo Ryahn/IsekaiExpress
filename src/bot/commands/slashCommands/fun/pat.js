@@ -1,8 +1,11 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageEmbed } = require('discord.js');
 const { fetchRandom } = require('nekos-best.js');
+const crypto = require('crypto');
+const path = require('path');
 
 module.exports = {
+    category: path.basename(__dirname),
     
     data: new SlashCommandBuilder()
         .setName('pat')
@@ -10,20 +13,33 @@ module.exports = {
         .addUserOption(option => option.setName('target').setDescription('The user you want to headpat')),
 
     async execute(client, interaction) {
+        const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
+		const allowedChannel = await client.db.getAllowedChannel(hash);
+		const guild = client.guilds.cache.get(interaction.guild.id);
+		const member = await guild.members.fetch(interaction.user.id);
+		const roles = member.roles.cache.map(role => role.id);
+
+		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
+			if (!roles.some(role => client.allowed.includes(role))) {
+				return interaction.reply({ 
+					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
+					ephemeral: true 
+				});
+			}
+		}
+        
         const { getRandomColor } = client.utils;
         try {
             await interaction.deferReply();
             let target = interaction.options.getUser('target') || interaction.user;
             const avatar = target.displayAvatarURL({ size: 512, format: 'jpg', dynamic: false });
-            const response = await fetch(`https://nekobot.xyz/api/imagegen?type=magik&image=${avatar}`);
+
+            const response = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
+                return await fetchRandom('pat');
+            });
             const data = await response.json();
 
-        async function fetchImage() {
-            const response = await fetchRandom('pat');
-            return response.results[0].url;
-        }
-
-        const img = await fetchImage();
+            const img = data.results[0].url;
 
         let people = [
             'a random person',
