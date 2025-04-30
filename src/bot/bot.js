@@ -9,24 +9,64 @@ const process = require('process');
 const cooldownManager = require('./utils/cooldownManager');
 const rateLimitHandler = require('./utils/rateLimitHandler');
 
-const client = new Client({
-  intents: [
-    Intents.FLAGS.GUILDS,
-    Intents.FLAGS.GUILD_MESSAGES,
-    Intents.FLAGS.GUILD_MEMBERS,
-    Intents.FLAGS.GUILD_BANS,
-    Intents.FLAGS.GUILD_PRESENCES,
-  ]
+// Connection management constants
+const MAX_RECONNECT_ATTEMPTS = 5;
+const INITIAL_RECONNECT_DELAY = 1000; // 1 second
+const MAX_RECONNECT_DELAY = 60000; // 1 minute
+
+class BotClient extends Client {
+    constructor(options) {
+        super(options);
+        this.reconnectAttempts = 0;
+        this.reconnectTimeout = null;
+    }
+
+    async connect() {
+        try {
+            logger.startup('Bot is starting...');
+            await this.login(config.discord.botToken);
+            this.reconnectAttempts = 0; // Reset attempts on successful connection
+            logger.startup('Bot has started!');
+        } catch (error) {
+            logger.error('Failed to connect:', error);
+            this.handleReconnect();
+        }
+    }
+
+    handleReconnect() {
+        if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            logger.error(`Maximum reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Shutting down.`);
+            process.exit(1);
+            return;
+        }
+
+        // Calculate delay with exponential backoff
+        const delay = Math.min(
+            INITIAL_RECONNECT_DELAY * Math.pow(2, this.reconnectAttempts),
+            MAX_RECONNECT_DELAY
+        );
+
+        logger.info(`Attempting to reconnect in ${delay/1000} seconds... (Attempt ${this.reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+
+        clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = setTimeout(() => {
+            this.reconnectAttempts++;
+            this.connect();
+        }, delay);
+    }
+}
+
+const client = new BotClient({
+    intents: [
+        Intents.FLAGS.GUILDS,
+        Intents.FLAGS.GUILD_MESSAGES,
+        Intents.FLAGS.GUILD_MEMBERS,
+        Intents.FLAGS.GUILD_BANS,
+        Intents.FLAGS.GUILD_PRESENCES,
+    ]
 });
 
 (async () => {
-
-    logger.startup('Bot is starting...');
-    client.login(config.discord.botToken);
-    client.prefix = config.discord.prefix;
-    logger.startup('Bot has started!');
-    logger.info(`Prefix: ${client.prefix}`);
-
     client.commands = new Collection();
     client.slashCommands = new Collection();
     await registerCommands(client, '../commands/chatCommands');
@@ -47,6 +87,26 @@ const client = new Client({
         config.roles.mod,
         config.roles.staff
     ];
+
+    // Handle disconnections
+    client.on('disconnect', () => {
+        logger.warn('Bot disconnected from Discord');
+        client.handleReconnect();
+    });
+
+    // Handle errors
+    client.on('error', (error) => {
+        logger.error('Discord client error:', error);
+        client.handleReconnect();
+    });
+
+    // Handle debug messages
+    client.on('debug', (info) => {
+        if (info.includes('Session invalidated') || info.includes('Connection reset by peer')) {
+            logger.warn('Session invalidated or connection reset');
+            client.handleReconnect();
+        }
+    });
 
     client.on('ready', () => {
 
@@ -94,8 +154,10 @@ const client = new Client({
         
     });
 
+    // Graceful shutdown handlers
     process.on('SIGINT', async () => {
         logger.info('Received SIGINT. Shutting down gracefully...');
+        clearTimeout(client.reconnectTimeout);
         await db.end();
         client.destroy();
         process.exit(0);
@@ -103,9 +165,12 @@ const client = new Client({
     
     process.on('SIGTERM', async () => {
         logger.info('Received SIGTERM. Shutting down gracefully...');
+        clearTimeout(client.reconnectTimeout);
         await db.end();
         client.destroy();
         process.exit(0);
     });
 
+    // Start the connection
+    await client.connect();
 })();
