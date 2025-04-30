@@ -32,14 +32,14 @@ function startProcess(name, scriptPath, logPath) {
 }
 
 const botLogPath = path.join(__dirname, 'logs', 'bot.log');
-const webLogPath = path.join(__dirname, 'logs', 'web.log');
+// const webLogPath = path.join(__dirname, 'logs', 'web.log');
 
 const botProcess = startProcess('Bot', path.join(__dirname, 'src', 'bot', 'bot.js'), botLogPath);
-const webProcess = startProcess('Web Panel', path.join(__dirname, 'src', 'web', 'app.js'), webLogPath);
+// const webProcess = startProcess('Web Panel', path.join(__dirname, 'src', 'web', 'app.js'), webLogPath);
 
 process.on('SIGINT', () => {
   logger.info('Stopping all processes...');
   botProcess.kill();
-  webProcess.kill();
+  // webProcess.kill();
   process.exit();
 });
