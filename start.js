@@ -18,6 +18,18 @@ function startProcess(name, scriptPath, logPath) {
 
   logger.startup(`Started ${name} (PID: ${process.pid})`);
 
+  process.stdout.on('error', (error) => {
+    logger.error(`${name} stdout error:`, error);
+  });
+
+  process.stderr.on('error', (error) => {
+    logger.error(`${name} stderr error:`, error);
+  });
+
+  logStream.on('error', (error) => {
+    logger.error(`${name} log stream error:`, error);
+  });
+
   process.stdout.pipe(logStream);
   process.stderr.pipe(logStream);
   process.stdout.pipe(process.stdout);
@@ -26,6 +38,10 @@ function startProcess(name, scriptPath, logPath) {
   process.on('close', (code) => {
     logger.success(`${name} process exited with code ${code}`);
     logStream.end();
+  });
+
+  process.on('error', (error) => {
+    logger.error(`${name} process error:`, error);
   });
 
   return process;
