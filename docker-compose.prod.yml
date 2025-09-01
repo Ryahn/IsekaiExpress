@@ -1,0 +1,30 @@
+version: "3.9"
+services:
+  migrate:
+    # Use the prod image so migrations run from the baked code
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.bot
+      target: prod
+    # No volumes in prod; runs once and exits 0
+    entrypoint: ["sh","-lc","npx knex --knexfile /app/knexfile.js migrate:latest && echo 'migrations ok'"]
+
+  bot:
+    build: { target: prod }
+    environment: { NODE_ENV: production }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    volumes: []
+    command: ["npm","run","start:bot"]
+    stop_signal: SIGTERM
+    stop_grace_period: 15s
+
+  web:
+    build: { target: prod }
+    environment: { NODE_ENV: production }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    volumes: []
+    command: ["npm","run","start:web"]
+    stop_signal: SIGTERM
+    stop_grace_period: 15s
