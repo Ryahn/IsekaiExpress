@@ -10,7 +10,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('femboy')
         .setDescription("femboy")
-		.addStringOption(option => option.setName('query').setDescription('The query to search for').setRequired(true)),
+		.addStringOption(option => option.setName('tags').setDescription('The tags to search for on Gelbooru').setRequired(true)),
 
     async execute(client, interaction) {
 
