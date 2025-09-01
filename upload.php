@@ -1,6 +1,6 @@
 <?php
 // Define your secure token
-define('SECURE_TOKEN', 'N%P983LCAvVYKFYbxV$6UY#DNy7v&z*!BWPpC61&');
+define('SECURE_TOKEN', 'ADDSAD');
 
 // Get the Authorization header
 $headers = getallheaders();
