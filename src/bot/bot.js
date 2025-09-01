@@ -85,7 +85,9 @@ const client = new BotClient({
     client.allowed = [
         config.discord.ownerId,
         config.roles.mod,
-        config.roles.staff
+        config.roles.uploader,
+        config.roles.staff,
+        config.roles.user,
     ];
 
     // Handle disconnections

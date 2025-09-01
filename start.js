@@ -18,8 +18,15 @@ function startProcess(name, scriptPath, logPath) {
 
   logger.startup(`Started ${name} (PID: ${process.pid})`);
 
+  // Buffer to store error messages
+  let errorOutput = '';
+  
   process.stdout.on('error', (error) => {
     logger.error(`${name} stdout error:`, error);
+  });
+
+  process.stderr.on('data', (data) => {
+    errorOutput += data.toString();
   });
 
   process.stderr.on('error', (error) => {
@@ -36,6 +43,9 @@ function startProcess(name, scriptPath, logPath) {
   process.stderr.pipe(process.stderr);
 
   process.on('close', (code) => {
+    if (code !== 0) {
+      logger.error(`${name} process error output:\n${errorOutput}`);
+    }
     logger.success(`${name} process exited with code ${code}`);
     logStream.end();
   });
