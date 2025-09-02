@@ -1,4 +1,4 @@
-const config = require('../.config');
+const config = require('../config/.config');
 const { query, end } = require('../database/db');
 
 const self = module.exports = {

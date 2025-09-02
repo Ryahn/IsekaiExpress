@@ -3,7 +3,7 @@ const passport = require("passport");
 const { Strategy } = require("passport-discord");
 const { Routes } = require("discord-api-types/v10");
 const { REST } = require("@discordjs/rest");
-const config = require('../../../.config');
+const config = require('../../../config/.config');
 const rest = new REST({ version: "10" }).setToken(
   config.discord.botToken
 );

@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const logger = require('silly-logger');
 const path = require('path');
 const knex = require('knex');
-const sampleConfig = require('./.config-example.js');
+const sampleConfig = require('./config/.config-example.js');
 
 const knexConfig = {
   client: 'mysql2',

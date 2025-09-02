@@ -4,7 +4,7 @@ const { v5: uuidv5 } = require('uuid');
 const NAMESPACE = uuidv5.URL;
 const path = require('path');
 const db = require('./database/db');
-const config = require('./.config');
+const config = require('./config/.config');
 const { timestamp } = require('./libs/utils');
 
 GlobalFonts.registerFromPath('./src/bot/tcg/fonts/Mukta_Malar_NAME.woff2', 'CharacterNameFont');

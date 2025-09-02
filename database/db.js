@@ -1,5 +1,5 @@
 const knex = require('knex');
-const config = require('../.config');
+const config = require('../config/.config');
 const logger = require('silly-logger');
 const { timestamp } = require('../libs/utils');
 const { Model } = require('objection');

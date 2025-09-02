@@ -1,107 +1,63 @@
 const express = require("express");
-const session = require("express-session");
-const passport = require("passport");
-const RedisStore = require("connect-redis").default;
-const { createClient } = require("redis");
-const bodyParser = require("body-parser");
-const path = require('path');
-const { getDiscordAvatarUrl, timestamp, logAudit } = require('../../libs/utils');
-const nunjucks = require('nunjucks');
-const config = require('../../.config');
-const logger = require('silly-logger');
+const logger = require("silly-logger");
+const config = require("../../config/.config");
+const { getDiscordAvatarUrl } = require("../../libs/utils");
 
-logger.startup('Web Panel is starting....')
+// Import middleware classes
+const {
+  RedisMiddleware,
+  SessionMiddleware,
+  PassportMiddleware,
+  AuditMiddleware,
+  AuthMiddleware,
+  StaticMiddleware
+} = require("./middleware");
 
-let redisClient = createClient();
-redisClient.connect().catch(logger.error);
-logger.startup('Connected to Redis server....')
-
-let redisStore = new RedisStore({
-  client: redisClient,
-  prefix: "f95bot:",
-});
+logger.startup("Web Panel is starting...");
 
 const app = express();
 
-nunjucks.configure(path.join(__dirname, 'views'), {
-  autoescape: true,                            // Escape variables by default
-  express: app,                                // Connect with Express
-  watch: config.template.watch,                // Watch for file changes (dev environment)
-  noCache: config.template.noCache,            // Disable caching of templates
-  throwOnUndefined: config.template.undefined, // Do not throw on undefined variables
-  trimBlocks: config.template.trimBlocks,      // Trim newline after block tags
-  lstripBlocks: config.template.lstripBlocks,  // Strip leading spaces in block tags
+// Initialize Redis middleware
+const redisMiddleware = new RedisMiddleware();
+const redisClient = redisMiddleware.initialize();
+await redisMiddleware.connect();
+
+// Initialize Session middleware
+const sessionMiddleware = new SessionMiddleware(redisClient);
+app.use(sessionMiddleware.getMiddleware());
+
+// Initialize Static and Template middleware
+const staticMiddleware = new StaticMiddleware(app);
+staticMiddleware.apply();
+
+// Initialize Passport middleware
+const passportMiddleware = new PassportMiddleware();
+passportMiddleware.getAllMiddleware().forEach(middleware => {
+  app.use(middleware);
 });
 
-app.use(
-  session({
-    store: redisStore,
-    secret: config.session.secret,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false },
-  })
-);
+// Initialize Audit middleware
+const auditMiddleware = new AuditMiddleware();
+app.use(auditMiddleware.getMiddleware());
 
-app.use('/public', express.static(path.join(__dirname, "public")));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.set('views', path.join(__dirname, 'views'));
-app.set("view engine", "njk");
-
-passport.serializeUser((user, done) => done(null, user));
-passport.deserializeUser((user, done) => {
-    const { email, accessToken, ...safeUser } = user;
-    done(null, safeUser);
-  });
-
-app.use(passport.initialize());
-app.use(passport.session());
-
-app.use((req, res, next) => {
-  if (req.method !== 'GET') {
-    const { method, originalUrl } = req;
-    const userId = req.session && req.session.user ? req.session.user.id : 9007;
-
-    logAudit({
-      userId,
-      action: originalUrl,
-      method,
-      timestamp: timestamp(),
-    });
-  }
-  next();
-});
-
-
+// Routes
 const indexRouter = require("./routes/routerIndex");
-
 app.use("/", indexRouter);
 
-app.use((req, res, next) => {
-  if (req.path === "/auth/login" || req.path === "/auth/discord/callback") {
-    return next();
-  }
+// Initialize Authentication middleware
+const authMiddleware = new AuthMiddleware();
+app.use(authMiddleware.getMiddleware());
 
-  if (req.session && req.session.expires) {
-    if (Date.now() > req.session.expires) {
-      req.session.destroy((err) => {
-        if (err) {
-          logger.error("Session destruction error:", err);
-        }
-        return res.redirect("/auth/login");
-      });
-    } else {
-      next();
-    }
-  } else {
-    return res.redirect("/auth/login");
-  }
+// Home route
+app.get("/", (req, res) => {
+  res.render("index", {
+    username: req.session.user.username,
+    avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar),
+    csrfToken: req.session.csrf,
+  });
 });
 
-app.get('/', (req, res) => {
-  res.render('index', { username: req.session.user.username,  avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar), csrfToken: req.session.csrf });
-});
-
-
-app.listen(config.port, () => logger.startup(`Web panel started. Running on port ${config.port}`));
+// Start server
+app.listen(config.port, () =>
+  logger.startup(`Web panel started. Running on port ${config.port}`)
+);

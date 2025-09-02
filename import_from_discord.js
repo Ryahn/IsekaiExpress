@@ -1,5 +1,5 @@
 const { Client, Intents } = require('discord.js');
-const config = require('./.config');
+const config = require('./config/.config');
 const db = require('./database/db');
 const logger = require('silly-logger');
 const path = require('path');

@@ -3,7 +3,7 @@ const router = express.Router();
 const { timestamp, getDiscordAvatarUrl, generateUniqueId} = require("../../../libs/utils");
 const db = require("../../../database/db");
 const crypto = require('crypto');
-const config = require('../../../.config');
+const config = require('../../../config/.config');
 
 router.get("/", (req, res) => {
 	const allowed = req.session.roles.includes(config.roles.staff);

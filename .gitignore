@@ -16,3 +16,4 @@ src/bot/tcg/staff_data.json
 src/bot/tcg/uploader_data.json
 *.txt
 **/*.txt
+.env

@@ -1,7 +1,7 @@
 const {Client, Intents, Collection} = require('discord.js');
 const {registerCommands, registerEvents} = require('./utils/register');
 const schedule = require('node-schedule');
-const config = require('../../.config');
+const config = require('../../config/.config');
 const db = require('../../database/db');
 const { timestamp } = require('../../libs/utils');
 const logger = require('silly-logger');

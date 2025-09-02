@@ -1,4 +1,4 @@
-const config = require('./.config');
+const config = require('./config/.config');
 /**
  * @type { Object.<string, import("knex").Knex.Config> }
  */

@@ -18,17 +18,17 @@ services:
     cap_add:
       - SYS_NICE
     environment:
-      TZ: "America/Chicago"
-      MYSQL_DATABASE: isekai
-      MYSQL_USER: isekai
-      MYSQL_PASSWORD: isekai
-      MYSQL_ROOT_PASSWORD: rootpass
+      TZ: ${TZ:-America/Chicago}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-isekaiexpress}
+      MYSQL_USER: ${MYSQL_USER:-isekaiexpress}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-isekaiexpress}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
     volumes:
       - mysql_data:/var/lib/mysql
     ports:
       - "${MYSQL_HOST_PORT:-3307}:3306"
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -prootpass || exit 1"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p${MYSQL_ROOT_PASSWORD} || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -39,7 +39,7 @@ services:
     image: redis:7
     container_name: iex_redis
     environment:
-      TZ: "America/Chicago"
+      TZ: ${TZ:-America/Chicago}
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 5s
@@ -64,6 +64,13 @@ services:
     volumes:
       - ./:/app
       - /app/node_modules
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-isekaiexpress}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-isekaiexpress}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-isekaiexpress}
     entrypoint: ["sh","-lc","npx knex --knexfile /app/knexfile.js migrate:latest && echo 'migrations ok'"]
 
   bot:
@@ -75,9 +82,37 @@ services:
     init: true
     user: "node"
     environment:
-      TZ: "America/Chicago"
       NODE_ENV: ${NODE_ENV:-development}
-      CHOKIDAR_USEPOLLING: "true"
+      TZ: ${TZ:-America/Chicago}
+      CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
+      # DB
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-isekaiexpress}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-isekaiexpress}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-isekaiexpress}
+      # Redis
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_CONNECT_TIMEOUT_MS: ${REDIS_CONNECT_TIMEOUT_MS:-10000}
+      # App secrets & misc
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET not set}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:?missing}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?missing}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:?missing}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-309355248575578113}
+      DISCORD_OWNER_ID: ${DISCORD_OWNER_ID:-72884988374167552}
+      DISCORD_PREFIX: ${DISCORD_PREFIX:-!}
+      DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:-}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:${WEB_PORT:-3000}}
+      IMAGE_ARCHIVE_TOKEN: ${IMAGE_ARCHIVE_TOKEN:-}
+      FEMBOY_API_KEY: ${FEMBOY_API_KEY:-anonymous}
+      FEMBOY_USER_ID: ${FEMBOY_USER_ID:-9455}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      CURRENCY_API_KEY: ${CURRENCY_API_KEY:-}
+      KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
+      KRAKEN_API_SECRET: ${KRAKEN_API_SECRET:-}
+      KRAKEN_API_URL: ${KRAKEN_API_URL:-https://api.kraken.com}
     depends_on:
       mysql:   { condition: service_healthy }
       redis:   { condition: service_healthy }
@@ -119,8 +154,30 @@ services:
       - /app/node_modules
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      CHOKIDAR_USEPOLLING: "true"
-      TZ: "America/Chicago"
+      TZ: ${TZ:-America/Chicago}
+      CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
+      # DB
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-isekaiexpress}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-isekaiexpress}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-isekaiexpress}
+      # Redis
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_CONNECT_TIMEOUT_MS: ${REDIS_CONNECT_TIMEOUT_MS:-10000}
+      # App
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET not set}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:${WEB_PORT:-3000}}
+      SESSION_EXPIRES_DAYS: ${SESSION_EXPIRES_DAYS:-7}
+      IMAGE_ARCHIVE_TOKEN: ${IMAGE_ARCHIVE_TOKEN:-}
+      FEMBOY_API_KEY: ${FEMBOY_API_KEY:-anonymous}
+      FEMBOY_USER_ID: ${FEMBOY_USER_ID:-9455}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      CURRENCY_API_KEY: ${CURRENCY_API_KEY:-}
+      KRAKEN_API_KEY: ${KRAKEN_API_KEY:-}
+      KRAKEN_API_SECRET: ${KRAKEN_API_SECRET:-}
+      KRAKEN_API_URL: ${KRAKEN_API_URL:-https://api.kraken.com}
     command: ["npx","nodemon","-L",
               "--config","/app/nodemon.json",
               "--watch","/app/src/web",
