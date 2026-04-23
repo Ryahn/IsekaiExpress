@@ -12,15 +12,16 @@ module.exports = class GuildCreateEvent extends BaseEvent {
 
             await client.db.createGuildConfigurable(guild.id);
 
-            const result = await db.getGuildConfigurable(guild.id);
+            const result = await client.db.getGuildConfigurable(guild.id);
 
-            if (result.length > 0 && result.cmdPrefix) {
-                const prefix = result.cmdPrefix;
-                client.guildCommandPrefixes.set(guild.id, prefix);
-                client.logger.success(`Guild ${guild.id} added with prefix ${prefix}`);
+            if (result && result.cmdPrefix) {
+                client.guildCommandPrefixes.set(guild.id, result.cmdPrefix);
+                client.logger.success(`Guild ${guild.id} added with prefix ${result.cmdPrefix}`);
             } else {
                 client.logger.warn(`No prefix found for guild ${guild.id}, using default.`);
             }
+
+            client.guildGlobalLock.set(guild.id, { locked: false, channelIds: [] });
 
         } catch (err) {
             client.logger.error(`Error adding guild ${guild.id} to the database:`, err);

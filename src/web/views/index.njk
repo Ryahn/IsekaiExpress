@@ -2,174 +2,94 @@
 
 {% block content %}
 
-        <div class="mx-n4 px-4 mx-lg-n6 px-lg-6 bg-white pt-7 border-y border-300">
-          <div data-list='{"valueNames":["product","customer","rating","review","time"],"page":6}'>
-            <div class="row align-items-end justify-content-between pb-5 g-3">
-              <div class="col-auto">
-                <h3>Dashboard</h3>
-                <p class="text-700 lh-sm mb-0">Welcome to the IsekaiExpress Dashboard</p>
-              </div>
-            </div>
-            Nothing much to see here yet, but more features are coming soon!
-           
+<!-- Welcome Banner -->
+<div class="vs-welcome">
+  <div class="row align-items-center">
+    <div class="col">
+      <p class="vs-welcome-title">Welcome back, <span>{{ username }}</span></p>
+      <p class="vs-welcome-subtitle">IsekaiExpress Bot Control Panel &mdash; manage commands, moderation, and more.</p>
+      <span class="vs-welcome-badge">
+        <span data-feather="activity" style="width:11px;height:11px;"></span>
+        v1.13.0
+      </span>
+    </div>
+    <div class="col-auto d-none d-md-block">
+      <div class="avatar" style="width:64px;height:64px;">
+        <img class="rounded-circle" src="{{ avatarUrl }}" alt="{{ username }}" style="width:100%;height:100%;object-fit:cover;" />
+      </div>
+    </div>
+  </div>
+</div>
 
-          </div>
-        </div>
+<!-- Feature Cards -->
+<p class="vs-section-title">Quick Access</p>
 
-<footer class="footer position-absolute">
-  <div class="row g-0 justify-content-between align-items-center h-100">
+<div class="row g-4">
+  <div class="col-md-4">
+    <a href="/commands" class="vs-card">
+      <div class="vs-card-icon">
+        <span data-feather="terminal"></span>
+      </div>
+      <h5>Custom Commands</h5>
+      <p>Create, edit, and delete custom bot commands. Control what responses the bot gives to specific triggers.</p>
+      <span class="vs-card-link">Manage &rarr;</span>
+    </a>
+  </div>
+
+  <div class="col-md-4">
+    <a href="/commands/slashes" class="vs-card">
+      <div class="vs-card-icon">
+        <span data-feather="zap"></span>
+      </div>
+      <h5>Slash Commands</h5>
+      <p>Browse all registered slash commands available in the server. View names and descriptions at a glance.</p>
+      <span class="vs-card-link">Browse &rarr;</span>
+    </a>
+  </div>
+
+  <div class="col-md-4">
+    <a href="/warnings" class="vs-card">
+      <div class="vs-card-icon">
+        <span data-feather="alert-triangle"></span>
+      </div>
+      <h5>Warnings</h5>
+      <p>Review and manage user warnings issued by moderators. Edit reasons or remove warnings as needed.</p>
+      <span class="vs-card-link">Review &rarr;</span>
+    </a>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer class="footer mt-5">
+  <div class="row g-0 justify-content-between align-items-center">
     <div class="col-12 col-sm-auto text-center">
-      <p class="mb-0 mt-2 mt-sm-0 text-900">IsekaiExpress Bot made for F95Zone by Ryahn</p>
+      <p>IsekaiExpress Bot &mdash; made for F95Zone by Ryahn</p>
     </div>
     <div class="col-12 col-sm-auto text-center">
-      <p class="mb-0 text-600">v1.13.0</p>
+      <p>v1.13.0</p>
     </div>
   </div>
 </footer>
- <!-- Toast -->
- <div class="position-fixed top-0 end-0 p-3" style="z-index: 11; top: 65px !important;">
+
+<!-- Toast -->
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 11; margin-top: 70px;">
   <div class="toast" id="myToast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="3000">
     <div class="toast-header">
       <strong class="me-auto">Message</strong>
       <small class="text-muted" id="timestamp"></small>
       <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
     </div>
-    <div class="toast-body">
-      This is the body of the toast.
-    </div>
+    <div class="toast-body"></div>
   </div>
 </div>
-<!-- End of Toast -->
+
 {% endblock %}
+
 {% block scripts %}
-<script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.4.3/dist/js/tabulator.min.js"></script>
-
 <script>
-		document.querySelector('.logout-link').addEventListener('click', function (e) {
-    e.preventDefault();  // Prevent default link behavior
-    document.getElementById('logout-form').submit();  // Submit the logout form
-});
-document.addEventListener("DOMContentLoaded", function() {
-    var table = new Tabulator("#warningTable", {
-        ajaxURL: "/warnings/list", // Load data via AJAX
-        ajaxResponse: function(url, params, response) {
-            return response.warnings; // Return the array from the response object
-        },
-        pagination: "local", // Enable pagination
-        paginationSize: 10, // Set page size
-        layout: "fitColumns", // Fit columns to width of table
-        columns: [
-    { title: "Warn ID", field: "warn_id" },
-    { title: "Warned UID", field: "warn_user_id" },
-    { title: "Warned User", field: "warn_user" },
-    { title: "Warned By UID", field: "warn_by_id" },
-    { title: "Warned By User", field: "warn_by_user" },
-    {
-        title: "Reason",
-        field: "warn_reason",
-        hozAlign: "center",
-        formatter: function(cell, formatterParams) {
-            return `<button class="btn btn-sm btn-info viewReasonButton" data-reason="${cell.getValue()}">View</button>`;
-        },
-        cellClick: function(e, cell) {
-            if (e.target.classList.contains("viewReasonButton")) {
-                var reason = cell.getValue();
-                $('#fullReasonModalBody').text(reason); // Set the reason in the modal
-                $('#fullReasonModal').modal('show'); // Show the modal
-            }
-        }
-    },
-    { title: "Created At", field: "created_at" },
-    { title: "Updated At", field: "updated_at" },
-    {
-        title: "Action",
-        field: "warn_id",
-        hozAlign: "center",
-        formatter: function(cell, formatterParams) {
-            return `
-                <button class="btn btn-sm btn-primary editButton" data-id="${cell.getValue()}">Edit</button>
-                <button class="btn btn-sm btn-danger deleteButton" data-id="${cell.getValue()}">Delete</button>
-            `;
-        },
-        cellClick: function(e, cell) {
-            var id = cell.getValue();
-            var rowData = cell.getRow().getData();
-
-            if (e.target.classList.contains("editButton")) {
-                $('#reason').val(rowData.warn_reason);
-                $('#warnUserId').val(rowData.warn_user_id);
-                $('#warnUsername').val(rowData.warn_user);
-                $('#editModalLabel').text(`Edit Warning For: ${rowData.warn_user}`);
-                $('#warn_id').val(id);
-                $('#editModal').modal('show');
-            }
-
-            if (e.target.classList.contains("deleteButton")) {
-                if (confirm("Are you sure you want to delete this command?")) {
-                    $.ajax({
-                        url: `/warnings/delete/${rowData.warn_id}`,
-                        method: 'POST',
-                        data: {
-                            warn_id: rowData.warn_id,
-                            _csrf: '{{ csrfToken }}'
-                        },
-                        success: function(response) {
-                            table.replaceData(); // Refresh the table after deletion
-                        }
-                    });
-                }
-            }
-        }
-    }
-]
-
-    });
-
-    // Save changes to the command
-    document.getElementById("saveChanges").addEventListener("click", function() {
-        var reason = $('#reason').val();
-        var id = $('#warn_id').val();
-        var csrf = $('#csrf').val();
-
-        $.ajax({
-            url: '/warnings/edit/' + id,
-            method: 'POST',
-            data: {
-                reason: reason,
-                _csrf: csrf
-            },
-            success: function(response) {
-                $('#editModal').modal('hide');
-                var toastEl = document.getElementById('myToast');
-                var toastBody = toastEl.querySelector('.toast-body');
-                toastEl.classList.remove('text-bg-success', 'text-bg-danger');
-                toastEl.classList.add('text-bg-success');
-                toastBody.textContent = response.message;
-                var toast = new bootstrap.Toast(toastEl);
-                toast.show();
-                table.replaceData(); // Refresh the table after updating
-            }
-        });
-    });
-
-    // Search functionality
-    document.getElementById("searchInput").addEventListener("input", function(event) {
-    var searchValue = event.target.value.toLowerCase();
-
-    table.setFilter(function(data, filterParams){
-        // Safely check if each field is a string, otherwise, return false
-        return (typeof data.name === 'string' && data.name.toLowerCase().includes(searchValue)) || 
-               (typeof data.content === 'string' && data.content.toLowerCase().includes(searchValue)) ||
-               (typeof data.usage === 'string' && data.usage.toLowerCase().includes(searchValue)) ||
-               (typeof data.created_by_username === 'string' && data.created_by_username.toLowerCase().includes(searchValue)) ||
-               (typeof data.updated_by_username === 'string' && data.updated_by_username.toLowerCase().includes(searchValue)) ||
-               (typeof data.created_at === 'string' && data.created_at.toLowerCase().includes(searchValue)) ||
-               (typeof data.updated_at === 'string' && data.updated_at.toLowerCase().includes(searchValue));
-    });
-});
-
-});
-
-
-	</script>
+  document.querySelector('.logout-link').addEventListener('click', function(e) {
+    e.preventDefault();
+    document.getElementById('logout-form').submit();
+  });
+</script>
 {% endblock %}

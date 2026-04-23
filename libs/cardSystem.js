@@ -1,5 +1,5 @@
-const config = require('../.config');
-const { query, end } = require('../database/db');
+const config = require('../config');
+const { query } = require('../database/db');
 
 const self = module.exports = {
     getCard: (cardName, typee) => {
@@ -9,7 +9,6 @@ const self = module.exports = {
 	getRarityChances: async () => {
 		const rarityChances = await query('rarity').select('*');
 		rarityChances.sort((a, b) => a.high_chance - b.high_chance);
-		await end();
 		return Array.isArray(rarityChances) ? rarityChances : [rarityChances];
 	},
 

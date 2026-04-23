@@ -29,4 +29,20 @@ async function registerFiles(client, dir = '', isCommand = true) {
 const registerCommands = (client, dir = '') => registerFiles(client, dir, true);
 const registerEvents = (client, dir = '') => registerFiles(client, dir, false);
 
-module.exports = { registerCommands, registerEvents };
+/**
+ * Lowercased command names and aliases for prefix chat commands (built-ins take precedence over DB custom).
+ */
+function populateBuiltinChatCommandKeys(client) {
+    const keys = new Set();
+    for (const cmd of client.commands.values()) {
+        if (cmd.name) keys.add(String(cmd.name).toLowerCase());
+        if (cmd.aliases && Array.isArray(cmd.aliases)) {
+            for (const a of cmd.aliases) {
+                if (a) keys.add(String(a).toLowerCase());
+            }
+        }
+    }
+    client.builtinChatCommandKeys = keys;
+}
+
+module.exports = { registerCommands, registerEvents, populateBuiltinChatCommandKeys };

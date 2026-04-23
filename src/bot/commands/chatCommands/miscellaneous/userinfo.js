@@ -1,4 +1,4 @@
-const {Client, Intents, MessageEmbed, Formatters} = require('discord.js');
+const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const BaseCommand = require("../../../utils/structures/BaseCommand");
 const moment = require('moment');
 
@@ -21,19 +21,21 @@ module.exports = class help extends BaseCommand {
             color = "WHITE";
         }
 
-        const sEmbed = new MessageEmbed()
+        const sEmbed = new EmbedBuilder()
             .setColor(`#${getRandomColor()}`)
             .setTitle(`${userinfo.title} ${user.username}`)
-            .setThumbnail(user.avatarURL())
-            .addField(userinfo.username, user.username, true)
-            .addField(userinfo.discriminator, `#${user.discriminator}`, true)
-            .addField(userinfo.server, `<t:${moment(member.joinedAt).unix()}>`, true)
-            .addField(userinfo.role, `${member.roles.highest}`, true)
-            .addField(userinfo.admin, member.permissions.has("ADMINISTRATOR") ? '✅' : '❌', true)
-            .addField(userinfo.bot, user.bot ? '✅' : '❌', true)
-            .addField(userinfo.created, `<t:${moment(user.createdAt).unix()}>` , true)
-            .setFooter({ text:`${userinfo.requested} ${message.author.username}`, iconURL: message.author.displayAvatarURL({dynamic: true})})
+            .setThumbnail(user.displayAvatarURL({ size: 1024 }))
+            .addFields(
+                { name: userinfo.username, value: user.username, inline: true },
+                { name: userinfo.discriminator, value: `#${user.discriminator}`, inline: true },
+                { name: userinfo.server, value: `<t:${moment(member.joinedAt).unix()}>`, inline: true },
+                { name: userinfo.role, value: `${member.roles.highest}`, inline: true },
+                { name: userinfo.admin, value: member.permissions.has(PermissionFlagsBits.Administrator) ? '✅' : '❌', inline: true },
+                { name: userinfo.bot, value: user.bot ? '✅' : '❌', inline: true },
+                { name: userinfo.created, value: `<t:${moment(user.createdAt).unix()}>`, inline: true }
+            )
+            .setFooter({ text:`${userinfo.requested} ${message.author.username}`, iconURL: message.author.displayAvatarURL({ size: 128 })})
             .setTimestamp();
-        message.channel.send({embeds: [sEmbed]});
+        message.channel.send({ embeds: [sEmbed] });
     }
-}
+};

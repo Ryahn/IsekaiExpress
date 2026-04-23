@@ -1,6 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { MessageEmbed } = require('discord.js');
-const crypto = require('crypto');
+const { EmbedBuilder } = require('discord.js');
 const path = require('path');
 
 module.exports = {
@@ -20,20 +19,7 @@ module.exports = {
 
     async execute(client, interaction) {
 
-        const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
-		const allowedChannel = await client.db.getAllowedChannel(hash);
-		const guild = client.guilds.cache.get(interaction.guild.id);
-		const member = await guild.members.fetch(interaction.user.id);
-		const roles = member.roles.cache.map(role => role.id);
-
-		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
-			if (!roles.some(role => client.allowed.includes(role))) {
-				return interaction.reply({ 
-					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
-					ephemeral: true 
-				});
-			}
-		}
+        
 
         if (!client.config.warningSystem.enabled) {
             return interaction.reply('The warning system is not enabled.');
@@ -58,8 +44,8 @@ module.exports = {
 
             await client.db.createWarning(warningId, targetUser.id, targetUser.username, staff.username, staff.id, reason, client.utils.timestamp());
 
-            const embed = new MessageEmbed()
-                .setColor('RED')
+            const embed = new EmbedBuilder()
+                .setColor(0xE74C3C)
                 .setTitle('User Warned')
                 .addFields([
                     { name: 'Warning ID', value: warningId, inline: false },
@@ -73,8 +59,8 @@ module.exports = {
 
             const modChannel = interaction.guild.channels.cache.find(ch => ch.name === 'moderator-chat');
             if (modChannel) {
-                const modEmbed = new MessageEmbed()
-                    .setColor('RED')
+                const modEmbed = new EmbedBuilder()
+                    .setColor(0xE74C3C)
                     .setTitle('New Warning Issued')
                     .addFields([
                         { name: 'User', value: `<@${targetUser.id}>`, inline: true },

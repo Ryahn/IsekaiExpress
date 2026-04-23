@@ -4,8 +4,9 @@ const { v5: uuidv5 } = require('uuid');
 const NAMESPACE = uuidv5.URL;
 const path = require('path');
 const db = require('./database/db');
-const config = require('./.config');
+const config = require('./config');
 const { timestamp } = require('./libs/utils');
+const logger = require('silly-logger');
 
 GlobalFonts.registerFromPath('./src/bot/tcg/fonts/Mukta_Malar_NAME.woff2', 'CharacterNameFont');
 GlobalFonts.registerFromPath('./src/bot/tcg/fonts/Libre_Franklin_TYPE.woff2', 'ClassFont');
@@ -74,7 +75,8 @@ async function generateCard(characterName, rarity, className, level, power, avat
     let starWidth = 18;
     let starHeight = 18;
 
-    switch(rarity) {
+    let starCount = 0;
+    switch (rarity) {
         case 'UR':
             starCount = 11;
             break;
@@ -106,6 +108,9 @@ async function generateCard(characterName, rarity, className, level, power, avat
             starCount = 2;
             break;
         case 'N':
+            starCount = 1;
+            break;
+        default:
             starCount = 1;
             break;
     }
@@ -150,7 +155,7 @@ async function generateCard(characterName, rarity, className, level, power, avat
         class: className,
         level: level,
         power: power,
-        image_url: `${config.cardUrl}/${type}/${fileName}`,
+        image_url: `${(config.cardUrl || config.url || '')}/${type}/${fileName}`,
         created_at: timestamp(),
         updated_at: timestamp(),
     }

@@ -1,0 +1,75 @@
+# Copy .env from .env.example, set secrets, and use MYSQL_HOST=mysql / REDIS_URL=redis://redis:6379 in Compose.
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: f95bot-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DB:-f95bot}
+      MYSQL_USER: ${MYSQL_USER:-f95bot}
+      MYSQL_PASSWORD: ${MYSQL_PASS:-f95bot}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: f95bot-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+
+  migrate:
+    build: .
+    container_name: f95bot-migrate
+    env_file: .env
+    command: sh -c "sleep 8 && npx knex migrate:latest && npx knex seed:run"
+    environment:
+      MYSQL_HOST: mysql
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - mysql
+    profiles:
+      - migrate
+
+  bot:
+    build: .
+    container_name: f95bot-bot
+    env_file: .env
+    command: npm run start:bot
+    environment:
+      MYSQL_HOST: mysql
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./logs:/usr/src/app/logs
+      - ./src/bot/media/cards:/usr/src/app/src/bot/media/cards
+
+  web:
+    build: .
+    container_name: f95bot-web
+    env_file: .env
+    command: npm run start:web
+    # App listens on PORT from .env; map the same port on host and container.
+    ports:
+      - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
+    environment:
+      MYSQL_HOST: mysql
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+    profiles:
+      - web
+
+volumes:
+  mysql_data:
+  redis_data:

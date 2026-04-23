@@ -1,11 +1,11 @@
-const { MessageEmbed } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 const self = module.exports = {
 	xpSystem: async (client, message) => {
 		try {
 			client.db.checkUser(message.author);
 			const user = await client.db.getUserXP(message.author.id);
-			const settings = await client.db.getXPSettings();
+			const settings = await client.db.getXPSettings(message.guild.id);
 			const guildSettings = await client.db.getGuildConfigurable(message.guild.id);
 			user.message_count++;
 		
@@ -46,7 +46,7 @@ const self = module.exports = {
 	calculateLevel: (xp) => Math.floor(0.47 * Math.sqrt(xp)),
 
 	sendLevelUpMessage: (channel, user, newLevel) => {
-        const embed = new MessageEmbed()
+        const embed = new EmbedBuilder()
             .setTitle('Level Up!')
             .setDescription(`Congratulations ${user.username}! You've reached level ${newLevel}!`)
             .setColor('#00FF00')

@@ -1,5 +1,5 @@
 const BaseCommand = require("../../../../utils/structures/BaseCommand");
-const { MessageEmbed } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const crypto = require('crypto');
 

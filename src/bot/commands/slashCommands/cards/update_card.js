@@ -1,7 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { Permissions, MessageEmbed } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const path = require('path');
-const crypto = require('crypto');
 
 module.exports = {
     category: path.basename(__dirname),
@@ -20,20 +19,7 @@ module.exports = {
 
     async execute(client, interaction) {
 
-        const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
-		const allowedChannel = await client.db.getAllowedChannel(hash);
-		const guild = client.guilds.cache.get(interaction.guild.id);
-		const member = await guild.members.fetch(interaction.user.id);
-		const roles = member.roles.cache.map(role => role.id);
-
-		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
-			if (!roles.some(role => client.allowed.includes(role))) {
-				return interaction.reply({ 
-					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
-					ephemeral: true 
-				});
-			}
-		}
+        
 
 
         // try {
@@ -45,8 +31,10 @@ module.exports = {
 
 			const checkCard = await client.db.query('card_data').where('uuid', uuid).first();
 
-			if (checkCard.discord_id !== interaction.user.id || roles.some(role => role.id === client.roles.staff)) {
-				return interaction.reply({ content: `You are not allowed to update this card. Only the creator can update it (<@${checkCard.discord_id}>).`, ephemeral: true });
+			const isOwner = String(checkCard.discord_id) === String(interaction.user.id);
+			const isStaff = client.config.roles.staff && roles.includes(client.config.roles.staff);
+			if (!isOwner && !isStaff) {
+				return interaction.reply({ content: `You are not allowed to update this card. Only the creator (or staff) can update it (<@${checkCard.discord_id}>).`, ephemeral: true });
 			}
 
 			const card = await client.db.updateCardDescription(uuid, description);
@@ -58,7 +46,7 @@ module.exports = {
 			const stars = '⭐️'.repeat(card.stars);
 			const type = card.image_url.split('/')[4];
 
-			const embed = new MessageEmbed()
+			const embed = new EmbedBuilder()
 				.setTitle(card.name)
 				.setDescription(card.description || 'No description')
 				.addFields(

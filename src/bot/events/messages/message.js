@@ -2,12 +2,25 @@ const BaseEvent = require('../../utils/structures/BaseEvent');
 const path = require('path');
 const crypto = require('crypto');
 const { updateChannelStats } = require('../../utils/channelStats');
-const { MessageEmbed } = require('discord.js');
 const { xpSystem } = require('../../../../libs/xpSystem');
 const { afkSystem } = require('../../../../libs/afkSystem');
 const { getCachedAllowedChannel } = require('../../utils/cache');
+const { checkMessageGlobalCommandLock } = require('../../middleware/globalCommandLock');
 const { checkCommandCooldown, setCooldown } = require('../../middleware/commandMiddleware');
 const { executeWithRateLimit } = require('../../middleware/apiMiddleware');
+
+function parseCommandContent(content, message) {
+    const randomPattern = /\{random:(.*?)\}/g;
+    content = content.replace(randomPattern, (match, options) => {
+        const optionList = options.split(/[,~]/);
+        const randomIndex = Math.floor(Math.random() * optionList.length);
+        return optionList[randomIndex].trim();
+    });
+
+    content = content.replace('{mention}', `<@${message.author.id}>`);
+
+    return content;
+}
 
 module.exports = class MessageEvent extends BaseEvent {
     constructor() {
@@ -16,16 +29,16 @@ module.exports = class MessageEvent extends BaseEvent {
 
     async run(client, message) {
         if (message.author.bot || !message.guild) return;
-        
+
         try {
             await xpSystem(client, message);
             await afkSystem(client, message);
 
             /************************************
-             * CUSTOM COMMANDS
+             * PREFIX + CUSTOM / BUILT-IN COMMANDS
              ************************************/
 
-            let prefix = client.guildCommandPrefixes.get(message.guild.id) || 'o!';
+            let prefix = client.guildCommandPrefixes.get(message.guild.id) || client.config.discord.prefix || 'o!';
             const usedPrefix = message.content.slice(0, prefix.length);
 
             if (client.config.channelStats.enabled) {
@@ -39,89 +52,64 @@ module.exports = class MessageEvent extends BaseEvent {
 
             if (usedPrefix === prefix) {
                 const [cmdName, ...cmdArgs] = message.content.slice(prefix.length).trim().split(/\s+/);
-                let filename = path.basename(__filename);
-                filename = `${filename} - ${usedPrefix}${cmdName}`;
+                if (!cmdName) return;
+
+                const globalLock = await checkMessageGlobalCommandLock(client, message);
+                if (!globalLock.allowed) {
+                    return message.reply(globalLock.message);
+                }
+
+                const cmdLower = cmdName.toLowerCase();
+                const commandNameHash = crypto.createHash('md5').update(cmdLower).digest('hex');
+
+                if (client.builtinChatCommandKeys.has(cmdLower)) {
+                    const command = client.commands.get(cmdLower) ||
+                        client.commands.find(cmd => cmd.aliases && cmd.aliases.includes(cmdLower));
+
+                    if (!command) {
+                        return message.channel.send('Command not found.');
+                    }
+
+                    try {
+                        const cooldownCheck = checkCommandCooldown(client, message.author.id, command.name);
+
+                        if (cooldownCheck.onCooldown) {
+                            return message.reply(`You are on cooldown! Please wait ${cooldownCheck.remainingTime.toFixed(1)} more seconds.`);
+                        }
+
+                        const allowedChannel = await getCachedAllowedChannel(client, commandNameHash);
+
+                        if (allowedChannel && allowedChannel.channel_id && allowedChannel.channel_id !== 'all') {
+                            if (message.channel.id !== allowedChannel.channel_id) {
+                                return message.reply(
+                                    `This command can only be used in: <#${allowedChannel.channel_id}>`
+                                );
+                            }
+                        }
+
+                        await executeWithRateLimit(client, 'discord-api', async () => {
+                            await command.run(client, message, cmdArgs);
+                        });
+
+                        setCooldown(client, message.author.id, command.name);
+                    } catch (err) {
+                        client.logger.error(`Error executing command ${cmdName}:`, err);
+                        message.channel.send('There was an error executing that command.');
+                    }
+                    return;
+                }
 
                 try {
-                    const commandNameHash = crypto.createHash('md5').update(cmdName.toLowerCase()).digest('hex');
-                    const [customCmd] = await client.db.getCommand(commandNameHash);
-
-                    if (typeof customCmd !== 'undefined' && customCmd) {
-                        let commandContent = customCmd.content;
-                        const newUsageCount = customCmd.usage + 1;
-
-                        function parseCommandContent(content, message) {
-                            const randomPattern = /\{random:(.*?)\}/g;
-                            content = content.replace(randomPattern, (match, options) => {
-                                const optionList = options.split(/[,~]/);
-                                const randomIndex = Math.floor(Math.random() * optionList.length);
-                                return optionList[randomIndex].trim();
-                            });
-                
-                            content = content.replace('{mention}', `<@${message.author.id}>`);
-                
-                            return content;
-                        }
-
-                        commandContent = parseCommandContent(commandContent, message);
-
-                        message.channel.send(commandContent);
-
-                        await client.db.updateCommandUsage(commandNameHash, newUsageCount);
-
+                    const customContent = client.customCommandsByHash.get(commandNameHash);
+                    if (customContent !== undefined) {
+                        const text = parseCommandContent(customContent, message);
+                        await message.channel.send(text);
+                        await client.db.incrementCustomCommandUsage(commandNameHash);
                         return;
                     }
-                    /************************************
-                     * END CUSTOM COMMANDS
-                     ************************************/
-
-                    const command = client.commands.get(cmdName.toLowerCase()) || 
-                                    client.commands.find(cmd => cmd.aliases && cmd.aliases.includes(cmdName.toLowerCase()));
-
-                    if (command) {
-                        try {
-                            // Check cooldown
-                            const cooldownCheck = checkCommandCooldown(client, message.author.id, command.name);
-                            
-                            if (cooldownCheck.onCooldown) {
-                                return message.reply(`You are on cooldown! Please wait ${cooldownCheck.remainingTime.toFixed(1)} more seconds.`);
-                            }
-                            
-                            // Check if command is restricted to specific channels
-                            const commandNameHash = crypto.createHash('md5').update(cmdName.toLowerCase()).digest('hex');
-                            const allowedChannel = await getCachedAllowedChannel(client, commandNameHash);
-                            
-                            if (allowedChannel && allowedChannel.length > 0) {
-                                // Command is restricted to specific channels
-                                const channelIds = allowedChannel.map(ch => ch.channel_id);
-                                
-                                if (!channelIds.includes(message.channel.id)) {
-                                    // Command used in a non-allowed channel
-                                    const allowedChannelMentions = channelIds
-                                        .map(id => `<#${id}>`)
-                                        .join(', ');
-                                    
-                                    return message.reply(`This command can only be used in: ${allowedChannelMentions}`);
-                                }
-                            }
-                            
-                            // Execute command with rate limiting for API calls
-                            await executeWithRateLimit(client, 'discord-api', async () => {
-                                await command.run(client, message, cmdArgs);
-                            });
-                            
-                            // Set cooldown after successful execution
-                            setCooldown(client, message.author.id, command.name);
-                        } catch (err) {
-                            client.logger.error(`Error executing command ${cmdName}:`, err);
-                            message.channel.send('There was an error executing that command.');
-                        }
-                    } else {
-                        message.channel.send('Command not found.');
-                    }
-
+                    message.channel.send('Command not found.');
                 } catch (err) {
-                    client.logger.error('Error querying custom commands:', err);
+                    client.logger.error('Error running custom command:', err);
                     message.channel.send('There was an error executing that command.');
                 }
             }

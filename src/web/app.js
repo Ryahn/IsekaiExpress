@@ -5,16 +5,15 @@ const RedisStore = require("connect-redis").default;
 const { createClient } = require("redis");
 const bodyParser = require("body-parser");
 const path = require('path');
-const { getDiscordAvatarUrl, timestamp, logAudit } = require('../../libs/utils');
+const { getDiscordAvatarUrl, timestamp, logAudit, checkSessionExpiration } = require('../../libs/utils');
 const nunjucks = require('nunjucks');
-const config = require('../../.config');
+const config = require('../../config');
 const logger = require('silly-logger');
 
 logger.startup('Web Panel is starting....')
 
-let redisClient = createClient();
-redisClient.connect().catch(logger.error);
-logger.startup('Connected to Redis server....')
+const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+const redisClient = createClient({ url: redisUrl });
 
 let redisStore = new RedisStore({
   client: redisClient,
@@ -73,35 +72,33 @@ app.use((req, res, next) => {
   next();
 });
 
-
-const indexRouter = require("./routes/routerIndex");
-
-app.use("/", indexRouter);
-
 app.use((req, res, next) => {
-  if (req.path === "/auth/login" || req.path === "/auth/discord/callback") {
+  if (
+    req.path.startsWith('/public') ||
+    req.path === '/auth/login' ||
+    req.path === '/auth/discord/callback'
+  ) {
     return next();
   }
-
-  if (req.session && req.session.expires) {
-    if (Date.now() > req.session.expires) {
-      req.session.destroy((err) => {
-        if (err) {
-          logger.error("Session destruction error:", err);
-        }
-        return res.redirect("/auth/login");
-      });
-    } else {
-      next();
-    }
-  } else {
-    return res.redirect("/auth/login");
-  }
+  return checkSessionExpiration(req, res, next);
 });
+
+const indexRouter = require("./routes/routerIndex");
+app.use("/", indexRouter);
 
 app.get('/', (req, res) => {
   res.render('index', { username: req.session.user.username,  avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar), csrfToken: req.session.csrf });
 });
 
+async function start() {
+  try {
+    await redisClient.connect();
+    logger.startup('Connected to Redis server');
+  } catch (err) {
+    logger.error('Redis connection failed', err);
+    process.exit(1);
+  }
+  app.listen(config.port, () => logger.startup(`Web panel started. Running on port ${config.port}`));
+}
 
-app.listen(config.port, () => logger.startup(`Web panel started. Running on port ${config.port}`));
+start();

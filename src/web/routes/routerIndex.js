@@ -6,9 +6,12 @@ const routesPath = path.join(__dirname);
 
 const checkRoles = (requiredRoles) => {
   return (req, res, next) => {
+    if (!requiredRoles || requiredRoles.length === 0) {
+      return next();
+    }
     const userRoles = req.session.roles ? req.session.roles : [];
     const hasRequiredRole = requiredRoles.some(role => userRoles.includes(role));
-    
+
     if (hasRequiredRole) {
       next();
     } else {

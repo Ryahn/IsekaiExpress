@@ -1,4 +1,4 @@
-const { MessageEmbed } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 const self = module.exports = {
 	afkSystem: async (client, message) => {
@@ -7,7 +7,7 @@ const self = module.exports = {
 
 			if (afkUser.length > 0) {
 				await client.db.deleteAfkUser(message.author.id, message.guild.id);
-				const embed = new MessageEmbed()
+				const embed = new EmbedBuilder()
 					.setColor('#00FF00')
 					.setDescription(`Welcome back, ${message.author}! Your AFK status has been removed.`);
 				await message.reply({ embeds: [embed] });
@@ -18,7 +18,7 @@ const self = module.exports = {
 				for (const [userId, user] of mentionedUsers) {
 					const [afkMentioned] = await client.db.getAfkUser(userId, message.guild.id);
 					if (afkMentioned) {
-						const embed = new MessageEmbed()
+						const embed = new EmbedBuilder()
 							.setColor('#FFA500')
 							.setDescription(`${user} is currently AFK: ${afkMentioned.message}`);
 						await message.reply({ embeds: [embed] });

@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { timestamp, getDiscordAvatarUrl, hasRole } = require("../../../libs/utils");
+const { timestamp, getDiscordAvatarUrl } = require("../../../libs/utils");
 const db = require("../../../database/db");
 const crypto = require('crypto');
-const config = require('../../../.config');
+const config = require('../../../config');
 
 router.get("/", (req, res) => {
 	const allowed = req.session.roles.includes(config.roles.staff);
@@ -19,7 +19,7 @@ router.get("/list", async (req, res) => {
     LEFT JOIN users u2 ON commands.updated_by = u2.discord_id`;
 
 	try {
-		const results = await db.query(query);
+		const results = await db.sql(query);
 
 		res.json({ commands: results });
 	} catch (error) {
@@ -33,7 +33,7 @@ router.post("/add", async (req, res) => {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
 
-	if (!hasRole(config.roles.staff)) {
+	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to add commands' });
 	}
 
@@ -43,18 +43,12 @@ router.post("/add", async (req, res) => {
 	}
 
 	let hash = crypto.createHash('md5').update(name.toLowerCase()).digest('hex');
-	let data = [
-		hash,
-		name,
-		content,
-		created_by = req.session.user.id,
-		updated_by = req.session.user.id,
-		created_at = timestamp(),
-		update_at = timestamp(),
-	];
+	const ts = timestamp();
+	const data = [hash, name, content, req.session.user.id, req.session.user.id, ts, ts];
 
 	try {
-		await db.query('INSERT INTO commands (hash, name, content, created_by, updated_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', data);
+		await db.sql('INSERT INTO commands (hash, name, content, created_by, updated_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', data);
+		await db.bumpCustomCommandsRevision();
 		res.status(201).json({ message: 'Command created' });
 	} catch (error) {
 		console.error(error);
@@ -67,7 +61,7 @@ router.post("/edit/:id", async (req, res) => {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
 
-	if (!hasRole(config.roles.staff)) {
+	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to edit commands' });
 	}
 
@@ -77,17 +71,11 @@ router.post("/edit/:id", async (req, res) => {
 	}
 
 	let hash = crypto.createHash('md5').update(name.toLowerCase()).digest('hex');
-	let data = [
-		name,
-		hash,
-		content,
-		updated_by = req.session.user.id,
-		updated_at = timestamp(),
-		id = req.params.id,
-	];
+	const data = [name, hash, content, req.session.user.id, timestamp(), req.params.id];
 
 	try {
-		await db.query('UPDATE commands SET name = ?, hash = ?, content = ?, updated_by = ?, updated_at = ? WHERE id = ?', data);
+		await db.sql('UPDATE commands SET name = ?, hash = ?, content = ?, updated_by = ?, updated_at = ? WHERE id = ?', data);
+		await db.bumpCustomCommandsRevision();
 		res.status(200).json({ message: 'Command updated' });
 	} catch (error) {
 		console.error(error);
@@ -100,12 +88,13 @@ router.post("/delete/:id", async(req, res) => {
 		return res.status(403).json({ message: 'Invalid CSRF token' });
 	}
 
-	if (!hasRole(config.roles.staff)) {
+	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to delete commands' });
 	}
 
 	try {
-		await db.query('DELETE FROM commands WHERE id = ?', [req.params.id]);
+		await db.sql('DELETE FROM commands WHERE id = ?', [req.params.id]);
+		await db.bumpCustomCommandsRevision();
 		res.status(200).json({ message: 'Command deleted' });
 	} catch (error) {
 		console.error(error);

@@ -1,5 +1,5 @@
 const BaseCommand = require("../../../../utils/structures/BaseCommand");
-const { MessageEmbed, Formatters } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 // Cooldown map to store user cooldowns
 const cooldowns = new Map();

@@ -1,7 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { MessageAttachment, MessageEmbed } = require('discord.js');
+const { MessageAttachment, EmbedBuilder } = require('discord.js');
 const canvacord = require("canvacord");
-const crypto = require('crypto');
 const path = require('path');
 
 module.exports = {
@@ -13,20 +12,7 @@ module.exports = {
 		.addUserOption(option => option.setName('target').setDescription('The user you want to check the level of').setRequired(false)),
 
     async execute(client, interaction) {
-		const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
-		const allowedChannel = await client.db.getAllowedChannel(hash);
-		const guild = client.guilds.cache.get(interaction.guild.id);
-		const member = await guild.members.fetch(interaction.user.id);
-		const roles = member.roles.cache.map(role => role.id);
-
-		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
-			if (!roles.some(role => client.allowed.includes(role))) {
-				return interaction.reply({ 
-					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
-					ephemeral: true 
-				});
-			}
-		}
+		
 
 		const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'level');
         if (cooldownTime) {
@@ -86,7 +72,7 @@ module.exports = {
                 rank.build()
                     .then(async data => {
                     const attachment = new MessageAttachment(data, "RankCard.png");
-                    const embed = new MessageEmbed()
+                    const embed = new EmbedBuilder()
                         .setTitle(`Ranking of:  ${user.username}`)
                         .addFields({
                             name: 'XP',

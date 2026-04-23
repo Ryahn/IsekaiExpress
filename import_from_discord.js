@@ -1,5 +1,5 @@
-const { Client, Intents } = require('discord.js');
-const config = require('./.config');
+const { Client, GatewayIntentBits } = require('discord.js');
+const config = require('./config');
 const db = require('./database/db');
 const logger = require('silly-logger');
 const path = require('path');
@@ -7,11 +7,11 @@ const fs = require('fs');
 
 const client = new Client({
   intents: [
-    Intents.FLAGS.GUILDS,
-    Intents.FLAGS.GUILD_MESSAGES,
-    Intents.FLAGS.GUILD_MEMBERS,
-    Intents.FLAGS.GUILD_BANS,
-    Intents.FLAGS.GUILD_PRESENCES,
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildBans,
+    GatewayIntentBits.GuildPresences,
   ]
 });
 

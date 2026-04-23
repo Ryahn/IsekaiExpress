@@ -3,12 +3,11 @@ const passport = require("passport");
 const { Strategy } = require("passport-discord");
 const { Routes } = require("discord-api-types/v10");
 const { REST } = require("@discordjs/rest");
-const config = require('../../../.config');
+const config = require('../../../config');
 const rest = new REST({ version: "10" }).setToken(
   config.discord.botToken
 );
 const router = express.Router();
-const app = express();
 const { daysToSeconds, generateCsrfToken } = require("../../../libs/utils");
 const db = require("../../../database/db");
 passport.use(
@@ -32,20 +31,21 @@ router.get(
   async (req, res) => {
     try {
       const userId = req.user.id;
-      const [member, [existingUser]] = await Promise.all([
-        rest.get(Routes.guildMember(process.env.DISCORD_GUILD_ID, userId)),
-        db.query('SELECT * FROM users WHERE discord_id = ?', [userId])
+      const [member, userRows] = await Promise.all([
+        rest.get(Routes.guildMember(config.discord.guildId, userId)),
+        db.sql('SELECT * FROM users WHERE discord_id = ?', [userId])
       ]);
+      const existingUser = userRows[0];
 
       req.session.roles = member.roles;
       req.session.loggedin = true;
       const { email, accessToken, ...safeUser } = req.user;
       req.session.user = safeUser;
-      req.session.expires = Date.now() + daysToSeconds(process.env.SESSION_EXPIRES);
+      req.session.expires = Date.now() + daysToSeconds(config.session.expires);
       req.session.csrf = generateCsrfToken();
 
       if (!existingUser) {
-        await db.query('INSERT INTO users (username, discord_id) VALUES (?, ?)', [req.user.username, userId]);
+        await db.sql('INSERT INTO users (username, discord_id) VALUES (?, ?)', [req.user.username, userId]);
       }
 
       req.session.save((err) => {

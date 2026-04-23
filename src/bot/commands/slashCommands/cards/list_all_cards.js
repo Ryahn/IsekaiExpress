@@ -1,6 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
-const crypto = require('crypto');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -9,21 +8,7 @@ module.exports = {
 		.addStringOption(option => option.setName('search').setDescription('Search for a card by name, class, rarity, class, or type').setRequired(false)),
 
     async execute(client, interaction) {
-        const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
         
-        const allowedChannel = await client.db.getAllowedChannel(hash);
-        const guild = client.guilds.cache.get(interaction.guild.id);
-        const member = await guild.members.fetch(interaction.user.id);
-        const roles = member.roles.cache.map(role => role.id);
-
-        if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
-            if (!roles.some(role => client.allowed.includes(role))) {
-                return interaction.reply({ 
-                    content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
-                    ephemeral: true 
-                });
-            }
-        }
 
         let page = 1;
         const pageSize = 8;
@@ -35,23 +20,30 @@ module.exports = {
 			return string.charAt(0).toUpperCase() + string.slice(1);
 		  }
 
+		const searchScope = (qb) => {
+			if (!search) return qb;
+			return qb.where(function whereSearch() {
+				this.where('name', 'like', `%${search}%`)
+					.orWhere('class', 'like', `%${capitalizeFirstLetter(search)}%`)
+					.orWhere('rarity', 'like', `%${search.toUpperCase()}%`)
+					.orWhere('image_url', 'like', `%${search.toLowerCase()}%`);
+			});
+		};
+
 		const fetchCards = async (page) => {
 			const offset = (page - 1) * pageSize;
-			return await client.db.query('card_data')
-				.select('*')
-				.where('name', 'like', `%${search}%`)
-				.orWhere('class', 'like', `%${capitalizeFirstLetter(search)}%`)
-				.orWhere('rarity', 'like', `%${search.toUpperCase()}%`)
-				.orWhere('image_url', 'like', `%${search.toLowerCase()}%`)
+			const q = searchScope(client.db.query('card_data').select('*'));
+			return q
 				.orderBy('created_at', 'desc')
 				.offset(offset)
 				.limit(pageSize);
 		};
 
-        const totalCards = await client.db.query('card_data')
-            .count('* as count')
-            .first();
-        const totalPages = Math.ceil(totalCards.count / pageSize);
+        const totalRow = await searchScope(
+			client.db.query('card_data').count('* as count')
+		).first();
+        const totalCount = Number(totalRow ? totalRow.count : 0);
+        const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
         const createCardEmbed = async (page) => {
             const cards = await fetchCards(page);
@@ -59,7 +51,7 @@ module.exports = {
                 return null;
             }
 
-            const embed = new MessageEmbed()
+            const embed = new EmbedBuilder()
                 .setTitle(`Cards - Page ${page}`)
                 .setDescription(`Listing cards with pagination\n\`\`\`${client.config.emojis.type.trim()}: Type, ${client.config.emojis.level.trim()}: Level, ${client.config.emojis.power.trim()}: Power, ${client.config.emojis.class.trim()}: Class, ${client.config.emojis.star.trim()}: Stars\`\`\``);
 
@@ -84,22 +76,22 @@ module.exports = {
         }
 
         const createButtons = () => {
-            return new MessageActionRow()
+            return new ActionRowBuilder()
                 .addComponents(
-                    new MessageButton()
+                    new ButtonBuilder()
                         .setCustomId('previous')
                         .setLabel('Previous')
-                        .setStyle('PRIMARY')
+                        .setStyle(ButtonStyle.Primary)
                         .setDisabled(page <= 1),
-                    new MessageButton()
+                    new ButtonBuilder()
                         .setCustomId('next')
                         .setLabel('Next')
-                        .setStyle('PRIMARY')
+                        .setStyle(ButtonStyle.Primary)
                         .setDisabled(page >= totalPages),
-                    new MessageButton()
+                    new ButtonBuilder()
                         .setCustomId('cancel')
                         .setLabel('Cancel')
-                        .setStyle('DANGER')
+                        .setStyle(ButtonStyle.Danger)
                 );
         };
 

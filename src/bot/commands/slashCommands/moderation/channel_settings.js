@@ -1,7 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { Permissions, MessageEmbed } = require('discord.js');
+const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const moment = require('moment');
-const crypto = require('crypto');
 const path = require('path');
 
 module.exports = {
@@ -16,24 +15,11 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(client, interaction) {
-        if (!interaction.member.permissions.has(Permissions.FLAGS.ADMINISTRATOR)) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
         }
 
-        const hash = crypto.createHash('md5').update('channel_settings').digest('hex');
-		const allowedChannel = await client.db.getAllowedChannel(hash);
-		const guild = client.guilds.cache.get(interaction.guild.id);
-		const member = await guild.members.fetch(interaction.user.id);
-		const roles = member.roles.cache.map(role => role.id);
-
-		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
-			if (!roles.some(role => client.allowed.includes(role))) {
-				return interaction.reply({ 
-					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
-					ephemeral: true 
-				});
-			}
-		}
+        const pageRequested = interaction.options.getInteger('page') || 1;
 
         try {
             const [totalCommandsResult, commands] = await Promise.all([
@@ -71,8 +57,8 @@ function createCommandSettingsEmbed(totalCommands, commands, currentPage, totalP
         inline: true
     }));
 
-    return new MessageEmbed()
-        .setColor('RED')
+    return new EmbedBuilder()
+        .setColor(0xE74C3C)
         .setTitle('Command Settings')
         .setDescription(`There are a total of **${totalCommands}** commands.`)
         .addFields(fields)

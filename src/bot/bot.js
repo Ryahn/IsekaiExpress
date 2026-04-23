@@ -1,7 +1,7 @@
-const {Client, Intents, Collection} = require('discord.js');
-const {registerCommands, registerEvents} = require('./utils/register');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { registerCommands, registerEvents, populateBuiltinChatCommandKeys } = require('./utils/register');
 const schedule = require('node-schedule');
-const config = require('../../.config');
+const config = require('../../config');
 const db = require('../../database/db');
 const { timestamp } = require('../../libs/utils');
 const logger = require('silly-logger');
@@ -58,11 +58,11 @@ class BotClient extends Client {
 
 const client = new BotClient({
     intents: [
-        Intents.FLAGS.GUILDS,
-        Intents.FLAGS.GUILD_MESSAGES,
-        Intents.FLAGS.GUILD_MEMBERS,
-        Intents.FLAGS.GUILD_BANS,
-        Intents.FLAGS.GUILD_PRESENCES,
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildBans,
+        GatewayIntentBits.GuildPresences,
     ]
 });
 
@@ -70,6 +70,7 @@ const client = new BotClient({
     client.commands = new Collection();
     client.slashCommands = new Collection();
     await registerCommands(client, '../commands/chatCommands');
+    populateBuiltinChatCommandKeys(client);
     await registerEvents(client, '../events');
     client.db = require('../../database/db');
     client.logger = logger;
@@ -89,10 +90,12 @@ const client = new BotClient({
         config.roles.staff,
         config.roles.user,
     ];
+    client.guildGlobalLock = new Map();
+    client.customCommandsByHash = new Map();
+    client.customCommandsRevision = 0;
 
-    // Handle disconnections
-    client.on('disconnect', () => {
-        logger.warn('Bot disconnected from Discord');
+    client.on('shardDisconnect', (_event, shardId) => {
+        logger.warn(`Bot shard ${shardId} disconnected from Discord`);
         client.handleReconnect();
     });
 
@@ -151,15 +154,12 @@ const client = new BotClient({
 
     });
 
-    client.on('rateLimit', (rateLimitInfo) => {
-        client.logger.warn(`Rate limit hit! Timeout: ${rateLimitInfo.timeout}ms, Limit: ${rateLimitInfo.limit}, Method: ${rateLimitInfo.method}, Path: ${rateLimitInfo.path}, Route: ${rateLimitInfo.route}`);
-        
-    });
-
     // Graceful shutdown handlers
     process.on('SIGINT', async () => {
         logger.info('Received SIGINT. Shutting down gracefully...');
         clearTimeout(client.reconnectTimeout);
+        if (client.customCommandsPollInterval) clearInterval(client.customCommandsPollInterval);
+        if (client.customCommandsSafetyInterval) clearInterval(client.customCommandsSafetyInterval);
         await db.end();
         client.destroy();
         process.exit(0);
@@ -168,6 +168,8 @@ const client = new BotClient({
     process.on('SIGTERM', async () => {
         logger.info('Received SIGTERM. Shutting down gracefully...');
         clearTimeout(client.reconnectTimeout);
+        if (client.customCommandsPollInterval) clearInterval(client.customCommandsPollInterval);
+        if (client.customCommandsSafetyInterval) clearInterval(client.customCommandsSafetyInterval);
         await db.end();
         client.destroy();
         process.exit(0);

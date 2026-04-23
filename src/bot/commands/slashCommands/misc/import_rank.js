@@ -1,10 +1,9 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { MessageEmbed } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const Tesseract = require('tesseract.js');
 const axios = require('axios');
 const fs = require('fs');
 const sharp = require('sharp');
-const crypto = require('crypto');
 const path = require('path');
 
 module.exports = {
@@ -17,20 +16,7 @@ module.exports = {
 
     async execute(client, interaction) {
 
-		const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
-		const allowedChannel = await client.db.getAllowedChannel(hash);
-		const guild = client.guilds.cache.get(interaction.guild.id);
-		const member = await guild.members.fetch(interaction.user.id);
-		const roles = member.roles.cache.map(role => role.id);
-
-		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
-			if (!roles.some(role => client.allowed.includes(role))) {
-				return interaction.reply({ 
-					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
-					ephemeral: true 
-				});
-			}
-		}
+		
 
         try {
             await interaction.deferReply();

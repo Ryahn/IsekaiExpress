@@ -1,6 +1,8 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
 const { checkCommandCooldown, setCooldown } = require('../../middleware/commandMiddleware');
 const { executeWithRateLimit } = require('../../middleware/apiMiddleware');
+const { checkInteractionGlobalCommandLock } = require('../../middleware/globalCommandLock');
+const { assertSlashCommandChannel } = require('../../middleware/slashCommandChannel');
 
 module.exports = class InteractionEvent extends BaseEvent {
     constructor() {
@@ -8,12 +10,20 @@ module.exports = class InteractionEvent extends BaseEvent {
     }
     
     async run(client, interaction) {
-        if (!interaction.isCommand()) return;
+        if (!interaction.isChatInputCommand()) return;
 
         const command = client.slashCommands.get(interaction.commandName);
         if (!command) return;
 
         try {
+            const globalLock = await checkInteractionGlobalCommandLock(client, interaction);
+            if (!globalLock.allowed) {
+                return interaction.reply({ content: globalLock.message, ephemeral: true });
+            }
+            if (!(await assertSlashCommandChannel(client, interaction))) {
+                return;
+            }
+
             // Check cooldown
             const cooldownCheck = checkCommandCooldown(client, interaction.user.id, interaction.commandName);
             

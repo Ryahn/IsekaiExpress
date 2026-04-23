@@ -1,5 +1,5 @@
 const knex = require('knex');
-const config = require('../.config');
+const config = require('../config');
 const logger = require('silly-logger');
 const { timestamp } = require('../libs/utils');
 const { Model } = require('objection');
@@ -38,11 +38,17 @@ db.raw('SELECT 1')
     logger.error('Error connecting to the database:', err);
   });
 
-const self =module.exports = {
+const self = module.exports = {
   ...models,
   query: db,
   db: db,
   end: () => db.destroy(),
+
+  /**
+   * Run raw SQL. Resolves to the first result set: row array for SELECT, or
+   * a ResultSetHeader-like object for INSERT/UPDATE/DELETE (mysql2).
+   */
+  sql: (query, bindings = []) => db.raw(query, bindings).then((result) => result[0]),
 
   checkUser: async (user) => {
     const userId = user.id;
@@ -189,9 +195,52 @@ const self =module.exports = {
     return rows;
   },
 
-  getXPSettings: async () => {
-    const [rows] = await db.table('xp_settings').select('*').limit(1);
-    return rows;
+  /**
+   * Ensure a row exists for guildId when the table is guild-scoped (has guildId column).
+   * Legacy `id`-only tables are left unchanged.
+   */
+  ensureXPSettingsForGuild: async (guildId) => {
+    if (!guildId) return;
+    const first = await db.table('xp_settings').first();
+    if (!first) return;
+    if (first.guildId === undefined && first.id !== undefined) return;
+    const existing = await db.table('xp_settings').where({ guildId }).first();
+    if (existing) return;
+    try {
+      await db.table('xp_settings').insert({
+        guildId,
+        messages_per_xp: 3,
+        min_xp_per_gain: 1,
+        max_xp_per_gain: 5,
+        weekend_multiplier: 2,
+        weekend_days: 'sat,sun',
+        double_xp_enabled: false
+      });
+    } catch (e) {
+      if (e.code !== 'ER_DUP_ENTRY' && e.code !== 'SQLITE_CONSTRAINT') throw e;
+    }
+  },
+
+  getXPSettings: async (guildId) => {
+    if (guildId) {
+      await self.ensureXPSettingsForGuild(guildId);
+    }
+    const rows = await db.table('xp_settings').select('*');
+    if (!rows.length) {
+      return {
+        messages_per_xp: 3,
+        min_xp_per_gain: 1,
+        max_xp_per_gain: 3,
+        weekend_multiplier: 2,
+        weekend_days: 'sat,sun',
+        double_xp_enabled: false
+      };
+    }
+    if (rows[0].guildId !== undefined && guildId) {
+      const match = rows.find((r) => String(r.guildId) === String(guildId));
+      if (match) return match;
+    }
+    return rows[0];
   },
 
   getExpiredCagedUsers: async (currentTime) => {
@@ -211,8 +260,11 @@ const self =module.exports = {
   },
 
   getChannelStats: async (channelId, currentDate) => {
-    const [rows] = await db.table('channel_stats').where({channel_id: channelId}).andWhere({month_day: currentDate}).select('*');
-    return rows;
+    const row = await db.table('channel_stats')
+      .select('*')
+      .where({ channel_id: channelId, month_day: currentDate })
+      .first();
+    return row;
   },
 
   getGuildConfigurable: async (guildId) => {
@@ -220,33 +272,83 @@ const self =module.exports = {
     return rows;
   },
 
+  /**
+   * @param {object} options
+   * @param {boolean} [options.locked]
+   * @param {string[]|null} [options.whitelistChannelIds] — set to [] or null to clear; omit to leave unchanged
+   */
+  updateGuildGlobalCommandLock: async (guildId, options = {}) => {
+    const { locked, whitelistChannelIds } = options;
+    const patch = {};
+    if (typeof locked === 'boolean') {
+      patch.global_commands_locked = locked;
+    }
+    if (whitelistChannelIds !== undefined) {
+      patch.global_commands_whitelist_channel_ids = whitelistChannelIds && whitelistChannelIds.length
+        ? JSON.stringify(whitelistChannelIds)
+        : null;
+    }
+    if (Object.keys(patch).length === 0) return;
+    await db.table('GuildConfigurable').where({ guildId }).update(patch);
+  },
+
   getAfkUser: async (userId, guildId) => {
     const rows = await db.table('afk_users').select('*').where({user_id: userId}).andWhere({guild_id: guildId});
     return rows;
   },
 
-  getChannelStats: async (channelId, currentDate) => {
-    const [rows] = await db.table('channel_stats').select('*').where({channel_id: channelId}).andWhere({month_day: currentDate});
-    return rows;
+  getCommand: async (commandNameHash) => {
+    return db.table('commands').select('hash', 'content', 'usage').where({ hash: commandNameHash }).first();
   },
 
-  getCommand: async (commandNameHash) => {
-    const rows = await db.table('commands').select('hash', 'content', 'usage').where({hash: commandNameHash});
-    return rows;
+  ensureAppStateRow: async () => {
+    const row = await db.table('app_state').where({ id: 1 }).first();
+    if (!row) {
+      await db.table('app_state').insert({ id: 1, custom_commands_revision: 0 });
+    }
+  },
+
+  getCustomCommandsRevision: async () => {
+    await self.ensureAppStateRow();
+    const row = await db.table('app_state').select('custom_commands_revision').where({ id: 1 }).first();
+    return row ? Number(row.custom_commands_revision) : 0;
+  },
+
+  bumpCustomCommandsRevision: async () => {
+    await self.ensureAppStateRow();
+    await db.table('app_state').where({ id: 1 }).increment('custom_commands_revision', 1);
+  },
+
+  getAllCustomCommandsForCache: async () => {
+    return db.table('commands').select('hash', 'content');
+  },
+
+  refreshCustomCommandsCache: async (client) => {
+    const rows = await self.getAllCustomCommandsForCache();
+    const map = new Map();
+    for (const r of rows) {
+      map.set(r.hash, r.content);
+    }
+    client.customCommandsByHash = map;
+    client.customCommandsRevision = await self.getCustomCommandsRevision();
+  },
+
+  incrementCustomCommandUsage: async (commandNameHash) => {
+    await db.table('commands').increment('usage', 1).where({ hash: commandNameHash });
   },
 
   getLeaderboard: async (limit = 10) => {
-    const [rows] = await db('user_xp').join('users', 'user_xp.user_id','=', 'users.discord_id').select('user_xp.*', 'users.username').limit(limit);
-    const leaderboard = [];
-    for (const row of rows) {
-      leaderboard.push({
-        user_id: row.user_id,
-        username: row.username,
-        xp: row.xp,
-        level: row.level
-      });
-    }
-    return leaderboard;
+    const rows = await db('user_xp')
+      .join('users', 'user_xp.user_id', '=', 'users.discord_id')
+      .select('user_xp.*', 'users.username')
+      .orderBy('user_xp.xp', 'desc')
+      .limit(limit);
+    return rows.map((row) => ({
+      user_id: row.user_id,
+      username: row.username,
+      xp: row.xp,
+      level: row.level
+    }));
   },
 
   getWarningsOffset: async (userId, itemsPerPage, offset) => {
@@ -267,8 +369,25 @@ const self =module.exports = {
     await db.table('caged_users').where({discord_id: userId}).delete()
   },
   
-  toggleDoubleXP: async (enabled) => {
-    await db.table('xp_settings').update({double_xp_enabled: enabled}).where({id: 1});
+  toggleDoubleXP: async (enabled, guildId) => {
+    const s = await self.getXPSettings(guildId);
+    if (s && s.guildId != null) {
+      await db.table('xp_settings').where({ guildId: s.guildId }).update({ double_xp_enabled: enabled });
+      return;
+    }
+    if (s && s.id != null) {
+      await db.table('xp_settings').where({ id: s.id }).update({ double_xp_enabled: enabled });
+      return;
+    }
+    const first = await db.table('xp_settings').first();
+    if (!first) return;
+    if (first.guildId != null) {
+      await db.table('xp_settings').where({ guildId: first.guildId }).update({ double_xp_enabled: enabled });
+      return;
+    }
+    if (first.id != null) {
+      await db.table('xp_settings').where({ id: first.id }).update({ double_xp_enabled: enabled });
+    }
   },
 
   updateUserXP: async (userId, xp, messageCount = 0, level = 1) => {
@@ -284,16 +403,34 @@ const self =module.exports = {
     await db.table('user_xp').update({message_count: messageCount}).where({user_id: userId});
   },
   
-  updateXPSettings: async (settings) => {
-    await db.table('xp_settings').update(settings).where({ id: 1 });
+  updateXPSettings: async (settings, guildId) => {
+    if (guildId) {
+      await self.ensureXPSettingsForGuild(guildId);
+    }
+    const s = await self.getXPSettings(guildId);
+    if (s && s.guildId != null) {
+      await db.table('xp_settings').where({ guildId: s.guildId }).update(settings);
+      return;
+    }
+    if (s && s.id != null) {
+      await db.table('xp_settings').where({ id: s.id }).update(settings);
+      return;
+    }
+    const first = await db.table('xp_settings').first();
+    if (!first) return;
+    if (first.guildId != null) {
+      await db.table('xp_settings').where({ guildId: first.guildId }).update(settings);
+      return;
+    }
+    if (first.id != null) {
+      await db.table('xp_settings').where({ id: first.id }).update(settings);
+    }
   },
 
   updateChannelStats: async (channelId, currentDate) => {
-    await db.table('channel_stats').update({total: total+1}).where({channel_id: channelId}).andWhere({month_day: currentDate});
+    await db.table('channel_stats')
+      .where({ channel_id: channelId, month_day: currentDate })
+      .increment('total', 1);
   },
   
-  updateCommandUsage: async (commandNameHash, newUsageCount) => {
-    await db.table('commands').update({usage: newUsageCount}).where({hash: commandNameHash});
-  },
-
 };

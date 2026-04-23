@@ -1,7 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { Permissions, MessageEmbed } = require('discord.js');
+const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const moment = require('moment');
-const crypto = require('crypto');
 const path = require('path');
 
 module.exports = {
@@ -36,24 +35,11 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(client, interaction) {
-        if (!interaction.member.permissions.has(Permissions.FLAGS.MANAGE_ROLES)) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
             return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
         }
 
-        const hash = crypto.createHash('md5').update(module.exports.data.name).digest('hex');
-		const allowedChannel = await client.db.getAllowedChannel(hash);
-		const guild = client.guilds.cache.get(interaction.guild.id);
-		const member = await guild.members.fetch(interaction.user.id);
-		const roles = member.roles.cache.map(role => role.id);
-
-		if (allowedChannel && (allowedChannel.channel_id === 'all' || allowedChannel.channel_id !== interaction.channel.id)) {
-			if (!roles.some(role => client.allowed.includes(role))) {
-				return interaction.reply({ 
-					content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
-					ephemeral: true 
-				});
-			}
-		}
+        
 
         // try {
             const userToCage = interaction.options.getUser('user');
@@ -73,7 +59,7 @@ module.exports = {
 
             const cageName = guild.roles.cache.get(cageValue);
 
-            if (!interaction.guild.members.me.permissions.has(Permissions.FLAGS.MANAGE_ROLES)) {
+            if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) {
                 return interaction.reply({ content: 'I do not have permission to manage roles.', ephemeral: true });
             }
 
@@ -115,8 +101,8 @@ module.exports = {
             let expiresText = expires === 0 ? 'Permanent' : `<t:${expires}:R>`;
 
             const modChannel = interaction.guild.channels.cache.find(ch => ch.name === 'moderator-chat');
-            let modEmbed = new MessageEmbed()
-                .setColor('RED')
+            let modEmbed = new EmbedBuilder()
+                .setColor(0xE74C3C)
                 .setTitle('User Caged')
                 .addFields([
                     { name: 'User', value: `<@${userToCage.id}>`, inline: true },

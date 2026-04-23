@@ -1,5 +1,5 @@
 const BaseCommand = require("../../../../utils/structures/BaseCommand");
-const { MessageEmbed, Formatters } = require('discord.js'); // Import Formatters
+const { EmbedBuilder, userMention } = require('discord.js');
 
 // Cooldown map to store user cooldowns
 const cooldowns = new Map();
@@ -33,15 +33,15 @@ module.exports = class Gaydar extends BaseCommand {
         let description = '';
         if (percent >= 80) {
             image = 'https://overlord.lordainz.xyz/f/astolfo.gif';
-            description = `${Formatters.userMention(targetUser.id)} your gayness is ${percent}% and you are a certified trap.`;
+            description = `${userMention(targetUser.id)} your gayness is ${percent}% and you are a certified trap.`;
         } else {
             image = 'https://overlord.lordainz.xyz/f/gaydar.jpg';
-            description = `${Formatters.userMention(targetUser.id)} has been scanned by the gaydar and is ${percent}% gay.`;
+            description = `${userMention(targetUser.id)} has been scanned by the gaydar and is ${percent}% gay.`;
         }
 
         // Create the embed
-        let embed = new MessageEmbed()
-            .setColor('BLUE')
+        let embed = new EmbedBuilder()
+            .setColor(0x3498DB)
             .setTitle('Gayness Detected')
             .setDescription(description)
             .setImage(image)

@@ -1,10 +1,11 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
 const path = require("path");
 const fs = require("node:fs");
-const { Collection } = require("discord.js");
+const { Collection, ActivityType } = require("discord.js");
 const { REST } = require('@discordjs/rest');
-const { Routes } = require('discord-api-types/v9');
+const { Routes } = require('discord-api-types/v10');
 const crypto = require('crypto');
+const { parseWhitelistJson } = require('../../middleware/globalCommandLock');
 
 module.exports = class ReadyEvent extends BaseEvent {
     constructor() {
@@ -12,7 +13,7 @@ module.exports = class ReadyEvent extends BaseEvent {
     }
 
     async run(client) {
-        const rest = new REST({ version: '9' }).setToken(client.config.discord.botToken);
+        const rest = new REST({ version: '10' }).setToken(client.config.discord.botToken);
 
         client.langs = new Collection();
         client.guildSubReddits = new Collection();
@@ -97,22 +98,66 @@ module.exports = class ReadyEvent extends BaseEvent {
         }
 
         try {
-            for (const guildId of guildIds) {
-                const result = await client.db.getGuildConfigurable(guildId);
-                
-                if (result) {
-                    const { cmdPrefix, subReddit, guildWelcome, guildLanguage } = result;                    
+            if (guildIds.length) {
+                const rows = await client.db.query
+                    .table('GuildConfigurable')
+                    .select('*')
+                    .whereIn('guildId', guildIds);
+                for (const result of rows) {
+                    if (!result) continue;
+                    const guildId = result.guildId;
+                    const { cmdPrefix, subReddit, guildWelcome, guildLanguage } = result;
                     client.guildSubReddits.set(guildId, subReddit);
                     client.langs.set(guildId, guildLanguage);
                     client.guildCommandPrefixes.set(guildId, cmdPrefix);
                     client.guildWelcomes.set(guildId, guildWelcome);
+                    client.guildGlobalLock.set(guildId, {
+                        locked: Boolean(result.global_commands_locked),
+                        channelIds: parseWhitelistJson(result.global_commands_whitelist_channel_ids)
+                    });
                 }
             }
         } catch (err) {
             client.logger.error("Error fetching guild configuration:", err);
         }
 
-        client.user.setActivity(`zonies cry`, { type: 'LISTENING' });
+        try {
+            await client.db.refreshCustomCommandsCache(client);
+            client.logger.info(
+                `Custom commands cache loaded (${client.customCommandsByHash.size} entries, revision ${client.customCommandsRevision})`
+            );
+        } catch (err) {
+            client.logger.error('Error loading custom commands cache:', err);
+        }
+
+        if (client.customCommandsPollInterval) clearInterval(client.customCommandsPollInterval);
+        if (client.customCommandsSafetyInterval) clearInterval(client.customCommandsSafetyInterval);
+
+        const pollMs = client.config.customCommands?.pollMs ?? 5000;
+        client.customCommandsPollInterval = setInterval(async () => {
+            try {
+                const rev = await client.db.getCustomCommandsRevision();
+                if (rev > client.customCommandsRevision) {
+                    await client.db.refreshCustomCommandsCache(client);
+                    client.logger.info(`Custom commands cache reloaded (revision ${client.customCommandsRevision})`);
+                }
+            } catch (e) {
+                client.logger.error('Custom commands revision poll failed:', e);
+            }
+        }, pollMs);
+
+        const safetyMs = client.config.customCommands?.safetyRefreshMs ?? 0;
+        if (safetyMs > 0) {
+            client.customCommandsSafetyInterval = setInterval(async () => {
+                try {
+                    await client.db.refreshCustomCommandsCache(client);
+                } catch (e) {
+                    client.logger.error('Custom commands safety refresh failed:', e);
+                }
+            }, safetyMs);
+        }
+
+        client.user.setActivity('zonies cry', { type: ActivityType.Listening });
         client.logger.info(`${client.user.tag} has logged in. Using prefix: ${client.guildCommandPrefixes.get(client.config.discord.guildId)}`);
         client.logger.info('Collection refreshed, no errors occurred while starting the program! SUCCESS!');
     }

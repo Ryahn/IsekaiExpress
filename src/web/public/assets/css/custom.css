@@ -1,0 +1,861 @@
+/* ============================================================
+   VOID STATION THEME — IsekaiExpress Bot Dashboard
+   ============================================================ */
+
+/* 1. CSS VARIABLES */
+:root {
+  --vs-bg-base: #0b0d1a;
+  --vs-bg-surface: #12152a;
+  --vs-bg-surface-2: #1a1e38;
+  --vs-bg-sidebar: #090b16;
+  --vs-accent: #7c3aed;
+  --vs-accent-light: #a78bfa;
+  --vs-accent-glow: rgba(124, 58, 237, 0.25);
+  --vs-cyan: #22d3ee;
+  --vs-text-primary: #e2e8f0;
+  --vs-text-muted: #8892a4;
+  --vs-border: rgba(255, 255, 255, 0.07);
+  --vs-danger: #f87171;
+  --vs-success: #34d399;
+  --vs-warning: #fbbf24;
+  --vs-sidebar-width: 260px;
+  --vs-topbar-height: 64px;
+}
+
+/* 2. BASE */
+body.voidstation-theme {
+  background-color: var(--vs-bg-base) !important;
+  color: var(--vs-text-primary) !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6,
+body.voidstation-theme h1,
+body.voidstation-theme h2,
+body.voidstation-theme h3,
+body.voidstation-theme h4,
+body.voidstation-theme h5,
+body.voidstation-theme h6 {
+  font-family: 'Oxanium', sans-serif;
+  color: var(--vs-text-primary);
+}
+
+/* 3. NEUTRALIZE LIGHT THEME CLASSES */
+body.voidstation-theme .bg-white {
+  background-color: transparent !important;
+}
+
+body.voidstation-theme .border-y {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+body.voidstation-theme .border-300 {
+  border-color: var(--vs-border) !important;
+}
+
+body.voidstation-theme .text-700 {
+  color: var(--vs-text-muted) !important;
+}
+
+body.voidstation-theme .text-900 {
+  color: var(--vs-text-primary) !important;
+}
+
+body.voidstation-theme .text-600 {
+  color: var(--vs-text-muted) !important;
+}
+
+body.voidstation-theme .text-muted {
+  color: var(--vs-text-muted) !important;
+}
+
+body.voidstation-theme p {
+  color: var(--vs-text-muted);
+}
+
+/* 4. SIDEBAR (Vertical Navbar) */
+body.voidstation-theme .navbar-vertical {
+  background-color: var(--vs-bg-sidebar) !important;
+  border-right: 1px solid var(--vs-border) !important;
+  width: var(--vs-sidebar-width) !important;
+}
+
+body.voidstation-theme .navbar-vertical-content {
+  padding: 0.75rem 0.5rem !important;
+}
+
+/* Section labels */
+body.voidstation-theme .navbar-vertical-label {
+  color: var(--vs-text-muted) !important;
+  font-size: 0.62rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  padding: 1.25rem 1rem 0.3rem !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  display: block !important;
+}
+
+body.voidstation-theme .navbar-vertical-line {
+  border-color: var(--vs-border) !important;
+  margin: 0.15rem 0.75rem !important;
+}
+
+/* Nav links */
+body.voidstation-theme .navbar-vertical .nav-link {
+  color: var(--vs-text-muted) !important;
+  border-radius: 8px !important;
+  padding: 0.55rem 0.875rem !important;
+  margin: 0.1rem 0.4rem !important;
+  transition: background-color 0.15s ease, color 0.15s ease !important;
+  position: relative !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+body.voidstation-theme .navbar-vertical .nav-link:hover {
+  background-color: var(--vs-bg-surface-2) !important;
+  color: var(--vs-text-primary) !important;
+}
+
+body.voidstation-theme .navbar-vertical .nav-link.vs-active {
+  background-color: var(--vs-accent-glow) !important;
+  color: var(--vs-accent-light) !important;
+}
+
+body.voidstation-theme .navbar-vertical .nav-link.vs-active::before {
+  content: '';
+  position: absolute;
+  left: -0.4rem;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  background: linear-gradient(180deg, var(--vs-accent), var(--vs-accent-light));
+  border-radius: 0 2px 2px 0;
+  animation: glow-pulse 2.5s ease-in-out infinite;
+}
+
+body.voidstation-theme .navbar-vertical .nav-link .d-flex {
+  align-items: center !important;
+  gap: 0.7rem !important;
+}
+
+/* Nav icons */
+body.voidstation-theme .nav-link-icon {
+  width: 20px !important;
+  height: 20px !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+body.voidstation-theme .nav-link-icon svg {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+/* Nav text wrapper */
+body.voidstation-theme .nav-link-text {
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+/* 5. TOP NAVBAR */
+body.voidstation-theme .navbar-top {
+  background-color: var(--vs-bg-surface) !important;
+  border-bottom: 1px solid var(--vs-border) !important;
+  height: var(--vs-topbar-height) !important;
+}
+
+body.voidstation-theme .navbar-top .navbar-brand {
+  color: var(--vs-text-primary) !important;
+  text-decoration: none !important;
+}
+
+body.voidstation-theme .logo-text {
+  font-family: 'Oxanium', sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 1.05rem !important;
+  color: var(--vs-accent-light) !important;
+  letter-spacing: 0.02em !important;
+}
+
+/* Hamburger icon */
+body.voidstation-theme .navbar-toggler-humburger-icon {
+  color: var(--vs-text-muted) !important;
+}
+
+body.voidstation-theme .navbar-toggler-humburger-icon:hover {
+  color: var(--vs-text-primary) !important;
+  background: transparent !important;
+}
+
+body.voidstation-theme .toggle-line {
+  background-color: var(--vs-text-primary) !important;
+}
+
+/* User dropdown toggle */
+body.voidstation-theme .navbar-top .nav-link {
+  color: var(--vs-text-primary) !important;
+}
+
+/* User avatar border */
+body.voidstation-theme .avatar img {
+  border: 2px solid rgba(124, 58, 237, 0.5) !important;
+  transition: border-color 0.2s ease !important;
+}
+
+body.voidstation-theme .avatar img:hover {
+  border-color: var(--vs-accent-light) !important;
+}
+
+/* User dropdown menu */
+body.voidstation-theme .dropdown-menu {
+  background-color: var(--vs-bg-surface) !important;
+  border: 1px solid var(--vs-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+body.voidstation-theme .dropdown-profile .card {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+body.voidstation-theme .dropdown-profile .card-body {
+  background: linear-gradient(135deg, var(--vs-bg-surface), rgba(124, 58, 237, 0.1)) !important;
+}
+
+body.voidstation-theme .dropdown-menu h6 {
+  color: var(--vs-text-primary) !important;
+  font-family: 'Oxanium', sans-serif !important;
+}
+
+body.voidstation-theme .dropdown-menu .nav-link {
+  color: var(--vs-text-muted) !important;
+  font-size: 0.875rem !important;
+  padding: 0.6rem 1rem !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  transition: background-color 0.15s ease, color 0.15s ease !important;
+}
+
+body.voidstation-theme .dropdown-menu .nav-link:hover {
+  color: var(--vs-text-primary) !important;
+  background-color: var(--vs-bg-surface-2) !important;
+}
+
+/* 6. CONTENT AREA */
+body.voidstation-theme .content {
+  background-color: var(--vs-bg-base) !important;
+  min-height: 100vh !important;
+  padding-top: calc(var(--vs-topbar-height) + 1.5rem) !important;
+  padding-bottom: 3rem !important;
+  padding-left: 1.5rem !important;
+  padding-right: 1.5rem !important;
+}
+
+body.voidstation-theme .content > div[class*="mx-n"],
+body.voidstation-theme .content > div {
+  padding-top: 0 !important;
+}
+
+/* 7. FEATURE CARDS (dashboard) */
+.vs-card {
+  background-color: var(--vs-bg-surface);
+  border: 1px solid var(--vs-border);
+  border-radius: 14px;
+  padding: 1.5rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  text-decoration: none;
+  display: block;
+  color: var(--vs-text-primary);
+  height: 100%;
+}
+
+.vs-card:hover {
+  border-color: var(--vs-accent);
+  box-shadow: 0 0 0 1px var(--vs-accent), 0 8px 32px var(--vs-accent-glow);
+  transform: translateY(-2px);
+  color: var(--vs-text-primary);
+  text-decoration: none;
+}
+
+.vs-card-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--vs-accent-glow);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.1rem;
+  color: var(--vs-accent-light);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+.vs-card-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: var(--vs-accent-light);
+}
+
+.vs-card h5 {
+  font-family: 'Oxanium', sans-serif !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 0.45rem !important;
+  color: var(--vs-text-primary) !important;
+}
+
+.vs-card p {
+  font-size: 0.83rem;
+  color: var(--vs-text-muted);
+  margin-bottom: 1.1rem;
+  line-height: 1.55;
+}
+
+.vs-card-link {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--vs-accent-light);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.vs-card:hover .vs-card-link {
+  color: var(--vs-cyan);
+}
+
+/* 8. WELCOME BANNER */
+.vs-welcome {
+  background: linear-gradient(135deg, var(--vs-bg-surface) 0%, rgba(124, 58, 237, 0.12) 100%);
+  border: 1px solid var(--vs-border);
+  border-radius: 16px;
+  padding: 2rem 2rem;
+  margin-bottom: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.vs-welcome::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.vs-welcome::after {
+  content: '';
+  position: absolute;
+  bottom: -40px;
+  right: 100px;
+  width: 150px;
+  height: 150px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.vs-welcome-title {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+  color: var(--vs-text-primary);
+}
+
+.vs-welcome-title span {
+  color: var(--vs-accent-light);
+}
+
+.vs-welcome-subtitle {
+  color: var(--vs-text-muted);
+  font-size: 0.875rem;
+  margin: 0 0 1.1rem;
+  line-height: 1.5;
+}
+
+.vs-welcome-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--vs-accent-glow);
+  color: var(--vs-accent-light);
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* 9. PAGE HEADERS (commands/warnings/slashes) */
+.vs-page-header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.vs-page-title {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--vs-text-primary);
+  margin-bottom: 0.2rem;
+}
+
+.vs-page-subtitle {
+  font-size: 0.83rem;
+  color: var(--vs-text-muted);
+  margin: 0;
+}
+
+/* Toolbar (search + action) */
+.vs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.vs-toolbar .form-control {
+  background-color: var(--vs-bg-surface) !important;
+  border: 1px solid var(--vs-border) !important;
+  color: var(--vs-text-primary) !important;
+  border-radius: 8px !important;
+  font-size: 0.875rem !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+.vs-toolbar .form-control::placeholder {
+  color: var(--vs-text-muted) !important;
+}
+
+.vs-toolbar .form-control:focus {
+  border-color: var(--vs-accent) !important;
+  box-shadow: 0 0 0 3px var(--vs-accent-glow) !important;
+  background-color: var(--vs-bg-surface) !important;
+}
+
+/* 10. BUTTONS */
+body.voidstation-theme .btn-primary {
+  background-color: var(--vs-accent) !important;
+  border-color: var(--vs-accent) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  border-radius: 8px !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+body.voidstation-theme .btn-primary:hover {
+  background-color: var(--vs-accent-light) !important;
+  border-color: var(--vs-accent-light) !important;
+  box-shadow: 0 4px 16px var(--vs-accent-glow) !important;
+}
+
+body.voidstation-theme .btn-danger {
+  background-color: transparent !important;
+  border-color: var(--vs-danger) !important;
+  color: var(--vs-danger) !important;
+  font-weight: 600 !important;
+  font-size: 0.8rem !important;
+  border-radius: 6px !important;
+}
+
+body.voidstation-theme .btn-danger:hover {
+  background-color: var(--vs-danger) !important;
+  color: #fff !important;
+}
+
+body.voidstation-theme .btn-info {
+  background-color: transparent !important;
+  border-color: var(--vs-cyan) !important;
+  color: var(--vs-cyan) !important;
+  font-weight: 600 !important;
+  font-size: 0.8rem !important;
+  border-radius: 6px !important;
+}
+
+body.voidstation-theme .btn-info:hover {
+  background-color: var(--vs-cyan) !important;
+  color: var(--vs-bg-base) !important;
+}
+
+body.voidstation-theme .btn-secondary {
+  background-color: var(--vs-bg-surface-2) !important;
+  border-color: var(--vs-border) !important;
+  color: var(--vs-text-muted) !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  border-radius: 8px !important;
+}
+
+body.voidstation-theme .btn-secondary:hover {
+  color: var(--vs-text-primary) !important;
+  background-color: var(--vs-bg-surface-2) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+}
+
+/* 11. MODALS */
+body.voidstation-theme .modal-content {
+  background-color: var(--vs-bg-surface) !important;
+  border: 1px solid var(--vs-border) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6) !important;
+}
+
+body.voidstation-theme .modal-header {
+  border-bottom: 1px solid var(--vs-border) !important;
+  padding: 1.25rem 1.5rem !important;
+  background: linear-gradient(90deg, transparent, rgba(124, 58, 237, 0.04));
+}
+
+body.voidstation-theme .modal-title {
+  font-family: 'Oxanium', sans-serif !important;
+  color: var(--vs-text-primary) !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+}
+
+body.voidstation-theme .modal-body {
+  padding: 1.5rem !important;
+}
+
+body.voidstation-theme .modal-footer {
+  border-top: 1px solid var(--vs-border) !important;
+  padding: 1rem 1.5rem !important;
+  background: rgba(0,0,0,0.1);
+}
+
+body.voidstation-theme .btn-close {
+  filter: invert(1) !important;
+  opacity: 0.5 !important;
+}
+
+body.voidstation-theme .btn-close:hover {
+  opacity: 1 !important;
+}
+
+/* 12. FORMS */
+body.voidstation-theme .form-control,
+body.voidstation-theme .form-select,
+body.voidstation-theme textarea.form-control {
+  background-color: var(--vs-bg-surface-2) !important;
+  border: 1px solid var(--vs-border) !important;
+  color: var(--vs-text-primary) !important;
+  border-radius: 8px !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  font-size: 0.875rem !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+body.voidstation-theme .form-control:focus,
+body.voidstation-theme .form-select:focus,
+body.voidstation-theme textarea.form-control:focus {
+  border-color: var(--vs-accent) !important;
+  box-shadow: 0 0 0 3px var(--vs-accent-glow) !important;
+  background-color: var(--vs-bg-surface-2) !important;
+  color: var(--vs-text-primary) !important;
+}
+
+body.voidstation-theme .form-control::placeholder,
+body.voidstation-theme textarea.form-control::placeholder {
+  color: var(--vs-text-muted) !important;
+}
+
+body.voidstation-theme .form-control[readonly] {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+}
+
+body.voidstation-theme label {
+  color: var(--vs-text-muted) !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 0.4rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.07em !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+body.voidstation-theme .form-group {
+  margin-bottom: 1rem !important;
+}
+
+body.voidstation-theme .input-group-text {
+  background-color: var(--vs-bg-sidebar) !important;
+  border: 1px solid var(--vs-border) !important;
+  color: var(--vs-text-muted) !important;
+  border-radius: 8px 0 0 8px !important;
+  font-size: 0.875rem !important;
+}
+
+/* 13. TABULATOR DARK THEME */
+.tabulator {
+  background-color: var(--vs-bg-surface) !important;
+  border: 1px solid var(--vs-border) !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  color: var(--vs-text-primary) !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  font-size: 0.855rem !important;
+}
+
+.tabulator .tabulator-header {
+  background-color: var(--vs-bg-sidebar) !important;
+  border-bottom: 1px solid var(--vs-border) !important;
+  color: var(--vs-text-muted) !important;
+}
+
+.tabulator .tabulator-header .tabulator-col {
+  background-color: var(--vs-bg-sidebar) !important;
+  border-right: 1px solid var(--vs-border) !important;
+  font-weight: 700 !important;
+  font-size: 0.7rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  color: var(--vs-text-muted) !important;
+  padding: 0.75rem !important;
+}
+
+.tabulator .tabulator-header .tabulator-col:hover {
+  background-color: var(--vs-bg-surface-2) !important;
+  color: var(--vs-text-primary) !important;
+}
+
+.tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover {
+  background-color: var(--vs-bg-surface-2) !important;
+}
+
+.tabulator .tabulator-row {
+  background-color: var(--vs-bg-surface) !important;
+  border-bottom: 1px solid var(--vs-border) !important;
+  color: var(--vs-text-primary) !important;
+  transition: background-color 0.12s ease !important;
+}
+
+.tabulator .tabulator-row:nth-child(even) {
+  background-color: rgba(26, 30, 56, 0.5) !important;
+}
+
+.tabulator .tabulator-row:hover {
+  background-color: rgba(124, 58, 237, 0.07) !important;
+}
+
+.tabulator .tabulator-cell {
+  border-right: 1px solid var(--vs-border) !important;
+  padding: 0.65rem 0.75rem !important;
+  vertical-align: middle !important;
+}
+
+/* Sort icons */
+.tabulator .tabulator-col .tabulator-col-sorter {
+  color: var(--vs-text-muted) !important;
+}
+
+/* Footer / Pagination */
+.tabulator .tabulator-footer {
+  background-color: var(--vs-bg-sidebar) !important;
+  border-top: 1px solid var(--vs-border) !important;
+  color: var(--vs-text-muted) !important;
+  padding: 0.6rem 1rem !important;
+}
+
+.tabulator .tabulator-paginator {
+  color: var(--vs-text-muted) !important;
+  font-size: 0.8rem !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+.tabulator .tabulator-page {
+  background-color: var(--vs-bg-surface-2) !important;
+  border: 1px solid var(--vs-border) !important;
+  color: var(--vs-text-primary) !important;
+  border-radius: 6px !important;
+  padding: 0.2rem 0.55rem !important;
+  margin: 0 2px !important;
+  font-size: 0.8rem !important;
+  transition: all 0.15s ease !important;
+  cursor: pointer !important;
+}
+
+.tabulator .tabulator-page:hover:not([disabled]) {
+  background-color: var(--vs-accent-glow) !important;
+  border-color: rgba(124, 58, 237, 0.5) !important;
+  color: var(--vs-accent-light) !important;
+}
+
+.tabulator .tabulator-page.active {
+  background-color: var(--vs-accent) !important;
+  border-color: var(--vs-accent) !important;
+  color: #fff !important;
+}
+
+.tabulator .tabulator-page[disabled] {
+  opacity: 0.3 !important;
+  cursor: not-allowed !important;
+}
+
+/* 14. TOAST */
+body.voidstation-theme .toast {
+  background-color: var(--vs-bg-surface) !important;
+  border: 1px solid var(--vs-border) !important;
+  border-radius: 10px !important;
+  color: var(--vs-text-primary) !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+body.voidstation-theme .toast-header {
+  background-color: transparent !important;
+  border-bottom: 1px solid var(--vs-border) !important;
+  color: var(--vs-text-primary) !important;
+}
+
+body.voidstation-theme .toast.text-bg-success {
+  border-color: rgba(52, 211, 153, 0.4) !important;
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.15) !important;
+}
+
+body.voidstation-theme .toast.text-bg-danger {
+  border-color: rgba(248, 113, 113, 0.4) !important;
+  box-shadow: 0 0 16px rgba(248, 113, 113, 0.15) !important;
+}
+
+/* 15. FOOTER */
+body.voidstation-theme .footer {
+  background-color: var(--vs-bg-surface) !important;
+  border-top: 1px solid var(--vs-border) !important;
+  padding: 1rem 1.5rem !important;
+  position: relative !important;
+}
+
+body.voidstation-theme .footer p {
+  color: var(--vs-text-muted) !important;
+  font-size: 0.8rem !important;
+  margin: 0 !important;
+}
+
+/* 16. MODAL BACKDROP */
+body.voidstation-theme .modal-backdrop {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+}
+
+/* 17. SECTION TITLE (dashboard) */
+.vs-section-title {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--vs-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vs-section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--vs-border);
+}
+
+/* 18. SCROLLBAR */
+body.voidstation-theme ::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+body.voidstation-theme ::-webkit-scrollbar-track {
+  background: var(--vs-bg-base);
+}
+
+body.voidstation-theme ::-webkit-scrollbar-thumb {
+  background: var(--vs-bg-surface-2);
+  border-radius: 3px;
+}
+
+body.voidstation-theme ::-webkit-scrollbar-thumb:hover {
+  background: var(--vs-accent);
+}
+
+/* 19. ANIMATIONS */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(124, 58, 237, 0.3); }
+  50% { box-shadow: 0 0 10px rgba(124, 58, 237, 0.6); }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.vs-welcome {
+  animation: fade-in-up 0.4s ease both;
+}
+
+.vs-card {
+  animation: fade-in-up 0.4s ease both;
+}
+
+.vs-card:nth-child(2) { animation-delay: 0.05s; }
+.vs-card:nth-child(3) { animation-delay: 0.1s; }
+
+/* 20. MOBILE */
+@media (max-width: 991.98px) {
+  body.voidstation-theme .content {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+
+/* 21. SEARCH INPUT (standalone, outside toolbar) */
+body.voidstation-theme .search-input,
+body.voidstation-theme .form-control.search-input {
+  background-color: var(--vs-bg-surface) !important;
+  border: 1px solid var(--vs-border) !important;
+  color: var(--vs-text-primary) !important;
+  border-radius: 8px !important;
+  font-size: 0.875rem !important;
+}
+
+body.voidstation-theme .search-input:focus {
+  border-color: var(--vs-accent) !important;
+  box-shadow: 0 0 0 3px var(--vs-accent-glow) !important;
+}
+
+/* 22. INLINE SEARCH BOX */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.search-box input {
+  flex: 1;
+}
+
+.search-box .add-button {
+  flex-shrink: 0;
+}

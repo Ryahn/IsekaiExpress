@@ -1,4 +1,4 @@
-const config = require('./.config');
+const config = require('./config');
 /**
  * @type { Object.<string, import("knex").Knex.Config> }
  */
@@ -10,7 +10,8 @@ module.exports = {
       host: config.mysql.host,
       user: config.mysql.user,
       password: config.mysql.password,
-      database: config.mysql.database
+      database: config.mysql.database,
+      port: config.mysql.port
     },
     pool: {
       min: 2,
@@ -27,7 +28,8 @@ module.exports = {
       host: config.mysql.host,
       user: config.mysql.user,
       password: config.mysql.password,
-      database: config.mysql.database
+      database: config.mysql.database,
+      port: config.mysql.port
     },
     pool: {
       min: 2,

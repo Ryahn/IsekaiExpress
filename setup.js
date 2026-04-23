@@ -1,40 +1,57 @@
 const fs = require('fs');
 const crypto = require('crypto');
-const logger = require('silly-logger');
 const path = require('path');
 const knex = require('knex');
-const sampleConfig = require('./.config-example.js');
+const logger = require('silly-logger');
 
-const knexConfig = {
-  client: 'mysql2',
-  connection: {
-    host: sampleConfig.mysql.host,
-    user: sampleConfig.mysql.user,
-    password: sampleConfig.mysql.password,
-    database: sampleConfig.mysql.database,
-  },
-};
-
-if (sampleConfig.mysql.user === 'NOTSET' || sampleConfig.mysql.password === 'NOTSET' || sampleConfig.mysql.database === 'NOTSET') {
-  logger.error('Please set the mysql user, password and database in .config-example.js');
-  process.exit(1);
-}
+const exampleEnv = path.join(__dirname, '.env.example');
+const envPath = path.join(__dirname, '.env');
 
 function generateToken(length = 32) {
   return crypto.randomBytes(length).toString('hex');
 }
 
-fs.renameSync(path.join(__dirname, '.config-example.js'), path.join(__dirname, '.config.js'));
+if (!fs.existsSync(envPath)) {
+  if (fs.existsSync(exampleEnv)) {
+    fs.copyFileSync(exampleEnv, envPath);
+    logger.info('Created .env from .env.example — edit it with your secrets.');
+  } else {
+    logger.error('Missing .env.example. Cannot create .env.');
+    process.exit(1);
+  }
+}
 
-let configContent = fs.readFileSync(path.join(__dirname, '.config.js'), 'utf8');
+require('dotenv').config({ path: envPath });
 
-const sessionSecret = generateToken();
-const uploadToken = generateToken();
+let envText = fs.readFileSync(envPath, 'utf8');
+if (!/^\s*SESSION_SECRET=/m.test(envText) || /SESSION_SECRET=\"\"\s*$/m.test(envText) || /SESSION_SECRET=\s*$/m.test(envText)) {
+  if (!/SESSION_SECRET=/.test(envText)) {
+    fs.appendFileSync(envPath, `\nSESSION_SECRET=${generateToken()}\n`);
+  } else {
+    envText = envText.replace(/SESSION_SECRET=.*/g, `SESSION_SECRET=${generateToken()}`);
+    fs.writeFileSync(envPath, envText, 'utf8');
+  }
+  logger.info('Set SESSION_SECRET in .env');
+}
 
-configContent = configContent.replace('YOUR_SESSION_SECRET', sessionSecret);
-configContent = configContent.replace('YOUR_UPLOAD_TOKEN', uploadToken);
+delete require.cache[require.resolve('./config')];
+const config = require('./config');
 
-fs.writeFileSync(path.join(__dirname, '.config.js'), configContent, 'utf8');
+if (!config.mysql.user || !config.mysql.database) {
+  logger.error('Set MYSQL_USER and MYSQL_DB in .env before running setup.');
+  process.exit(1);
+}
+
+const knexConfig = {
+  client: 'mysql2',
+  connection: {
+    host: config.mysql.host,
+    user: config.mysql.user,
+    password: config.mysql.password,
+    database: config.mysql.database,
+    port: config.mysql.port
+  }
+};
 
 const db = knex(knexConfig);
 
@@ -53,4 +70,4 @@ db.migrate.latest({
   db.destroy();
 });
 
-logger.info('Setup complete. .config.js has been created with new tokens.');
+logger.info('Setup step finished. Ensure .env has Discord and MySQL values.');

@@ -5,7 +5,7 @@ async function updateChannelStats(channelId, channelName) {
     try {
         const currentDate = new Date().toISOString().split('T')[0];
 
-        const [existingEntry] = await db.getChannelStats(channelId, currentDate);
+        const existingEntry = await db.getChannelStats(channelId, currentDate);
 
         if (existingEntry) {
             await db.updateChannelStats(channelId, currentDate);
@@ -14,8 +14,6 @@ async function updateChannelStats(channelId, channelName) {
         }
     } catch (error) {
         console.error('Error updating channel stats:', error);
-    } finally {
-        await db.end();
     }
 }
 
