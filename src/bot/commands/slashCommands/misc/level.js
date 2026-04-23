@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { MessageAttachment, EmbedBuilder } = require('discord.js');
+const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const canvacord = require("canvacord");
 const path = require('path');
 
@@ -37,7 +37,7 @@ module.exports = {
             let { xp, level, message_count } = userData;
             let requiredXP = client.utils.calculateXPForNextLevel(level);
 
-			const member = interaction.guild.members.cache.get(interaction.user.id);
+			const member = interaction.guild?.members.cache.get(user.id);
             let status = "offline";
             let color = "#b1b1b1";
 
@@ -52,7 +52,6 @@ module.exports = {
             const userRank = await client.db.getUserRank(user.id);
 			const progressPercentage = Math.min(100, Math.max(0, (xp / requiredXP) * 100));
 
-            // Use rate limiting for image generation
             await client.rateLimitHandler.executeWithRateLimit('image-generation', async () => {
                 const rank = new canvacord.Rank()
                     .setAvatar(avatar)
@@ -68,33 +67,32 @@ module.exports = {
                     .setRank(Number(userRank), "Rank", true)
                     .setLevel(Number(level), "Level", true)
                     .setDiscriminator(user.discriminator, color);
-                
-                rank.build()
-                    .then(async data => {
-                    const attachment = new MessageAttachment(data, "RankCard.png");
-                    const embed = new EmbedBuilder()
-                        .setTitle(`Ranking of:  ${user.username}`)
-                        .addFields({
-                            name: 'XP',
-                            value: `${xp} / ${requiredXP}`,
-                            inline: true
-                        },
-                        {
-                            name: 'Progress',
-                            value: `${Number(progressPercentage).toFixed(2)}%`,
-                            inline: true
-                        })
-                        .setColor(color)
-                        .setImage("attachment://RankCard.png")
-                    await interaction.editReply({ embeds: [embed], files: [attachment] });
-                    return;
-                });
+
+                const data = await rank.build();
+                const attachment = new AttachmentBuilder(data, { name: 'RankCard.png' });
+                const embed = new EmbedBuilder()
+                    .setTitle(`Ranking of:  ${user.username}`)
+                    .addFields({
+                        name: 'XP',
+                        value: `${xp} / ${requiredXP}`,
+                        inline: true
+                    },
+                    {
+                        name: 'Progress',
+                        value: `${Number(progressPercentage).toFixed(2)}%`,
+                        inline: true
+                    })
+                    .setColor(color)
+                    .setImage("attachment://RankCard.png");
+                await interaction.editReply({ embeds: [embed], files: [attachment] });
             });
 
         } catch (error) {
             client.logger.error('Error executing the level command:', error);
-            if (!interaction.replied) {
-                await interaction.followUp('Something went wrong.');
+            try {
+                await interaction.editReply({ content: 'Something went wrong.', ephemeral: true });
+            } catch {
+                await interaction.followUp({ content: 'Something went wrong.', ephemeral: true }).catch(() => {});
             }
         }
     },

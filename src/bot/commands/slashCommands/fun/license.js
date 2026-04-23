@@ -1,4 +1,4 @@
-const { MessageAttachment } = require("discord.js");
+const { AttachmentBuilder } = require("discord.js");
 const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
 const moment = require('moment');
 const crypto = require('crypto');
@@ -81,7 +81,7 @@ module.exports = {
 
             // Prepare the image for sending
 			const filename = `lolilicense_${user.id}_${crypto.randomBytes(9).toString('base64').replace(/\//g, '_').replace(/\+/g, '-').substr(0, 12)}.png`;
-            const attachment = new MessageAttachment(await canvas.encode('png'), filename);
+            const attachment = new AttachmentBuilder(await canvas.encode('png'), { name: filename });
 
             return interaction.editReply({ files: [attachment] });
         } catch (error) {
