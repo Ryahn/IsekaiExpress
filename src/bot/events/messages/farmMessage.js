@@ -10,7 +10,7 @@ const { handleFarmSell } = require('../../commands/chatCommands/farm/sell');
 const { handleFarmExpand } = require('../../commands/chatCommands/farm/expand');
 const { handleCropList } = require('../../commands/chatCommands/farm/cropList');
 const { handleFarmBuy } = require('../../commands/chatCommands/farm/buy');
-const { handleRoleList, handleRoleBuy } = require('../../commands/chatCommands/farm/roleShop');
+const { handleRoleList } = require('../../commands/chatCommands/farm/roleShop');
 
 /**
  * Prefix-based farm minigame (separate from guild cmdPrefix).
@@ -42,6 +42,15 @@ async function handleFarmMessage(message) {
 	const command = args.shift()?.toLowerCase();
 
 	if (!command) return false;
+
+	const farmChannelDeny = await farmManager.getWrongFarmChannelMessageIfAny(
+		guildId,
+		message.channel,
+	);
+	if (farmChannelDeny) {
+		await message.reply(`❌ ${farmChannelDeny}`).catch(() => undefined);
+		return true;
+	}
 
 	try {
 		switch (command) {
@@ -93,17 +102,17 @@ async function handleFarmMessage(message) {
 			await handleFarmExpand(message);
 			return true;
 
-		case 'role':
-			if (args[0]?.toLowerCase() === 'list') {
-				await handleRoleList(message);
-			}
-			else if (args[0]?.toLowerCase() === 'buy') {
-				await handleRoleBuy(message, args.slice(1));
-			}
-			else {
-				await handleRoleList(message);
-			}
-			return true;
+		// case 'role':
+		// 	if (args[0]?.toLowerCase() === 'list') {
+		// 		await handleRoleList(message);
+		// 	}
+		// 	else if (args[0]?.toLowerCase() === 'buy') {
+		// 		await handleRoleBuy(message, args.slice(1));
+		// 	}
+		// 	else {
+		// 		await handleRoleList(message);
+		// 	}
+		// 	return true;
 
 		case 'info':
 			await handleFarmInfo(message, args);

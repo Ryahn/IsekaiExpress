@@ -42,6 +42,10 @@ app.use(
   })
 );
 
+app.use(
+  '/public/cards',
+  express.static(path.join(__dirname, '../bot/media/cards')),
+);
 app.use('/public', express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));

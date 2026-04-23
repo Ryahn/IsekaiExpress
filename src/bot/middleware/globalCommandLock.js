@@ -1,4 +1,4 @@
-const { PermissionFlagsBits } = require('discord.js');
+const { hasGuildAdminOrStaffRole } = require('../utils/guildPrivileges');
 
 const BYPASS_SLASH = new Set(['global', 'help']);
 
@@ -9,7 +9,7 @@ function isOwner(client, userId) {
 function memberCanBypassGlobalLock(client, member) {
   if (!member) return false;
   if (isOwner(client, member.id)) return true;
-  if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
+  if (hasGuildAdminOrStaffRole(member, client.config?.roles?.staff)) return true;
   return member.roles?.cache?.some((r) => client.allowed?.includes(r.id)) ?? false;
 }
 

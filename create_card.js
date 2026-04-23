@@ -3,185 +3,189 @@ const fs = require('fs');
 const { v5: uuidv5 } = require('uuid');
 const NAMESPACE = uuidv5.URL;
 const path = require('path');
-const db = require('./database/db');
+// const db = require('./database/db');
 const config = require('./config');
 const { timestamp } = require('./libs/utils');
 const logger = require('silly-logger');
+const {
+  CARD,
+  RARITY,
+  normalizeRarityKey,
+  resolveBaseCardPath,
+  safePathSegmentFromName,
+  readableTextOuterGlowColor,
+  cardLayoutForRarity,
+  drawGlowingTextCentered,
+  drawClassPillText,
+  drawSubtleCardGradient,
+} = require('./src/bot/tcg/cardLayout.js');
 
-GlobalFonts.registerFromPath('./src/bot/tcg/fonts/Mukta_Malar_NAME.woff2', 'CharacterNameFont');
-GlobalFonts.registerFromPath('./src/bot/tcg/fonts/Libre_Franklin_TYPE.woff2', 'ClassFont');
-GlobalFonts.registerFromPath('./src/bot/tcg/fonts/Character_Power_LEVEL_POWER.ttf', 'LevelPowerFont');
+const repoRoot = __dirname;
+const ORBITRON_WOFF2 = path.join(repoRoot, 'tools', 'fonts', 'Orbitron-Bold.woff2');
+const FONT_family = 'Orbitron';
+try {
+  if (fs.existsSync(ORBITRON_WOFF2)) {
+    GlobalFonts.registerFromPath(ORBITRON_WOFF2, FONT_family);
+  } else {
+    logger.warn('Orbitron not found at tools/fonts/Orbitron-Bold.woff2; using system sans');
+  }
+} catch (e) {
+  logger.warn(`Font register failed: ${e.message}`);
+}
 
-let baseImagePath = './src/bot/tcg/base_card.png';
+function font(sizePx, weight = 'bold') {
+  if (fs.existsSync(ORBITRON_WOFF2)) {
+    return `${weight} ${sizePx}px ${FONT_family}`;
+  }
+  return `${weight} ${sizePx}px ui-sans-serif, system-ui, sans-serif`;
+}
 
-function makeCardFileName(name, rarity) {
-    const safeName = name.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
-    return `${safeName}_${rarity}.png`;
+function makeCardFileName(name, rawRarity) {
+  const safeName = name.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+  return `${safeName}_${String(rawRarity).toUpperCase()}.png`;
 }
 
 function generateUUID(characterName, rarity, discordId) {
-    const inputString = `${characterName}-${rarity}-${discordId}`;
-    return uuidv5(inputString, NAMESPACE);
+  return uuidv5(`${characterName}-${rarity}-${discordId}`, NAMESPACE);
 }
 
-async function generateCard(characterName, rarity, className, level, power, avatar, type, discordId) {
-    const uuid = generateUUID(characterName, rarity, discordId);
-    let canvas = createCanvas(768, 1073);
-    let ctx = canvas.getContext('2d');
+/**
+ * @param {string} characterName
+ * @param {string} rawRarity - batch key, may be legacy
+ * @param {string} className
+ * @param {number} level
+ * @param {number} power
+ * @param {string} avatar - URL
+ * @param {string} _typeLegacy - kept for API compatibility; unused for paths
+ * @param {string|number} discordId
+ * @param {string} [elementIconPath] - optional absolute path to element PNG
+ */
+async function generateCard(
+  characterName,
+  rawRarity,
+  className,
+  level,
+  power,
+  avatar,
+  _typeLegacy,
+  discordId,
+  elementIconPath = null,
+) {
+  const norm = normalizeRarityKey(rawRarity);
+  const rSpec = RARITY[norm] || RARITY.C;
+  const uuid = generateUUID(characterName, rawRarity, discordId);
+  const safeUser = safePathSegmentFromName(characterName);
 
-    let baseImage = await loadImage(baseImagePath);
-    ctx.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
+  const canvas = createCanvas(CARD.width, CARD.height);
+  const ctx = canvas.getContext('2d');
 
-    // Load the profile image
-    let profileImage = await loadImage(avatar);
-    ctx.drawImage(profileImage, 60, 160, 645, 700);
+  const basePath = resolveBaseCardPath(repoRoot, norm);
+  const baseImage = await loadImage(basePath);
+  ctx.drawImage(baseImage, 0, 0, CARD.width, CARD.height);
 
-    ctx.lineWidth = 5; // Set the border width
-    ctx.strokeStyle = '#FFD700'; // Set the border color (gold)
-    ctx.strokeRect(60, 160, 645, 700); // Draw the border
+  const layout = cardLayoutForRarity(norm);
 
-    // Add character name
-    ctx.font = 'bold 50px Mukta Malar ExtraBold';
-    ctx.fillStyle = '#FFFFFF';
-    ctx.textAlign = 'center';
-    ctx.fillText(characterName, canvas.width / 2, 975);
+  const profileImage = await loadImage(avatar);
+  const p = layout.portrait;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(p.x, p.y, p.w, p.h);
+  ctx.clip();
+  ctx.drawImage(profileImage, p.x, p.y, p.w, p.h);
+  ctx.restore();
 
-    // Add rarity
-    ctx.font = 'bold 50px Mukta Malar ExtraBold';
-    ctx.fillStyle = '#FFFFFF';
-    ctx.textAlign = 'center';
-    ctx.fillText(rarity, canvas.width / 2 + 280, 1020);
+  if (elementIconPath && fs.existsSync(elementIconPath)) {
+    const el = CARD.elementIcon;
+    const size = el.r * 2;
+    const icon = await loadImage(elementIconPath);
+    ctx.drawImage(icon, el.cx - el.r, el.cy - el.r, size, size);
+  }
 
-    // Add className
-    ctx.font = '25px Libre Franklin Thin';
-    ctx.fillText(className, canvas.width / 2, 1020);
+  const l = layout.level;
+  const levelStr = String(level);
+  const levelFont = font(l.fontSize);
+  drawGlowingTextCentered(ctx, levelStr, l.cx, l.cy, {
+    font: levelFont,
+    fillColor: rSpec.accentColor,
+    outerColor: rSpec.accentColor,
+  });
 
-    // Add level
-    ctx.font = 'bold 80px Onepiecetcg_power';
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(String(level), 70, 95);
+  const po = layout.power;
+  const powerStr = String(power);
+  let powerFont = font(po.fontSize);
+  ctx.font = powerFont;
+  if (ctx.measureText(powerStr).width > po.w - 20) {
+    powerFont = font(44);
+  }
+  drawGlowingTextCentered(ctx, powerStr, po.cx, po.cy, {
+    font: powerFont,
+    fillColor: rSpec.accentColor,
+    outerColor: rSpec.accentColor,
+  });
 
-    // Add power
-    if (power > 9999) {
-        ctx.font = 'bold 53px Onepiecetcg_power';
-    } else {
-        ctx.font = 'bold 60px Onepiecetcg_power';
-    }
-    ctx.fillStyle = '#000000';
-    ctx.fillText(String(power), canvas.width - 178, 70);
+  const n = layout.name;
+  const cp = layout.classPill;
+  const nameOuter = readableTextOuterGlowColor(rSpec.rarityColor);
+  const nameUpper = String(characterName).toUpperCase();
+  drawGlowingTextCentered(ctx, nameUpper, n.cx, n.cy, {
+    font: font(n.fontSize),
+    fillColor: '#FFFFFF',
+    outerColor: nameOuter,
+    maxWidth: n.maxWidth,
+    minFontSize: 28,
+  });
 
-    // Add stars
-    let star = await loadImage('./src/bot/tcg/star.png');
-    let starWidth = 18;
-    let starHeight = 18;
+  const classOuter = readableTextOuterGlowColor(rSpec.rarityColor);
+  drawClassPillText(ctx, className, cp, {
+    font: font(cp.fontSize, 'normal'),
+    fillColor: '#AAAAAA',
+    outerColor: classOuter,
+    letterSpacing: 4,
+  });
 
-    let starCount = 0;
-    switch (rarity) {
-        case 'UR':
-            starCount = 11;
-            break;
-        case 'SUR':
-            starCount = 10;
-            break;
-        case 'SSR':
-            starCount = 9;
-            break;
-        case 'SR':
-            starCount = 8;
-            break;
-        case 'L':
-            starCount = 7;
-            break;
-        case 'M':
-            starCount = 6;
-            break;
-        case 'U':
-            starCount = 5;
-            break;
-        case 'R':
-            starCount = 4;
-            break;
-        case 'UC':
-            starCount = 3;
-            break;
-        case 'C':
-            starCount = 2;
-            break;
-        case 'N':
-            starCount = 1;
-            break;
-        default:
-            starCount = 1;
-            break;
-    }
+  drawSubtleCardGradient(ctx);
 
-    if (starCount > 10) {
-        starWidth = 18;
-        starHeight = 18;
-    } else if (starCount > 5) {
-        starWidth = 22;
-        starHeight = 22;
-    } else {
-        starWidth = 35;
-        starHeight = 35;
-    }
+  const fileName = makeCardFileName(characterName, rawRarity);
+  const outputDir = path.join(repoRoot, 'src', 'bot', 'media', 'cards', safeUser);
+  if (!fs.existsSync(outputDir)) {
+    logger.info(`Creating output directory: ${outputDir}`);
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  const outputPath = path.join(outputDir, fileName);
 
-    let startX = (canvas.width - (starWidth * starCount)) / 2; // Center the stars horizontally
-    for (let i = 0; i < starCount; i++) {
-        const x = startX + (i * starWidth); // Position stars in a row
-        ctx.drawImage(star, x, 900, starWidth, starHeight); // Adjust the y-position as needed
-    }
+  const baseCardUrl = (config.cardUrl || config.url || '').replace(/\/$/, '');
+  const image_url = `${baseCardUrl}/${encodeURIComponent(safeUser)}/${fileName}`;
 
-    let fileName = makeCardFileName(characterName, rarity);
-    let outputDir = path.join(__dirname, `./src/bot/media/cards/${type}`);
-    if (!fs.existsSync(outputDir)) {
-      logger.info(`Creating output directory: ${outputDir}`);
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
+  const buffer = canvas.toBuffer('image/png');
+  fs.writeFileSync(outputPath, buffer);
 
-    let outputPath = path.join(outputDir, fileName);
+  const card = {
+    discord_id: discordId,
+    uuid,
+    stars: rSpec.starCount,
+    name: characterName,
+    rarity: norm,
+    class: className,
+    level,
+    power,
+    image_url,
+    created_at: timestamp(),
+    updated_at: timestamp(),
+  };
 
-    // Convert the canvas to a buffer
-    let buffer = canvas.toBuffer('image/png');
+  // await db.createCard(card);
 
-    fs.writeFileSync(outputPath, buffer);
+  if (global.gc) {
+    global.gc({ type: 'major' });
+  }
 
-    let card = {
-        discord_id: discordId,
-        uuid: uuid,
-        stars: starCount,
-        name: characterName,
-        rarity: rarity,
-        class: className,
-        level: level,
-        power: power,
-        image_url: `${(config.cardUrl || config.url || '')}/${type}/${fileName}`,
-        created_at: timestamp(),
-        updated_at: timestamp(),
-    }
-
-    await db.createCard(card);
-
-    // Clear memory-intensive objects manually
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    baseImage = null;
-    ctx = null;
-    canvas = null;
-    profileImage = null;
-    star = null;
-    buffer = null;
-
-    if (global.gc) {
-        global.gc({ type: 'major' });
-    }
-
-    return {
-        fileName,
-        outputPath,
-        file_id: uuid,
-    };
+  return {
+    fileName,
+    outputPath,
+    file_id: uuid,
+  };
 }
 
 module.exports = {
-    generateCard,
+  generateCard,
 };

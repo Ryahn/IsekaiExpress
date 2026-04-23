@@ -36,6 +36,18 @@ function rowToUserFarm(row) {
 	};
 }
 
+/**
+ * @param {import('discord.js').Channel} channel
+ * @returns {string|null}
+ */
+function effectiveChannelIdForFarmLock(channel) {
+	if (!channel) return null;
+	if (channel.isThread?.()) {
+		return channel.parentId ?? null;
+	}
+	return channel.id;
+}
+
 class FarmManager {
 	async _ensureFarmGuildRow(guildId) {
 		const id = String(guildId);
@@ -51,6 +63,36 @@ class FarmManager {
 			row = await knex('farm_guild_settings').where({ guild_id: id }).first();
 		}
 		return row;
+	}
+
+	/**
+	 * @param {import('discord.js').Channel} channel
+	 * @returns {Promise<string|null>} Ephemeral user message if blocked, or null if allowed
+	 */
+	async getWrongFarmChannelMessageIfAny(guildId, channel) {
+		const row = await this._ensureFarmGuildRow(guildId);
+		const locked = row.farm_channel_id;
+		if (locked == null || locked === '') {
+			return null;
+		}
+		const effective = effectiveChannelIdForFarmLock(channel);
+		if (effective == null) {
+			return 'Farm commands are not available in this channel.';
+		}
+		if (String(effective) === String(locked)) {
+			return null;
+		}
+		return `Farm commands are only allowed in <#${locked}>.`;
+	}
+
+	/**
+	 * @param {string | null} channelId
+	 */
+	async setLockedFarmChannelId(guildId, channelId) {
+		const id = String(guildId);
+		await this._ensureFarmGuildRow(guildId);
+		const v = channelId == null || channelId === '' ? null : String(channelId);
+		await knex('farm_guild_settings').where({ guild_id: id }).update({ farm_channel_id: v });
 	}
 
 	async isGuildMinigameEnabled(guildId) {

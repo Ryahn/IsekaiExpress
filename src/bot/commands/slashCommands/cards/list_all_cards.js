@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { getCardImageFolderName } = require('../../../../../libs/cardImageUrl');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -56,10 +57,10 @@ module.exports = {
                 .setDescription(`Listing cards with pagination\n\`\`\`${client.config.emojis.type.trim()}: Type, ${client.config.emojis.level.trim()}: Level, ${client.config.emojis.power.trim()}: Power, ${client.config.emojis.class.trim()}: Class, ${client.config.emojis.star.trim()}: Stars\`\`\``);
 
             cards.forEach(card => {
-                const type = card.image_url.split('/')[4];
+                const folder = getCardImageFolderName(card.image_url);
                 embed.addFields(
                     { name: `${card.name} (${card.rarity})`, value: `
-                    ${client.config.emojis.type.trim()}: ${type} ${client.config.emojis.level.trim()}: ${card.level} ${client.config.emojis.power.trim()}: ${card.power} ${client.config.emojis.class.trim()}: ${card.class} ${client.config.emojis.star.trim()}: ${card.stars}\n
+                    ${client.config.emojis.type.trim()}: ${folder} ${client.config.emojis.level.trim()}: ${card.level} ${client.config.emojis.power.trim()}: ${card.power} ${client.config.emojis.class.trim()}: ${card.class} ${client.config.emojis.star.trim()}: ${card.stars}\n
                     **ID:** ${card.uuid}` }
                 );
             });

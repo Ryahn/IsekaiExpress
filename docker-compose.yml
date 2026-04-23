@@ -67,6 +67,8 @@ services:
       - mysql
       - redis
     restart: unless-stopped
+    volumes:
+      - ./src/bot/media/cards:/usr/src/app/src/bot/media/cards
     profiles:
       - web
 

@@ -1,7 +1,8 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const moment = require('moment');
 const path = require('path');
+const { hasGuildAdminOrStaffRole } = require('../../../utils/guildPrivileges');
 
 module.exports = {
     category: path.basename(__dirname),
@@ -15,7 +16,7 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(client, interaction) {
-        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
             return interaction.editReply({ content: 'You do not have permission to use this command.', ephemeral: true });
         }
 

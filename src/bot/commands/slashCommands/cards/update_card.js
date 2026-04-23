@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
 const path = require('path');
+const { getCardImageFolderName } = require('../../../../../libs/cardImageUrl');
 
 module.exports = {
     category: path.basename(__dirname),
@@ -30,9 +31,16 @@ module.exports = {
 			}
 
 			const checkCard = await client.db.query('card_data').where('uuid', uuid).first();
+			if (!checkCard) {
+				return interaction.editReply({ content: 'Card not found.', ephemeral: true });
+			}
 
 			const isOwner = String(checkCard.discord_id) === String(interaction.user.id);
-			const isStaff = client.config.roles.staff && roles.includes(client.config.roles.staff);
+			const roleIds = interaction.member?.roles?.cache;
+			const isStaff =
+				client.config.roles.staff
+				&& roleIds
+				&& roleIds.has(client.config.roles.staff);
 			if (!isOwner && !isStaff) {
 				return interaction.editReply({ content: `You are not allowed to update this card. Only the creator (or staff) can update it (<@${checkCard.discord_id}>).`, ephemeral: true });
 			}
@@ -44,7 +52,7 @@ module.exports = {
 			}
 
 			const stars = '⭐️'.repeat(card.stars);
-			const type = card.image_url.split('/')[4];
+			const folder = getCardImageFolderName(card.image_url);
 
 			const embed = new EmbedBuilder()
 				.setTitle(card.name)
@@ -56,7 +64,7 @@ module.exports = {
 					{ name: 'Power', value: String(card.power) || 'N/A', inline: true },
 					{ name: 'Class', value: card.class || 'N/A', inline: true },
 					{ name: 'Rarity', value: card.rarity || 'N/A', inline: true },
-					{ name: 'Type', value: type || 'N/A', inline: true }
+					{ name: 'Folder', value: folder || 'N/A', inline: true }
 				)
 				.setImage(card.image_url || null);
 

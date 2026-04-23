@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { generateCard } = require('./create_card');
+const { powerScoreAtLevel } = require('./src/bot/tcg/cardLayout');
 const logger = require('silly-logger');
 
 const batchFilePath = process.argv[2];
@@ -14,7 +15,28 @@ logger.startup(`Processing batch from ${batchFilePath}...`);
       logger.info(`Processing character: ${character.name}`);
       for (const [key, value] of Object.entries(character.rarity)) {
         if (value) {
-          const card = await generateCard(character.name, key, character.class, character.level, character.power, character.avatar, character.type, character.discord_id);
+          let power;
+          if (
+            character.powerByRarity
+            && Object.prototype.hasOwnProperty.call(character.powerByRarity, key)
+            && character.powerByRarity[key] != null
+          ) {
+            power = character.powerByRarity[key];
+          } else if (character.power != null && character.power !== '') {
+            power = character.power;
+          } else {
+            power = powerScoreAtLevel(key, character.level);
+          }
+          const card = await generateCard(
+            character.name,
+            key,
+            character.class,
+            character.level,
+            power,
+            character.avatar,
+            character.type,
+            character.discord_id,
+          );
           logger.info(`Generated card: ${card.fileName}`);
         }
       }

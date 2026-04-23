@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
 const path = require('path');
+const { getCardImageFolderName } = require('../../../../../libs/cardImageUrl');
 
 module.exports = {
     category: path.basename(__dirname),
@@ -31,7 +32,7 @@ module.exports = {
 			}
 
 			const stars = '⭐️'.repeat(card.stars);
-			const type = card.image_url.split('/')[4];
+			const folder = getCardImageFolderName(card.image_url);
 
 			const embed = new EmbedBuilder()
 				.setTitle(card.name)
@@ -43,7 +44,7 @@ module.exports = {
 					{ name: 'Power', value: String(card.power) || 'N/A', inline: true },
 					{ name: 'Class', value: card.class || 'N/A', inline: true },
 					{ name: 'Rarity', value: card.rarity || 'N/A', inline: true },
-					{ name: 'Type', value: type || 'N/A', inline: true }
+					{ name: 'Folder', value: folder || 'N/A', inline: true }
 				)
 				.setImage(card.image_url || null);
 

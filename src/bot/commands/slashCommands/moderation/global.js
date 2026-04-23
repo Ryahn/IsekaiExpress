@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { PermissionFlagsBits } = require('discord.js');
 const path = require('path');
 const { parseWhitelistJson, updateGuildGlobalLockCache } = require('../../../middleware/globalCommandLock');
+const { hasGuildAdminOrStaffRole } = require('../../../utils/guildPrivileges');
 
 module.exports = {
   category: path.basename(__dirname),
@@ -45,8 +45,11 @@ module.exports = {
     if (!interaction.inGuild()) {
       return interaction.editReply({ content: 'This command can only be used in a server.', ephemeral: true });
     }
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      return interaction.editReply({ content: 'You need Administrator permission.', ephemeral: true });
+    if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
+      return interaction.editReply({
+        content: 'You need Administrator permission or the configured staff role.',
+        ephemeral: true,
+      });
     }
 
     const guildId = interaction.guildId;
