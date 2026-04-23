@@ -1,10 +1,10 @@
 <?php
 // Define your secure token
-define('SECURE_TOKEN', 'N%P98alskdjflkasjdfjaksldflkaslkfjklasjdfjlaksdflkasjlkfjlksdflkjas897w48u9oiadjfijsj');
+$token = getenv('IMAGE_ARCHIVE_UPLOAD_TOKEN');
 
 // Get the Authorization header
 $headers = getallheaders();
-if (!isset($headers['Authorization']) || trim($headers['Authorization']) !== 'Bearer ' . SECURE_TOKEN) {
+if (!isset($headers['Authorization']) || trim($headers['Authorization']) !== 'Bearer ' . $token) {
     // If the token is missing or invalid, return an error
     http_response_code(401); // Unauthorized
     echo json_encode(['error' => 'Unauthorized']);
