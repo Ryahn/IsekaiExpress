@@ -19,7 +19,7 @@ module.exports = {
 		
 
         try {
-            await interaction.deferReply();
+
 			const imageUrl = interaction.options.getString('url');
 
 			let xpValue = null;

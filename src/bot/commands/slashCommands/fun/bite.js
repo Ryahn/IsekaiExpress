@@ -19,14 +19,14 @@ module.exports = {
 
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'bite');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });
         }
 
         try {
-            await interaction.deferReply();
+
             let targetUser = interaction.options.getUser('target');
 
             // Use rate limiting for the API call

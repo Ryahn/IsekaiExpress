@@ -12,7 +12,6 @@ module.exports = {
         
 
         try {
-            await interaction.deferReply();
 
 			if (!interaction.member.permissions.has("ADMINISTRATOR")) {
 				return interaction.followUp('You do not have permission to enable double XP.');

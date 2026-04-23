@@ -21,13 +21,13 @@ module.exports = {
             const uuid = interaction.options.getString('uuid');
 
 			if (!uuid) {
-				return interaction.reply({ content: 'Invalid card ID.', ephemeral: true });
+				return interaction.editReply({ content: 'Invalid card ID.', ephemeral: true });
 			}
 
 			const card = await client.db.query('card_data').where('uuid', uuid).first();
 
 			if (!card) {
-				return interaction.reply({ content: 'Card not found.', ephemeral: true });
+				return interaction.editReply({ content: 'Card not found.', ephemeral: true });
 			}
 
 			const stars = '⭐️'.repeat(card.stars);
@@ -47,10 +47,10 @@ module.exports = {
 				)
 				.setImage(card.image_url || null);
 
-			await interaction.reply({ embeds: [embed] });
+			await interaction.editReply({ embeds: [embed] });
         // } catch (error) {
         //     client.logger.error('Error:', error);
-        //     await interaction.reply({ content: 'An error occurred while processing the command.', ephemeral: true });
+        //     await interaction.editReply({ content: 'An error occurred while processing the command.', ephemeral: true });
         // }
     }
 };

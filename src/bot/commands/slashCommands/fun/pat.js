@@ -16,7 +16,7 @@ module.exports = {
         
         const { getRandomColor } = client.utils;
         try {
-            await interaction.deferReply();
+
             let target = interaction.options.getUser('target') || interaction.user;
             const avatar = target.displayAvatarURL({ size: 512, format: 'jpg', dynamic: false });
 
@@ -47,11 +47,11 @@ module.exports = {
             .setColor(`#${getRandomColor()}`)
             .setImage(img);
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         client.logger.error('Error executing the pat command:', error);
         if (!interaction.replied) {
-            await interaction.reply('Something went wrong.');
+            await interaction.editReply('Something went wrong.');
         }
     }
     },

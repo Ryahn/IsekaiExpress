@@ -16,14 +16,14 @@ module.exports = {
 
 		const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'level');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });
         }
 
         try {
-            await interaction.deferReply();
+
             const user = interaction.options.getUser('target') || interaction.user;
             const avatar = user.avatar 
                 ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=1024` 

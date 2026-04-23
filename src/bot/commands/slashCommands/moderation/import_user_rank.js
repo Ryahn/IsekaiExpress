@@ -20,10 +20,10 @@ module.exports = {
 
         try {
 			if (!interaction.member.permissions.has("ADMINISTRATOR")) {
-				await interaction.reply('You do not have permission to use this command.');
+				await interaction.editReply('You do not have permission to use this command.');
 				return;
 			}
-            await interaction.deferReply();
+
 			const imageUrl = interaction.options.getString('url');
 			const targetUser = interaction.options.getUser('target');
 			let xpValue = null;

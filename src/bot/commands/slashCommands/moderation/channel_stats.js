@@ -26,9 +26,6 @@ module.exports = {
 
     async execute(client,interaction) { 
 
-        
-
-        await interaction.deferReply(); 
         const db = client.db;
 
         try {

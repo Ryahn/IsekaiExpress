@@ -21,7 +21,6 @@ module.exports = {
         
 
         try {
-            await interaction.deferReply();
 
             if (!interaction.member.permissions.has("BAN_MEMBERS")) {
                 return interaction.followUp('You do not have permission to warn users.');

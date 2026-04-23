@@ -16,7 +16,7 @@ module.exports = {
         // Check if user is on cooldown
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'baka');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });
@@ -24,8 +24,7 @@ module.exports = {
         
         const { getRandomColor } = client.utils;
         try {
-            await interaction.deferReply();
-            
+
             // Use rate limiting for the API call
             const img = await client.rateLimitHandler.executeWithRateLimit('nekos-best-api', async () => {
                 const response = await fetchRandom('baka');

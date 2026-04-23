@@ -15,7 +15,7 @@ module.exports = {
 
 		const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'fake_cage');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });
@@ -26,6 +26,6 @@ module.exports = {
 			let messageContent = `<@${targetUser.id}>\nHello Caged user. You're detained under Paragraph 6 of Schedule 7 to the Terrorism Act 2000. You will not be detained for over 96 hours. You have the right and duty to remain silent.\n\nAs always your safety is our priority,\n-The Staff Team`;
 		
 
-        await interaction.reply(messageContent);
+        await interaction.editReply(messageContent);
     },
 };

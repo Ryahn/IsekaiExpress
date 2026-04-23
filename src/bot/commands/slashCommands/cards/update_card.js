@@ -26,7 +26,7 @@ module.exports = {
             const uuid = interaction.options.getString('uuid');
 			const description = interaction.options.getString('description');
 			if (!uuid || !description) {
-				return interaction.reply({ content: 'Invalid card ID or description.', ephemeral: true });
+				return interaction.editReply({ content: 'Invalid card ID or description.', ephemeral: true });
 			}
 
 			const checkCard = await client.db.query('card_data').where('uuid', uuid).first();
@@ -34,13 +34,13 @@ module.exports = {
 			const isOwner = String(checkCard.discord_id) === String(interaction.user.id);
 			const isStaff = client.config.roles.staff && roles.includes(client.config.roles.staff);
 			if (!isOwner && !isStaff) {
-				return interaction.reply({ content: `You are not allowed to update this card. Only the creator (or staff) can update it (<@${checkCard.discord_id}>).`, ephemeral: true });
+				return interaction.editReply({ content: `You are not allowed to update this card. Only the creator (or staff) can update it (<@${checkCard.discord_id}>).`, ephemeral: true });
 			}
 
 			const card = await client.db.updateCardDescription(uuid, description);
 
 			if (!card) {
-				return interaction.reply({ content: 'Card not found.', ephemeral: true });
+				return interaction.editReply({ content: 'Card not found.', ephemeral: true });
 			}
 
 			const stars = '⭐️'.repeat(card.stars);
@@ -60,10 +60,10 @@ module.exports = {
 				)
 				.setImage(card.image_url || null);
 
-			await interaction.reply({ embeds: [embed] });
+			await interaction.editReply({ embeds: [embed] });
         // } catch (error) {
         //     client.logger.error('Error:', error);
-        //     await interaction.reply({ content: 'An error occurred while processing the command.', ephemeral: true });
+        //     await interaction.editReply({ content: 'An error occurred while processing the command.', ephemeral: true });
         // }
     }
 };

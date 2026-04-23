@@ -17,7 +17,7 @@ module.exports = {
 
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'highfive');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });
@@ -25,7 +25,7 @@ module.exports = {
         
         const { getRandomColor } = client.utils;
         try {
-            await interaction.deferReply();
+
             let targetUser = interaction.options.getUser('target');
 
             const response = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {

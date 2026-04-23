@@ -1,8 +1,9 @@
 const knex = require('knex');
 const config = require('../config');
 const logger = require('silly-logger');
-const { timestamp } = require('../libs/utils');
 const { Model } = require('objection');
+/** Do not import libs/utils here — it would require this module for `db` and create a circular dependency. */
+const nowUnix = () => Math.floor(Date.now() / 1000);
 const fs = require('fs');
 const path = require('path');
 
@@ -160,7 +161,7 @@ const self = module.exports = {
   },
 
   createCommandSettings: async (name, hash, category = 'misc', channelId = '351435045921357824',) => {
-    await db.table('command_settings').insert({name: name, hash: hash, channel_id: channelId, category: category, created_at: timestamp(), updated_at: timestamp()}).onConflict('hash').ignore();
+    await db.table('command_settings').insert({name: name, hash: hash, channel_id: channelId, category: category, created_at: nowUnix(), updated_at: nowUnix()}).onConflict('hash').ignore();
   },
 
   getAllowedChannel: async (hash) => {

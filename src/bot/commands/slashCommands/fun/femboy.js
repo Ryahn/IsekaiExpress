@@ -19,7 +19,7 @@ module.exports = {
 
 		const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'femboy');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });
@@ -32,10 +32,10 @@ module.exports = {
 		const response = await client.rateLimitHandler.executeWithRateLimit('gelbooru-api', async () => {
 			return await fetch(api);
 		});
-		if (!response.ok) return interaction.reply({ content: 'No results found', ephemeral: true });
+		if (!response.ok) return interaction.editReply({ content: 'No results found', ephemeral: true });
 
 		const data = await response.json();
-		if (!data.post || data.post.length <= 0) return interaction.reply({ content: 'No results found', ephemeral: true });
+		if (!data.post || data.post.length <= 0) return interaction.editReply({ content: 'No results found', ephemeral: true });
 
 		const index = Math.floor(Math.random() * data.post.length);
 		
@@ -51,7 +51,7 @@ module.exports = {
 			.addFields({ name: 'Source', value: `[Click here](${sourceUrl})`, inline: false })
 			.setColor(`#${getRandomColor()}`)
 
-		await interaction.reply({ embeds: [embed] });
+		await interaction.editReply({ embeds: [embed] });
 		await interaction.followUp(`|| ${post.file_url} ||`);
 
     },

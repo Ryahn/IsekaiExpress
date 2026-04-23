@@ -16,12 +16,8 @@ module.exports = {
 
     async execute(client, interaction) {
         if (!interaction.member.permissions.has("BAN_MEMBERS")) {
-            return interaction.reply({ content: 'You do not have permission to list bans.', ephemeral: true });
+            return interaction.editReply({ content: 'You do not have permission to list bans.', ephemeral: true });
         }
-
-        
-
-        await interaction.deferReply();
 
         const pageRequested = interaction.options.getInteger('page') ?? 1;
 

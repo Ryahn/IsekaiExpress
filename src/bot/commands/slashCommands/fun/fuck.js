@@ -17,7 +17,7 @@ module.exports = {
 
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'fuck');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });
@@ -25,7 +25,7 @@ module.exports = {
         
         const { getRandomColor } = client.utils;
         try {
-            await interaction.deferReply();
+
             const user = interaction.options.getUser('target');
 
 

@@ -1,5 +1,5 @@
+const path = require('path');
 const { Model } = require('objection');
-const User = require('./User');
 
 class Card extends Model {
   static get tableName() {
@@ -14,7 +14,7 @@ class Card extends Model {
     return {
       users: {
         relation: Model.ManyToManyRelation,
-        modelClass: User,
+        modelClass: path.join(__dirname, 'User.js'),
         join: {
           from: 'card_data.uuid',
           through: {

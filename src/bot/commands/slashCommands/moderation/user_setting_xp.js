@@ -36,7 +36,7 @@ module.exports = {
 		const amount = interaction.options.getInteger('amount');
 
         try {
-            await interaction.deferReply();
+
 			let optionName = '';
             
             switch (option) {

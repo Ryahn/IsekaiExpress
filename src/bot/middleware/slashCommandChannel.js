@@ -20,7 +20,7 @@ async function assertSlashCommandChannel(client, interaction) {
     allowedChannel.channel_id !== interaction.channelId
   ) {
     if (!roles.some((role) => client.allowed.includes(role))) {
-      await interaction.reply({
+      await interaction.editReply({
         content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`,
         ephemeral: true
       });

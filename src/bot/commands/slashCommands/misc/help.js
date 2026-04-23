@@ -19,9 +19,9 @@ module.exports = {
             let message = "**Import Rank Usage:**\n" +
                           "`/import_rank <url>` - Import your rank from an image URL.\n" +
                           "**Note:** Run ?level to get the rank from ZoneMaster.\nThen right click the message and select \"Copy Link\"\nThen run this command with the link as the argument.";
-            await interaction.reply(message);
+            await interaction.editReply(message);
         } else {
-            await interaction.reply("You can access my dashboard at https://bot.zonies.xyz");
+            await interaction.editReply("You can access my dashboard at https://bot.zonies.xyz");
         }
 
     },

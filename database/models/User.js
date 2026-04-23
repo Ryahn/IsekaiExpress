@@ -1,5 +1,5 @@
+const path = require('path');
 const { Model } = require('objection');
-const Card = require('./Card');
 
 class User extends Model {
   static get tableName() {
@@ -14,7 +14,7 @@ class User extends Model {
     return {
       cards: {
         relation: Model.HasManyRelation,
-        modelClass: Card,
+        modelClass: path.join(__dirname, 'Card.js'),
         join: {
           from: 'users.discord_id',
           through: {

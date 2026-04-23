@@ -16,7 +16,7 @@ module.exports = {
         const { getRandomColor } = client.utils;
 
         try {
-            await interaction.deferReply();
+
             const embed = new EmbedBuilder()
                 .setTitle('About this bot')
                 .setColor(`#${getRandomColor()}`)

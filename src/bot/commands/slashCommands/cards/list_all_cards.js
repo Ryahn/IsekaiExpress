@@ -69,7 +69,7 @@ module.exports = {
 
         const embed = await createCardEmbed(page);
         if (!embed) {
-            return interaction.reply({
+            return interaction.editReply({
                 content: 'No cards found.',
                 ephemeral: true
             });
@@ -95,7 +95,7 @@ module.exports = {
                 );
         };
 
-        const message = await interaction.reply({
+        const message = await interaction.editReply({
             embeds: [embed],
             components: [createButtons()],
             fetchReply: true

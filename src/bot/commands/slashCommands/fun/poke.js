@@ -18,13 +18,13 @@ module.exports = {
         const { getRandomColor } = client.utils;
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'poke');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });
         }
         try {
-            await interaction.deferReply();
+
             let targetUser = interaction.options.getUser('target');
 
             const response = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
@@ -55,11 +55,11 @@ module.exports = {
             .setColor(`#${getRandomColor()}`)
             .setImage(img);
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         client.logger.error('Error executing the poke command:', error);
         if (!interaction.replied) {
-            await interaction.reply('Something went wrong.');
+            await interaction.editReply('Something went wrong.');
         }
     }
     },

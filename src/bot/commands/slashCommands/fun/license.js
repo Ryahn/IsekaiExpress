@@ -18,15 +18,11 @@ module.exports = {
 
     async execute(client, interaction) {
 
-        
-        
-        await interaction.deferReply();
-
         const user = interaction.user;
 
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'lolilicense');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });

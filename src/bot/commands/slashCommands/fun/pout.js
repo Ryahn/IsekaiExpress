@@ -17,13 +17,12 @@ module.exports = {
         const { getRandomColor } = client.utils;
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'pout');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });
         }
         try {
-            await interaction.deferReply();
 
             const response = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
                 return await fetchRandom('pout');
@@ -37,7 +36,7 @@ module.exports = {
                 .setColor(`#${getRandomColor()}`)
                 .setImage(img);
 
-            await interaction.reply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [embed] });
         } catch (error) {
             client.logger.error('Error executing the pout command:', error);
             if (!interaction.replied) {

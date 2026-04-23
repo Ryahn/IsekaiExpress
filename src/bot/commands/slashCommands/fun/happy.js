@@ -17,14 +17,14 @@ module.exports = {
 
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'happy');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });
         }
 
         try {
-            await interaction.deferReply();
+
             const response = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
                 return await fetchRandom('happy');
             });

@@ -9,7 +9,7 @@ const { parseWhitelistJson } = require('../../middleware/globalCommandLock');
 
 module.exports = class ReadyEvent extends BaseEvent {
     constructor() {
-        super('ready');
+        super('clientReady');
     }
 
     async run(client) {

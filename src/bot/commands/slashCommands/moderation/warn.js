@@ -22,11 +22,9 @@ module.exports = {
         
 
         if (!client.config.warningSystem.enabled) {
-            return interaction.reply('The warning system is not enabled.');
+            return interaction.editReply('The warning system is not enabled.');
         }
         try {
-
-            await interaction.deferReply();
 
             if (!interaction.member.permissions.has("BAN_MEMBERS")) {
                 return interaction.followUp('You do not have permission to warn users.');

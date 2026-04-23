@@ -16,7 +16,7 @@ module.exports = {
 
     async execute(client, interaction) {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+            return interaction.editReply({ content: 'You do not have permission to use this command.', ephemeral: true });
         }
 
         const pageRequested = interaction.options.getInteger('page') || 1;
@@ -33,12 +33,12 @@ module.exports = {
             const currentPage = Math.min(Math.max(pageRequested - 1, 0), totalPages - 1);
 
             const embed = createCommandSettingsEmbed(totalCommands, commands, currentPage, totalPages);
-            await interaction.reply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [embed] });
 
            
         } catch (error) {
             client.logger.error('Error:', error);
-            await interaction.reply({ content: 'An error occurred while processing the command.', ephemeral: true });
+            await interaction.editReply({ content: 'An error occurred while processing the command.', ephemeral: true });
         }
     }
 };

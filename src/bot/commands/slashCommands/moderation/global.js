@@ -43,10 +43,10 @@ module.exports = {
 
   async execute(client, interaction) {
     if (!interaction.inGuild()) {
-      return interaction.reply({ content: 'This command can only be used in a server.', ephemeral: true });
+      return interaction.editReply({ content: 'This command can only be used in a server.', ephemeral: true });
     }
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: 'You need Administrator permission.', ephemeral: true });
+      return interaction.editReply({ content: 'You need Administrator permission.', ephemeral: true });
     }
 
     const guildId = interaction.guildId;
@@ -63,13 +63,13 @@ module.exports = {
           false,
           parseWhitelistJson(row?.global_commands_whitelist_channel_ids)
         );
-        return interaction.reply('Global command lock is **off**. Commands work in all channels (subject to per-command settings).');
+        return interaction.editReply('Global command lock is **off**. Commands work in all channels (subject to per-command settings).');
       }
       if (sub === 'off') {
         const row = await client.db.getGuildConfigurable(guildId);
         const channelIds = parseWhitelistJson(row?.global_commands_whitelist_channel_ids);
         if (!channelIds.length) {
-          return interaction.reply({
+          return interaction.editReply({
             content:
               'Set a whitelist first: `/global config whitelist` with a channel, then run `/global command off` again.',
             ephemeral: true
@@ -77,7 +77,7 @@ module.exports = {
         }
         await client.db.updateGuildGlobalCommandLock(guildId, { locked: true, whitelistChannelIds: channelIds });
         updateGuildGlobalLockCache(client, guildId, true, channelIds);
-        return interaction.reply(
+        return interaction.editReply(
           `Global command lock is **on**. Public commands are limited to: ${channelIds
             .map((id) => `<#${id}>`)
             .join(', ')}`
@@ -96,11 +96,11 @@ module.exports = {
         Boolean(row?.global_commands_locked),
         id
       );
-      return interaction.reply(
+      return interaction.editReply(
         `Whitelist set to <#${channel.id}>. Use \`/global command off\` to enforce lock.`
       );
     }
 
-    return interaction.reply({ content: 'Invalid subcommand.', ephemeral: true });
+    return interaction.editReply({ content: 'Invalid subcommand.', ephemeral: true });
   }
 };

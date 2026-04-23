@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const {db} = require('../database/db');
 
 const self = module.exports = {
 	hasRole: (roleId) => (req, res, next) => {
@@ -37,7 +36,8 @@ const self = module.exports = {
 
 	logAudit: async (logEntry) => {
 		try {
-			await db.table('audit').insert({discord_id: logEntry.userId, action: logEntry.action, method: logEntry.method, timestamp: logEntry.timestamp});
+			const { db: knexDb } = require('../database/db');
+			await knexDb.table('audit').insert({discord_id: logEntry.userId, action: logEntry.action, method: logEntry.method, timestamp: logEntry.timestamp});
 		} catch (error) {
 			console.error('Error logging audit:', error);
 		}

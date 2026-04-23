@@ -61,7 +61,7 @@ module.exports = {
         }
 
         if (result === null) {
-            await interaction.reply('Invalid conversion type or units.');
+            await interaction.editReply('Invalid conversion type or units.');
             return;
         }
 
@@ -74,7 +74,7 @@ module.exports = {
             )
             .setTimestamp();
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
     },
 };
 

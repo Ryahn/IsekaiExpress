@@ -24,15 +24,14 @@ module.exports = {
 
         // Check if the warning system is enabled
         if (!client.config.warningSystem.enabled) {
-            return interaction.reply({ content: 'The warning system is not enabled.', ephemeral: true });
+            return interaction.editReply({ content: 'The warning system is not enabled.', ephemeral: true });
         }
 
         if (!interaction.member.permissions.has("BAN_MEMBERS")) {
-            return interaction.reply({ content: 'You do not have permission to list warnings for users.', ephemeral: true });
+            return interaction.editReply({ content: 'You do not have permission to list warnings for users.', ephemeral: true });
         }
 
         // Defer reply to allow time for processing
-        await interaction.deferReply();
 
         const targetUser = interaction.options.getUser('user');
         const pageRequested = interaction.options.getInteger('page') ?? 1;

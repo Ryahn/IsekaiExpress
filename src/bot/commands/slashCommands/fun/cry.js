@@ -18,7 +18,7 @@ module.exports = {
 
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'cry');
         if (cooldownTime) {
-            return interaction.reply({ 
+            return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
                 ephemeral: true 
             });

@@ -36,7 +36,7 @@ module.exports = {
 
     async execute(client, interaction) {
         if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
-            return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+            return interaction.editReply({ content: 'You do not have permission to use this command.', ephemeral: true });
         }
 
         
@@ -49,23 +49,23 @@ module.exports = {
             const cageValue = interaction.options.getString('cage_type');
 
             if (!guildMember) {
-                return interaction.reply({ content: 'User not found in this server.', ephemeral: true });
+                return interaction.editReply({ content: 'User not found in this server.', ephemeral: true });
             }
 
             const cageRole = interaction.guild.roles.cache.find(role => role.id === cageValue);
             if (!cageRole) {
-                return interaction.reply({ content: `Cage role: ${cageValue} does not exist.`, ephemeral: true });
+                return interaction.editReply({ content: `Cage role: ${cageValue} does not exist.`, ephemeral: true });
             }
 
             const cageName = guild.roles.cache.get(cageValue);
 
             if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-                return interaction.reply({ content: 'I do not have permission to manage roles.', ephemeral: true });
+                return interaction.editReply({ content: 'I do not have permission to manage roles.', ephemeral: true });
             }
 
             const botRole = interaction.guild.members.me.roles.highest;
             if (guildMember.roles.highest.position >= botRole.position) {
-                return interaction.reply({ content: 'I cannot cage this user because their role is higher than or equal to mine.', ephemeral: true });
+                return interaction.editReply({ content: 'I cannot cage this user because their role is higher than or equal to mine.', ephemeral: true });
             }
 
             const parseDuration = (input) => {
@@ -88,7 +88,7 @@ module.exports = {
             if (duration) {
                 const durationInSeconds = parseDuration(duration);
                 if (!durationInSeconds) {
-                    return interaction.reply({ content: 'Invalid duration format. Use something like 1h, 30m, or 1d.', ephemeral: true });
+                    return interaction.editReply({ content: 'Invalid duration format. Use something like 1h, 30m, or 1d.', ephemeral: true });
                 }
                 expires = moment().unix() + durationInSeconds;
             }
@@ -96,7 +96,7 @@ module.exports = {
             await client.db.createCage(userToCage.id, expires, interaction.user.tag, interaction.user.id, client.utils.timestamp(), reason, cageValue);
 
             await guildMember.roles.add(cageValue);
-            await interaction.reply({ content: `<@${userToCage.id}> has been caged with role: ${cageName.name} successfully.` });
+            await interaction.editReply({ content: `<@${userToCage.id}> has been caged with role: ${cageName.name} successfully.` });
 
             let expiresText = expires === 0 ? 'Permanent' : `<t:${expires}:R>`;
 
@@ -120,7 +120,7 @@ module.exports = {
             }
         // } catch (error) {
         //     client.logger.error('Error:', error);
-        //     await interaction.reply({ content: 'An error occurred while processing the command.', ephemeral: true });
+        //     await interaction.editReply({ content: 'An error occurred while processing the command.', ephemeral: true });
         // }
     }
 };

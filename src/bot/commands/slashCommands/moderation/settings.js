@@ -35,7 +35,7 @@ module.exports = {
 		
 
         try {
-            await interaction.deferReply();
+
 			const option = interaction.options.getString('option');
 
 			if (!option) {

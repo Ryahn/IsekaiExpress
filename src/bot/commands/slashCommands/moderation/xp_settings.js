@@ -62,14 +62,12 @@ module.exports = {
 
     async execute(client, interaction) {
 		if (!interaction.member.permissions.has("ADMINISTRATOR")) {
-            return interaction.reply({ content: 'You do not have permission to change XP settings.', ephemeral: true });
+            return interaction.editReply({ content: 'You do not have permission to change XP settings.', ephemeral: true });
         }
 
 		
 
         const { getRandomColor } = client.utils;
-
-        await interaction.deferReply();
 
         const guildId = interaction.guildId;
         const xpSettings = await client.db.getXPSettings(guildId);

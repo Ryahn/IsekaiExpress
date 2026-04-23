@@ -20,7 +20,7 @@ module.exports = {
         const { timestamp } = client.utils;
 
         try {
-            await interaction.deferReply();
+
             await client.db.createAfkUser(interaction.user.id, interaction.guild.id, message, timestamp());
 
             const embed = new EmbedBuilder()

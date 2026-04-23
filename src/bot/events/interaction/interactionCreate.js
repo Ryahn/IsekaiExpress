@@ -16,9 +16,17 @@ module.exports = class InteractionEvent extends BaseEvent {
         if (!command) return;
 
         try {
+            // Acknowledge within 3s before DB/member fetches, rate-limited execute, or slow handlers.
+            await interaction.deferReply();
+        } catch (ackErr) {
+            client.logger.error('Failed to acknowledge slash interaction:', ackErr);
+            return;
+        }
+
+        try {
             const globalLock = await checkInteractionGlobalCommandLock(client, interaction);
             if (!globalLock.allowed) {
-                return interaction.reply({ content: globalLock.message, ephemeral: true });
+                return interaction.editReply({ content: globalLock.message, ephemeral: true });
             }
             if (!(await assertSlashCommandChannel(client, interaction))) {
                 return;
@@ -28,7 +36,7 @@ module.exports = class InteractionEvent extends BaseEvent {
             const cooldownCheck = checkCommandCooldown(client, interaction.user.id, interaction.commandName);
             
             if (cooldownCheck.onCooldown) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: `You are on cooldown! Please wait ${cooldownCheck.remainingTime.toFixed(1)} more seconds.`,
                     ephemeral: true
                 });
@@ -42,17 +50,12 @@ module.exports = class InteractionEvent extends BaseEvent {
             // Set cooldown after successful execution
             setCooldown(client, interaction.user.id, interaction.commandName);
         } catch (err) {
-            client.logger.error(err);
-
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({
-                    content: `An error occurred while executing this command.`,
-                    ephemeral: true
-                });
-            } else if (interaction.deferred) {
-                await interaction.editReply({
-                    content: `An error occurred while executing this command.`
-                });
+            client.logger.error('Slash command error:', err);
+            const payload = { content: 'An error occurred while executing this command.', ephemeral: true };
+            try {
+                await interaction.editReply(payload);
+            } catch {
+                await interaction.followUp(payload).catch(() => {});
             }
         }
     }

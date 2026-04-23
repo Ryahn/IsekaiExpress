@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Events } = require('discord.js');
 const { registerCommands, registerEvents, populateBuiltinChatCommandKeys } = require('./utils/register');
 const schedule = require('node-schedule');
 const config = require('../../config');
@@ -99,10 +99,21 @@ const client = new BotClient({
         client.handleReconnect();
     });
 
-    // Handle errors
-    client.on('error', (error) => {
-        logger.error('Discord client error:', error);
-        client.handleReconnect();
+    // Log client errors; avoid reconnecting on every generic `error` (can misfire and double-login / loop).
+    client.on(Events.Error, (error) => {
+        const message =
+            error instanceof Error
+                ? error.stack || error.message
+                : typeof error === 'string'
+                    ? error
+                    : (() => {
+                        try {
+                            return JSON.stringify(error, Object.getOwnPropertyNames(error));
+                        } catch {
+                            return String(error);
+                        }
+                    })();
+        logger.error('Discord client error: ' + message);
     });
 
     // Handle debug messages
@@ -113,7 +124,7 @@ const client = new BotClient({
         }
     });
 
-    client.on('ready', () => {
+    client.once(Events.ClientReady, () => {
 
         schedule.scheduleJob('*/1 * * * *', async () => {
         

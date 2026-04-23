@@ -75,12 +75,10 @@ module.exports = {
                                     interaction.options.getString('commands_3');
 
 			if (!selectedCommand) {
-				return interaction.reply({ content: 'No command selected. Please select a command to set the channel for.', ephemeral: true });
+				return interaction.editReply({ content: 'No command selected. Please select a command to set the channel for.', ephemeral: true });
 			}
 
             const channel = interaction.options.getChannel('channel');
-
-            await interaction.deferReply();
 
             if (!interaction.member.permissions.has("ADMINISTRATOR")) {
                 return interaction.followUp('You do not have permission to use this command.');

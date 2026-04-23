@@ -16,7 +16,7 @@ module.exports = {
             const cagedUsers = await client.db.getCagedUsers(client.utils.timestamp());
 
             if (!cagedUsers) {
-                return await interaction.reply('No active caged users found.');
+                return await interaction.editReply('No active caged users found.');
             }
 
             const embed = new EmbedBuilder()
@@ -42,10 +42,10 @@ module.exports = {
                 }
             }
 
-            await interaction.reply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [embed] });
         // } catch (error) {
         //     client.logger.error('Error in check_cages command:', error);
-        //     await interaction.reply('An error occurred while processing the command.');
+        //     await interaction.editReply('An error occurred while processing the command.');
         // }
     }
 };
