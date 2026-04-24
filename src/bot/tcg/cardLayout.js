@@ -7,7 +7,7 @@ const CARD = {
   // Portrait: original design 855×900, reduced 30% (70% scale), centered in the same frame
   portrait: { x: 213, y: 280, w: 599, h: 630 },
   level: {
-    cx: 105, cy: 105, r: 65, fontSize: 64, align: 'center', baseline: 'middle',
+    cx: 120, cy: 110, r: 65, fontSize: 64, align: 'center', baseline: 'middle',
   },
   power: {
     cx: 845, cy: 105, w: 250, h: 100, fontSize: 56, align: 'center', baseline: 'middle',
@@ -18,7 +18,8 @@ const CARD = {
   classPill: {
     cx: 512, cy: 1245, w: 240, h: 58, radius: 12, bgColor: 'transparent', fontSize: 28, letterSpacing: 4,
   },
-  elementIcon: { cx: 105, cy: 1430, r: 70 },
+  elementIcon: { cx: 125, cy: 1395, r: 70 },
+  abilityIcon: { cx: 830, cy: 1215, r: 70 },
 };
 
 /**
@@ -26,14 +27,15 @@ const CARD = {
  * - Top-level **number** — same nudge (px) for `name` and `class` only; portrait/level/power unchanged.
  * - **object**:
  *   - `name` / `class` — vertical shift for title and class pill (px), or one number for both (legacy).
- *   - `level` / `power` — number = Δcy, or `{ cx, cy }` for badge position (px).
+ *   - `level` / `power` / `element` / `ability` — number = Δcy, or `{ cx, cy }` for left/right and up/down (px).
  *   - `portrait` — avatar clip: `{ x, y, w, h }` as **deltas** from CARD.portrait.
  */
 const RARITY_LAYOUT_OFFSET = {
-  C: 0,
-  UC: { name: 20, class: 20 },
+  C: { name: 45, class: 50},
+  // UC: { name: 20, class: 20 },
+  UC: { name: 45, class: 50, level: { cx: 5, cy: 10 }, power: { cx: 5, cy: 5 }, element: { cx: 10, cy: -10 } },
   R: 40,
-  EP: 55,
+  EP: { name: 45, class: 50, level: { cx: -10, cy: 10 }, power: { cx: 5, cy: 5 } },
   L: 50,
   M: 80,
 };
@@ -82,13 +84,15 @@ function nudgePortrait(raw) {
 }
 
 /**
- * @returns {{ name: number, class: number, level: {cx,cy}, power: {cx,cy}, portrait: {x,y,w,h} }}
+ * @returns {{ name: number, class: number, level: {cx,cy}, power: {cx,cy}, element: {cx,cy}, ability: {cx,cy}, portrait: {x,y,w,h} }}
  */
 function expandRarityLayoutEntry(entry) {
   const out = {
     name: 0, class: 0,
     level: { cx: 0, cy: 0 },
     power: { cx: 0, cy: 0 },
+    element: { cx: 0, cy: 0 },
+    ability: { cx: 0, cy: 0 },
     portrait: { x: 0, y: 0, w: 0, h: 0 },
   };
   if (entry == null) return out;
@@ -107,13 +111,15 @@ function expandRarityLayoutEntry(entry) {
     out.class = nc.class;
     out.level = nudgeLevelPower(entry.level);
     out.power = nudgeLevelPower(entry.power);
+    out.element = nudgeLevelPower(entry.element);
+    out.ability = nudgeLevelPower(entry.ability);
     out.portrait = nudgePortrait(entry.portrait);
   }
   return out;
 }
 
 /**
- * Merged layout for one tier: portrait (avatar), level, power, name, class — includes CARD + offsets.
+ * Merged layout for one tier: portrait, level, power, name, class, element/ability corners — includes CARD + offsets.
  */
 function cardLayoutForRarity(norm) {
   const o = expandRarityLayoutEntry(RARITY_LAYOUT_OFFSET[norm]);
@@ -136,6 +142,16 @@ function cardLayoutForRarity(norm) {
     },
     name: { ...CARD.name, cy: CARD.name.cy + o.name },
     classPill: { ...CARD.classPill, cy: CARD.classPill.cy + o.class },
+    elementIcon: {
+      ...CARD.elementIcon,
+      cx: CARD.elementIcon.cx + o.element.cx,
+      cy: CARD.elementIcon.cy + o.element.cy,
+    },
+    abilityIcon: {
+      ...CARD.abilityIcon,
+      cx: CARD.abilityIcon.cx + o.ability.cx,
+      cy: CARD.abilityIcon.cy + o.ability.cy,
+    },
   };
 }
 
@@ -181,22 +197,83 @@ function normalizeRarityKey(raw) {
   return 'C';
 }
 
+/** URL/path folder segment per tier (e.g. `common`, `mythic`). DB `rarity` stays `C`…`M`. */
+const RARITY_PATH_SLUG = {
+  C: 'common',
+  UC: 'uncommon',
+  R: 'rare',
+  EP: 'epic',
+  L: 'legendary',
+  M: 'mythic',
+};
+
+function rarityPathSlugFromKey(rarityKey) {
+  const k = normalizeRarityKey(rarityKey);
+  return RARITY_PATH_SLUG[k] || RARITY_PATH_SLUG.C;
+}
+
+/**
+ * Linear per-level bonus: L1 = ×1, L2 = ×1.15, L3 = ×1.3, … L5 = ×1.6
+ * @param {number} [level=1]
+ * @returns {number}
+ */
+function statLevelMultiplier(level = 1) {
+  const lv = Math.min(5, Math.max(1, Number(level) || 1));
+  return 1 + 0.15 * (lv - 1);
+}
+
 /** Level-1 power scores from [CardSystem.md] — per tier, before level bonus */
 const POWER_SCORE_L1 = {
   C: 627, UC: 816, R: 1058, EP: 1372, L: 1776, M: 2312,
 };
 
+/** ATK / DEF / SPD / HP at level 1 — [CardSystem.md] base stats */
+const BASE_STATS_L1 = {
+  C: { atk: 100, def: 80, spd: 70, hp: 200 },
+  UC: { atk: 130, def: 105, spd: 90, hp: 260 },
+  R: { atk: 170, def: 135, spd: 115, hp: 340 },
+  EP: { atk: 220, def: 175, spd: 150, hp: 440 },
+  L: { atk: 285, def: 225, spd: 190, hp: 570 },
+  M: { atk: 370, def: 295, spd: 250, hp: 740 },
+};
+
+
 /**
  * @param {string} rarityKey - batch key (C…M or legacy)
- * @param {number} [level=1] - card level 1–5, +15% all stats per level over previous
+ * @param {number} [level=1] - card level 1–5, +15% of base stats per level step (linear)
  * @returns {number}
  */
 function powerScoreAtLevel(rarityKey, level = 1) {
   const k = normalizeRarityKey(rarityKey);
   const base = POWER_SCORE_L1[k] ?? POWER_SCORE_L1.C;
-  const lv = Math.min(5, Math.max(1, Number(level) || 1));
-  return Math.round(base * (1.15 ** (lv - 1)));
+  const mult = statLevelMultiplier(level);
+  return Math.round(base * mult);
 }
+/**
+ * @param {string} rarityKey
+ * @param {number} [level=1]
+ * @returns {{ atk: number, def: number, spd: number, hp: number }}
+ */
+function combatStatsAtLevel(rarityKey, level = 1) {
+  const k = normalizeRarityKey(rarityKey);
+  const base = BASE_STATS_L1[k] ?? BASE_STATS_L1.C;
+  const mult = statLevelMultiplier(level);
+  return {
+    atk: Math.round(base.atk * mult),
+    def: Math.round(base.def * mult),
+    spd: Math.round(base.spd * mult),
+    hp: Math.round(base.hp * mult),
+  };
+}
+
+/**
+ * Layout for catalog PNGs (frame, portrait, element, name, class only).
+ * Geometry matches `cardLayoutForRarity`; level/power/ability are simply not drawn.
+ */
+function cardLayoutForRarityCatalog(norm) {
+  return cardLayoutForRarity(norm);
+}
+
 
 const baseNamesByRarity = {
   C: ['C.png', 'COMMON.png', 'c.png'],
@@ -362,6 +439,27 @@ function drawClassPillText(ctx, text, cp, { font, fillColor, outerColor, letterS
   ctx.restore();
 }
 
+/**
+ * Downscales element/trait PNGs (e.g. 512×512) into the corner badge (2r × 2r px on the card).
+ * @param {object} ctx
+ * @param {{ width: number, height: number }} image
+ * @param {{ cx: number, cy: number, r: number }} slot
+ */
+function drawCornerIconScaled(ctx, image, { cx, cy, r }) {
+  const sw = image.width;
+  const sh = image.height;
+  if (!sw || !sh) return;
+  const dw = r * 2;
+  const dh = r * 2;
+  const dx = cx - r;
+  const dy = cy - r;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(image, 0, 0, sw, sh, dx, dy, dw, dh);
+  ctx.restore();
+}
+
 function drawSubtleCardGradient(ctx) {
   ctx.save();
   const g = ctx.createLinearGradient(0, 0, CARD.width, CARD.height);
@@ -379,12 +477,18 @@ module.exports = {
   CARD,
   RARITY,
   RARITY_LAYOUT_OFFSET,
+  RARITY_PATH_SLUG,
   normalizeRarityKey,
+  rarityPathSlugFromKey,
+  statLevelMultiplier,
   readableTextOuterGlowColor,
   cardLayoutForRarity,
+  cardLayoutForRarityCatalog,
   nameAndClassLayout,
   POWER_SCORE_L1,
+  BASE_STATS_L1,
   powerScoreAtLevel,
+  combatStatsAtLevel,
   resolveBaseCardPath,
   safePathSegmentFromName,
   fillRoundRect,
@@ -392,5 +496,6 @@ module.exports = {
   drawGlowingTextCentered,
   drawGlowingTextLeft,
   drawClassPillText,
+  drawCornerIconScaled,
   drawSubtleCardGradient,
 };

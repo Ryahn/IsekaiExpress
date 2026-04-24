@@ -3,7 +3,6 @@ const fs = require('fs');
 const { v5: uuidv5 } = require('uuid');
 const NAMESPACE = uuidv5.URL;
 const path = require('path');
-// const db = require('./database/db');
 const config = require('./config');
 const { timestamp } = require('./libs/utils');
 const logger = require('silly-logger');
@@ -14,11 +13,19 @@ const {
   resolveBaseCardPath,
   safePathSegmentFromName,
   readableTextOuterGlowColor,
-  cardLayoutForRarity,
+  cardLayoutForRarityCatalog,
+  rarityPathSlugFromKey,
+  BASE_STATS_L1,
+  POWER_SCORE_L1,
   drawGlowingTextCentered,
   drawClassPillText,
+  drawCornerIconScaled,
   drawSubtleCardGradient,
 } = require('./src/bot/tcg/cardLayout.js');
+const {
+  normalizeElementKey,
+  resolveElementIconPath,
+} = require('./src/bot/tcg/elements.js');
 
 const repoRoot = __dirname;
 const ORBITRON_WOFF2 = path.join(repoRoot, 'tools', 'fonts', 'Orbitron-Bold.woff2');
@@ -40,41 +47,54 @@ function font(sizePx, weight = 'bold') {
   return `${weight} ${sizePx}px ui-sans-serif, system-ui, sans-serif`;
 }
 
-function makeCardFileName(name, rawRarity) {
-  const safeName = name.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
-  return `${safeName}_${String(rawRarity).toUpperCase()}.png`;
-}
-
-function generateUUID(characterName, rarity, discordId) {
-  return uuidv5(`${characterName}-${rarity}-${discordId}`, NAMESPACE);
+function generateUUID(characterName, rarityNorm, discordId, elementKey) {
+  return uuidv5(`${characterName}|${rarityNorm}|${discordId}|${elementKey}`, NAMESPACE);
 }
 
 /**
  * @param {string} characterName
  * @param {string} rawRarity - batch key, may be legacy
  * @param {string} className
- * @param {number} level
- * @param {number} power
  * @param {string} avatar - URL
- * @param {string} _typeLegacy - kept for API compatibility; unused for paths
+ * @param {string} _typeLegacy - kept for API compatibility; unused
  * @param {string|number} discordId
- * @param {string} [elementIconPath] - optional absolute path to element PNG
+ * @param {string} elementKey - canonical element id (tools/card_elements/{key}.png)
+ * @param {string|null} [elementIconPath] - optional absolute path to element PNG
+ * @param {{ skipDb?: boolean }} [options]
  */
 async function generateCard(
   characterName,
   rawRarity,
   className,
-  level,
-  power,
   avatar,
   _typeLegacy,
   discordId,
+  elementKey,
   elementIconPath = null,
+  options = {},
 ) {
   const norm = normalizeRarityKey(rawRarity);
   const rSpec = RARITY[norm] || RARITY.C;
-  const uuid = generateUUID(characterName, rawRarity, discordId);
   const safeUser = safePathSegmentFromName(characterName);
+  const raritySlug = rarityPathSlugFromKey(norm);
+
+  const resolvedElementKey = normalizeElementKey(elementKey);
+  if (!resolvedElementKey) {
+    throw new Error(`generateCard: elementKey is required (got ${elementKey})`);
+  }
+
+  let iconPath = elementIconPath && fs.existsSync(elementIconPath) ? elementIconPath : null;
+  if (!iconPath) {
+    iconPath = resolveElementIconPath(repoRoot, resolvedElementKey);
+  }
+  if (!iconPath || !fs.existsSync(iconPath)) {
+    throw new Error(`generateCard: no element icon for ${resolvedElementKey}`);
+  }
+
+  const baseStats = BASE_STATS_L1[norm] ?? BASE_STATS_L1.C;
+  const basePower = POWER_SCORE_L1[norm] ?? POWER_SCORE_L1.C;
+
+  const uuid = generateUUID(characterName, norm, discordId, resolvedElementKey);
 
   const canvas = createCanvas(CARD.width, CARD.height);
   const ctx = canvas.getContext('2d');
@@ -83,7 +103,7 @@ async function generateCard(
   const baseImage = await loadImage(basePath);
   ctx.drawImage(baseImage, 0, 0, CARD.width, CARD.height);
 
-  const layout = cardLayoutForRarity(norm);
+  const layout = cardLayoutForRarityCatalog(norm);
 
   const profileImage = await loadImage(avatar);
   const p = layout.portrait;
@@ -94,34 +114,8 @@ async function generateCard(
   ctx.drawImage(profileImage, p.x, p.y, p.w, p.h);
   ctx.restore();
 
-  if (elementIconPath && fs.existsSync(elementIconPath)) {
-    const el = CARD.elementIcon;
-    const size = el.r * 2;
-    const icon = await loadImage(elementIconPath);
-    ctx.drawImage(icon, el.cx - el.r, el.cy - el.r, size, size);
-  }
-
-  const l = layout.level;
-  const levelStr = String(level);
-  const levelFont = font(l.fontSize);
-  drawGlowingTextCentered(ctx, levelStr, l.cx, l.cy, {
-    font: levelFont,
-    fillColor: rSpec.accentColor,
-    outerColor: rSpec.accentColor,
-  });
-
-  const po = layout.power;
-  const powerStr = String(power);
-  let powerFont = font(po.fontSize);
-  ctx.font = powerFont;
-  if (ctx.measureText(powerStr).width > po.w - 20) {
-    powerFont = font(44);
-  }
-  drawGlowingTextCentered(ctx, powerStr, po.cx, po.cy, {
-    font: powerFont,
-    fillColor: rSpec.accentColor,
-    outerColor: rSpec.accentColor,
-  });
+  const icon = await loadImage(iconPath);
+  drawCornerIconScaled(ctx, icon, layout.elementIcon);
 
   const n = layout.name;
   const cp = layout.classPill;
@@ -145,8 +139,8 @@ async function generateCard(
 
   drawSubtleCardGradient(ctx);
 
-  const fileName = makeCardFileName(characterName, rawRarity);
-  const outputDir = path.join(repoRoot, 'src', 'bot', 'media', 'cards', safeUser);
+  const fileName = `${resolvedElementKey}.png`;
+  const outputDir = path.join(repoRoot, 'src', 'bot', 'media', 'cards', safeUser, raritySlug);
   if (!fs.existsSync(outputDir)) {
     logger.info(`Creating output directory: ${outputDir}`);
     fs.mkdirSync(outputDir, { recursive: true });
@@ -154,10 +148,21 @@ async function generateCard(
   const outputPath = path.join(outputDir, fileName);
 
   const baseCardUrl = (config.cardUrl || config.url || '').replace(/\/$/, '');
-  const image_url = `${baseCardUrl}/${encodeURIComponent(safeUser)}/${fileName}`;
+  const image_url = `${baseCardUrl}/${encodeURIComponent(safeUser)}/${encodeURIComponent(raritySlug)}/${encodeURIComponent(fileName)}`;
 
   const buffer = canvas.toBuffer('image/png');
   fs.writeFileSync(outputPath, buffer);
+
+  let member_id = null;
+  // if (!options.skipDb) {
+  //   try {
+  //     const dbmod = require('./database/db');
+  //     const userRow = await dbmod.query('users').where({ discord_id: String(discordId) }).first();
+  //     if (userRow) member_id = userRow.id;
+  //   } catch (e) {
+  //     logger.warn(`member_id lookup skipped: ${e.message}`);
+  //   }
+  // }
 
   const card = {
     discord_id: discordId,
@@ -166,14 +171,31 @@ async function generateCard(
     name: characterName,
     rarity: norm,
     class: className,
-    level,
-    power,
+    level: null,
+    power: null,
+    element: resolvedElementKey,
+    ability_key: null,
+    base_atk: baseStats.atk,
+    base_def: baseStats.def,
+    base_spd: baseStats.spd,
+    base_hp: baseStats.hp,
+    base_power: basePower,
     image_url,
     created_at: timestamp(),
     updated_at: timestamp(),
   };
+  if (member_id != null) {
+    card.member_id = member_id;
+  }
 
-  // await db.createCard(card);
+  // if (!options.skipDb) {
+  //   try {
+  //     const dbmod = require('./database/db');
+  //     await dbmod.createCard(card);
+  //   } catch (e) {
+  //     logger.warn(`DB upsert failed: ${e.message}`);
+  //   }
+  // }
 
   if (global.gc) {
     global.gc({ type: 'major' });
@@ -183,6 +205,7 @@ async function generateCard(
     fileName,
     outputPath,
     file_id: uuid,
+    card,
   };
 }
 
