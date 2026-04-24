@@ -31,6 +31,7 @@ class UserWallet extends Model {
         gold: { type: 'integer' },
         tcg_daily_claim_at: { type: ['integer', 'null'] },
         tcg_first_win_utc_date: { type: ['string', 'null'] },
+        tcg_inventory_bonus_slots: { type: 'integer' },
         updated_at: { type: 'integer' },
       },
     };

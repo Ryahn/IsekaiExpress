@@ -60,6 +60,7 @@ class Card extends Model {
         base_hp: { type: ['number', 'null'] },
         base_power: { type: ['number', 'null'] },
         tcg_region: { type: ['integer', 'null'] },
+        is_boss_card: { type: 'integer' },
         updated_at: { type: 'number' },
         created_at: { type: 'number' },
       },

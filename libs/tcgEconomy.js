@@ -124,6 +124,11 @@ async function getTcgBalance(client, discordUser) {
     dailyReady,
     nextDailyAt,
     dailyRemainingSec: dailyReady ? 0 : Math.max(0, (lastClaim + DAILY_COOLDOWN_SEC) - now),
+    basicPackPity: Number(wallet.tcg_basic_pack_pity) || 0,
+    advancedPackPity: Number(wallet.tcg_advanced_pack_pity) || 0,
+    premiumLegendaryPity: Number(wallet.tcg_premium_pack_pity_legendary) || 0,
+    premiumMythicPity: Number(wallet.tcg_premium_pack_pity_mythic) || 0,
+    inventoryBonusSlots: Number(wallet.tcg_inventory_bonus_slots) || 0,
   };
 }
 

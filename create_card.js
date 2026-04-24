@@ -154,15 +154,15 @@ async function generateCard(
   fs.writeFileSync(outputPath, buffer);
 
   let member_id = null;
-  // if (!options.skipDb) {
-  //   try {
-  //     const dbmod = require('./database/db');
-  //     const userRow = await dbmod.query('users').where({ discord_id: String(discordId) }).first();
-  //     if (userRow) member_id = userRow.id;
-  //   } catch (e) {
-  //     logger.warn(`member_id lookup skipped: ${e.message}`);
-  //   }
-  // }
+  if (!options.skipDb) {
+    try {
+      const dbmod = require('./database/db');
+      const userRow = await dbmod.query('users').where({ discord_id: String(discordId) }).first();
+      if (userRow) member_id = userRow.id;
+    } catch (e) {
+      logger.warn(`member_id lookup skipped: ${e.message}`);
+    }
+  }
 
   const card = {
     discord_id: discordId,
@@ -188,14 +188,14 @@ async function generateCard(
     card.member_id = member_id;
   }
 
-  // if (!options.skipDb) {
-  //   try {
-  //     const dbmod = require('./database/db');
-  //     await dbmod.createCard(card);
-  //   } catch (e) {
-  //     logger.warn(`DB upsert failed: ${e.message}`);
-  //   }
-  // }
+  if (!options.skipDb) {
+    try {
+      const dbmod = require('./database/db');
+      await dbmod.createCard(card);
+    } catch (e) {
+      logger.warn(`DB upsert failed: ${e.message}`);
+    }
+  }
 
   if (global.gc) {
     global.gc({ type: 'major' });

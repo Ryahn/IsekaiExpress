@@ -6,6 +6,14 @@ const tcgEconomy = require('./tcgEconomy');
 
 const DEFAULT_INVENTORY_CAP = 500;
 
+/**
+ * @param {{ tcg_inventory_bonus_slots?: number|null }|null|undefined} walletRow
+ */
+function effectiveInventoryCap(walletRow) {
+  const bonus = walletRow != null ? Number(walletRow.tcg_inventory_bonus_slots) || 0 : 0;
+  return DEFAULT_INVENTORY_CAP + bonus;
+}
+
 /** @type {Record<string, number[]>} normalized rarity key → breakdown gold L1–L5 */
 const BREAKDOWN_GOLD_BY_RARITY = {
   C: [50, 75, 100, 130, 165],
@@ -61,12 +69,16 @@ async function countDistinctRaritiesForMember(internalUserId, memberDiscordId) {
   return rows.length;
 }
 
-async function countPlayerInstances(internalUserId) {
-  const row = await db.query('user_cards')
+async function countPlayerInstancesWithClient(internalUserId, trx = db.query) {
+  const row = await trx('user_cards')
     .where({ user_id: internalUserId })
     .count('* as c')
     .first();
   return Number(row ? row.c : 0);
+}
+
+async function countPlayerInstances(internalUserId) {
+  return countPlayerInstancesWithClient(internalUserId, db.query);
 }
 
 /**
@@ -78,6 +90,50 @@ async function countInventoryForDiscordUser(client, discordUser) {
   const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
   if (!internalId) return 0;
   return countPlayerInstances(internalId);
+}
+
+/**
+ * Insert one owned copy from a catalog row (transaction-safe).
+ * @param {import('knex').Knex} trx
+ * @param {number} internalUserId
+ * @param {object} template card_data row
+ * @param {{ skipCapCheck?: boolean }} [opts]
+ */
+async function grantTemplateWithTrx(trx, internalUserId, template, opts = {}) {
+  if (!opts.skipCapCheck) {
+    await tcgEconomy.ensureWallet(internalUserId, trx);
+    const w = await trx('user_wallets').where({ user_id: internalUserId }).first();
+    const cap = effectiveInventoryCap(w);
+    const owned = await countPlayerInstancesWithClient(internalUserId, trx);
+    if (owned >= cap) {
+      return { ok: false, error: `Inventory full (${cap} cards).` };
+    }
+  }
+  if (template.base_power == null || template.base_atk == null) {
+    return { ok: false, error: 'Not a catalog template (missing base stats).' };
+  }
+
+  const ability = pickRandomAbilityKeyForRarity(template.rarity);
+  const ts = nowUnix();
+  const [insertId] = await trx('user_cards').insert({
+    user_id: internalUserId,
+    card_id: template.card_id,
+    ability_key: ability,
+    level: 1,
+    acquired_at: ts,
+    is_lent: false,
+    is_escrowed: false,
+    element_reroll_count: 0,
+    updated_at: ts,
+    created_at: ts,
+  });
+
+  return {
+    ok: true,
+    userCardId: insertId,
+    template: { name: template.name, uuid: template.uuid, rarity: template.rarity, element: template.element },
+    ability_key: ability,
+  };
 }
 
 /**
@@ -100,36 +156,8 @@ async function grantCardToPlayer(client, discordUser, opts = {}) {
     : await db.query('card_data').where({ card_id: cardId }).first();
 
   if (!template) return { ok: false, error: 'Catalog card not found.' };
-  if (template.base_power == null || template.base_atk == null) {
-    return { ok: false, error: 'Not a catalog template (missing base stats).' };
-  }
 
-  const owned = await countPlayerInstances(internalId);
-  if (owned >= DEFAULT_INVENTORY_CAP) {
-    return { ok: false, error: `Inventory full (${DEFAULT_INVENTORY_CAP} cards).` };
-  }
-
-  const ability = pickRandomAbilityKeyForRarity(template.rarity);
-  const ts = nowUnix();
-  const [insertId] = await db.query('user_cards').insert({
-    user_id: internalId,
-    card_id: template.card_id,
-    ability_key: ability,
-    level: 1,
-    acquired_at: ts,
-    is_lent: false,
-    is_escrowed: false,
-    element_reroll_count: 0,
-    updated_at: ts,
-    created_at: ts,
-  });
-
-  return {
-    ok: true,
-    userCardId: insertId,
-    template: { name: template.name, uuid: template.uuid, rarity: template.rarity, element: template.element },
-    ability_key: ability,
-  };
+  return grantTemplateWithTrx(db.query, internalId, template);
 }
 
 async function loadOwnedInstance(internalUserId, userCardId, trx = db.query) {
@@ -412,10 +440,13 @@ async function getInstanceDetailForOwner(client, discordUser, userCardId) {
 
 module.exports = {
   DEFAULT_INVENTORY_CAP,
+  effectiveInventoryCap,
   BREAKDOWN_GOLD_BY_RARITY,
   breakdownGoldFor,
   nextElementRerollCost,
   combatStatsFromJoinedRow,
+  countPlayerInstancesWithClient,
+  grantTemplateWithTrx,
   grantCardToPlayer,
   breakdownInstance,
   fuseInstances,
