@@ -13,6 +13,17 @@ function defaultFarmState() {
 	};
 }
 
+/**
+ * Knex + mysql2 can generate invalid SQL for plain objects on JSON columns
+ * (e.g. `set col = {key: val}` instead of a quoted JSON string). Always bind a string.
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+function serializeMysqlJson(value) {
+	if (value == null) return null;
+	return JSON.stringify(value);
+}
+
 function parseJson(val, fallback) {
 	if (val == null) return fallback;
 	if (Buffer.isBuffer(val)) {
@@ -65,7 +76,7 @@ class FarmManager {
 				guild_id: id,
 				prefix: 'h',
 				minigame_enabled: true,
-				user_enabled_json: {},
+				user_enabled_json: serializeMysqlJson({}),
 				role_shop_json: null,
 			});
 			row = await knex('farm_guild_settings').where({ guild_id: id }).first();
@@ -119,7 +130,7 @@ class FarmManager {
 				guild_id: id,
 				prefix: 'h',
 				minigame_enabled: enabled,
-				user_enabled_json: {},
+				user_enabled_json: serializeMysqlJson({}),
 				role_shop_json: null,
 			});
 		}
@@ -141,7 +152,7 @@ class FarmManager {
 				guild_id: id,
 				prefix,
 				minigame_enabled: true,
-				user_enabled_json: {},
+				user_enabled_json: serializeMysqlJson({}),
 				role_shop_json: null,
 			});
 		}
@@ -158,7 +169,7 @@ class FarmManager {
 				money: d.money,
 				experience: d.experience,
 				land_slots: d.landSlots,
-				inventory: d.inventory,
+				inventory: serializeMysqlJson(d.inventory),
 				current_crop: null,
 				planted_at: null,
 				last_login: null,
@@ -175,8 +186,10 @@ class FarmManager {
 		if ('money' in updates) data.money = updates.money;
 		if ('experience' in updates) data.experience = updates.experience;
 		if ('landSlots' in updates) data.land_slots = updates.landSlots;
-		if ('inventory' in updates) data.inventory = updates.inventory;
-		if ('currentCrop' in updates) data.current_crop = updates.currentCrop;
+		if ('inventory' in updates) data.inventory = serializeMysqlJson(updates.inventory);
+		if ('currentCrop' in updates) {
+			data.current_crop = updates.currentCrop == null ? null : serializeMysqlJson(updates.currentCrop);
+		}
 		if ('plantedAt' in updates) {
 			data.planted_at = updates.plantedAt ? new Date(updates.plantedAt) : null;
 		}
@@ -198,7 +211,7 @@ class FarmManager {
 		const map = { ...parseJson(row.user_enabled_json, {}) };
 		map[userId] = enabled;
 		await knex('farm_guild_settings').where({ guild_id: id }).update({
-			user_enabled_json: map,
+			user_enabled_json: serializeMysqlJson(map),
 		});
 	}
 
