@@ -1,27 +1,45 @@
 /**
- * Resolves the folder segment immediately under `.../cards/<folder>/file.png` from a public card URL.
+ * Path segments after `.../cards/` (e.g. member slug, rarity folder, filename).
+ * @param {string} [imageUrl]
+ * @returns {string[]|null}
  */
-function getCardImageFolderName(imageUrl) {
-  if (!imageUrl || typeof imageUrl !== 'string') return 'N/A';
+function getCardImagePathSegments(imageUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string') return null;
+  let parts;
   try {
     if (/^https?:\/\//i.test(imageUrl)) {
       const u = new URL(imageUrl);
-      const parts = u.pathname.split('/').filter(Boolean);
-      const i = parts.indexOf('cards');
-      if (i >= 0 && parts[i + 1]) {
-        return decodeURIComponent(parts[i + 1].replace(/\+/g, ' '));
-      }
-      return 'N/A';
+      parts = u.pathname.split('/').filter(Boolean);
+    } else {
+      parts = String(imageUrl).split('/').filter(Boolean);
     }
   } catch {
-    /* fall through to relative */
+    parts = String(imageUrl).split('/').filter(Boolean);
   }
-  const parts = String(imageUrl).split('/').filter(Boolean);
   const i = parts.indexOf('cards');
-  if (i >= 0 && parts[i + 1]) {
-    return decodeURIComponent(parts[i + 1].replace(/\+/g, ' '));
-  }
-  return 'N/A';
+  if (i < 0 || !parts[i + 1]) return null;
+  return parts.slice(i + 1).map((p) => decodeURIComponent(String(p).replace(/\+/g, ' ')));
 }
 
-module.exports = { getCardImageFolderName };
+/**
+ * First segment under `cards/` (legacy helper; for catalog art this is usually the member slug).
+ */
+function getCardImageFolderName(imageUrl) {
+  const segs = getCardImagePathSegments(imageUrl);
+  return segs && segs.length ? segs[0] : 'N/A';
+}
+
+/**
+ * Full relative path under `/cards/` for embeds (e.g. `Eoin / common / fire.png`).
+ */
+function formatCardImagePathLabel(imageUrl) {
+  const segs = getCardImagePathSegments(imageUrl);
+  if (!segs || !segs.length) return 'N/A';
+  return segs.join(' / ');
+}
+
+module.exports = {
+  getCardImagePathSegments,
+  getCardImageFolderName,
+  formatCardImagePathLabel,
+};

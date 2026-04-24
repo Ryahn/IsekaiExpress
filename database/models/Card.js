@@ -6,22 +6,31 @@ class Card extends Model {
     return 'card_data';
   }
 
+  /** DB primary key; use uuid for public lookups where needed. */
   static get idColumn() {
-    return 'uuid';
+    return 'card_id';
   }
 
   static get relationMappings() {
     return {
+      userCards: {
+        relation: Model.HasManyRelation,
+        modelClass: path.join(__dirname, 'UserCard.js'),
+        join: {
+          from: 'card_data.card_id',
+          to: 'user_cards.card_id',
+        },
+      },
       users: {
         relation: Model.ManyToManyRelation,
         modelClass: path.join(__dirname, 'User.js'),
         join: {
-          from: 'card_data.uuid',
+          from: 'card_data.card_id',
           through: {
-            from: 'users_card.card_uuid',
-            to: 'users_card.user_id',
+            from: 'user_cards.card_id',
+            to: 'user_cards.user_id',
           },
-          to: 'users.discord_id',
+          to: 'users.id',
         },
       },
     };
@@ -31,6 +40,7 @@ class Card extends Model {
     return {
       type: 'object',
       properties: {
+        card_id: { type: 'integer' },
         uuid: { type: 'string' },
         name: { type: 'string' },
         description: { type: 'text' },
@@ -38,12 +48,20 @@ class Card extends Model {
         class: { type: 'string' },
         rarity: { type: 'string' },
         stars: { type: 'number' },
-        level: { type: 'number' },
-        power: { type: 'number' },
+        level: { type: ['number', 'null'] },
+        power: { type: ['number', 'null'] },
         discord_id: { type: 'number' },
+        member_id: { type: ['integer', 'null'] },
+        element: { type: ['string', 'null'] },
+        ability_key: { type: ['string', 'null'] },
+        base_atk: { type: ['number', 'null'] },
+        base_def: { type: ['number', 'null'] },
+        base_spd: { type: ['number', 'null'] },
+        base_hp: { type: ['number', 'null'] },
+        base_power: { type: ['number', 'null'] },
         updated_at: { type: 'number' },
         created_at: { type: 'number' },
-      }
+      },
     };
   }
 }

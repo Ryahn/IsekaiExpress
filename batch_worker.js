@@ -1,57 +1,52 @@
 const fs = require('fs');
 const { generateCard } = require('./create_card');
-const { powerScoreAtLevel } = require('./src/bot/tcg/cardLayout');
+const { ELEMENT_IDS } = require('./src/bot/tcg/elements');
 const logger = require('silly-logger');
+
+const BATCH_RARITY_KEYS = ['C', 'UC', 'R', 'EP', 'L', 'M'];
 
 const batchFilePath = process.argv[2];
 
 logger.startup(`Processing batch from ${batchFilePath}...`);
 
 (async () => {
-  // try {
-    const batchData = JSON.parse(fs.readFileSync(batchFilePath, 'utf8'));
+  try {
+  const batchData = JSON.parse(fs.readFileSync(batchFilePath, 'utf8'));
 
-    for (const character of batchData) {
-      logger.info(`Processing character: ${character.name}`);
-      for (const [key, value] of Object.entries(character.rarity)) {
-        if (value) {
-          let power;
-          if (
-            character.powerByRarity
-            && Object.prototype.hasOwnProperty.call(character.powerByRarity, key)
-            && character.powerByRarity[key] != null
-          ) {
-            power = character.powerByRarity[key];
-          } else if (character.power != null && character.power !== '') {
-            power = character.power;
-          } else {
-            power = powerScoreAtLevel(key, character.level);
-          }
-          const card = await generateCard(
-            character.name,
-            key,
-            character.class,
-            character.level,
-            power,
-            character.avatar,
-            character.type,
-            character.discord_id,
-          );
-          logger.info(`Generated card: ${card.fileName}`);
-        }
+  for (const character of batchData) {
+    logger.info(`Processing character: ${character.name}`);
+    const hasRarityConfig = character.rarity
+      && typeof character.rarity === 'object'
+      && Object.keys(character.rarity).length > 0;
+    const rarityKeys = BATCH_RARITY_KEYS.filter((key) => {
+      if (!hasRarityConfig) return true;
+      if (!Object.prototype.hasOwnProperty.call(character.rarity, key)) return false;
+      const v = character.rarity[key];
+      return v !== false && v !== 0;
+    });
+    for (const rarityKey of rarityKeys) {
+      for (const elementId of ELEMENT_IDS) {
+        const card = await generateCard(
+          character.name,
+          rarityKey,
+          character.class,
+          character.avatar,
+          character.type,
+          character.discord_id,
+          elementId,
+        );
+        logger.info(`Generated card: ${card.outputPath}`);
       }
     }
+  }
 
-    logger.success(`Finished processing batch from ${batchFilePath}. Exiting process...`);
-    
-    setTimeout(() => {
-      //logger.debug('Open Handles:', process._getActiveHandles());
-      // logger.debug('Open Requests:', process._getActiveRequests());
-      process.exit(0);
-    }, 1000);
+  logger.success(`Finished processing batch from ${batchFilePath}. Exiting process...`);
 
-  // } catch (error) {
-  //   logger.error(`Error processing batch: ${error.message}`);
-  //   process.exit(1);
-  // }
+  setTimeout(() => {
+    process.exit(0);
+  }, 1000);
+  } catch (err) {
+    logger.error(err.message || String(err));
+    process.exit(1);
+  }
 })();

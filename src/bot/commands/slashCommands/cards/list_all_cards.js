@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { getCardImageFolderName } = require('../../../../../libs/cardImageUrl');
+const { formatCardImagePathLabel } = require('../../../../../libs/cardImageUrl');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -27,6 +27,8 @@ module.exports = {
 				this.where('name', 'like', `%${search}%`)
 					.orWhere('class', 'like', `%${capitalizeFirstLetter(search)}%`)
 					.orWhere('rarity', 'like', `%${search.toUpperCase()}%`)
+					.orWhere('element', 'like', `%${search.toLowerCase()}%`)
+					.orWhere('ability_key', 'like', `%${search.toLowerCase()}%`)
 					.orWhere('image_url', 'like', `%${search.toLowerCase()}%`);
 			});
 		};
@@ -54,13 +56,19 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setTitle(`Cards - Page ${page}`)
-                .setDescription(`Listing cards with pagination\n\`\`\`${client.config.emojis.type.trim()}: Type, ${client.config.emojis.level.trim()}: Level, ${client.config.emojis.power.trim()}: Power, ${client.config.emojis.class.trim()}: Class, ${client.config.emojis.star.trim()}: Stars\`\`\``);
+                .setDescription(`Listing cards with pagination\n\`\`\`${client.config.emojis.type.trim()}: Art path (under /cards/), ${client.config.emojis.level.trim()}: Level, ${client.config.emojis.power.trim()}: Power, ${client.config.emojis.class.trim()}: Class, ${client.config.emojis.star.trim()}: Stars\`\`\``);
 
             cards.forEach(card => {
-                const folder = getCardImageFolderName(card.image_url);
+                const artPath = formatCardImagePathLabel(card.image_url);
+                const catalog = card.base_power != null;
+                const levelDisp = catalog ? '—' : (card.level ?? 'N/A');
+                const powerDisp = catalog ? `${card.base_power} (base Lv1)` : (card.power ?? 'N/A');
+                const abilDisp = catalog
+                    ? (card.ability_key || '—')
+                    : (card.ability_key || '—');
                 embed.addFields(
                     { name: `${card.name} (${card.rarity})`, value: `
-                    ${client.config.emojis.type.trim()}: ${folder} ${client.config.emojis.level.trim()}: ${card.level} ${client.config.emojis.power.trim()}: ${card.power} ${client.config.emojis.class.trim()}: ${card.class} ${client.config.emojis.star.trim()}: ${card.stars}\n
+                    ${client.config.emojis.type.trim()}: ${artPath} ${client.config.emojis.level.trim()}: ${levelDisp} ${client.config.emojis.power.trim()}: ${powerDisp} · El: ${card.element || "-"} · Abil: ${abilDisp} ${client.config.emojis.class.trim()}: ${card.class} ${client.config.emojis.star.trim()}: ${card.stars}\n
                     **ID:** ${card.uuid}` }
                 );
             });

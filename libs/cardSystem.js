@@ -1,5 +1,7 @@
 const config = require('../config');
 const { query } = require('../database/db');
+const tcgEconomy = require('./tcgEconomy');
+const tcgInventory = require('./tcgInventory');
 
 const self = module.exports = {
     getCard: (cardName, typee) => {
@@ -37,5 +39,14 @@ const self = module.exports = {
 	},
 
 
-	giveCard: (cardName, tyapee, user) => {}
-}
+	/**
+	 * Grant a catalog template to a player (new `user_cards` row, rolled ability).
+	 * @param {import('discord.js').Client} client
+	 * @param {{ id: string, username: string }} discordUser
+	 * @param {{ uuid?: string, cardId?: number }} opts
+	 */
+	giveCard: tcgInventory.grantCardToPlayer,
+
+	/** @type {typeof tcgEconomy.awardTcgBattleXp} */
+	awardTcgBattleXp: tcgEconomy.awardTcgBattleXp,
+};

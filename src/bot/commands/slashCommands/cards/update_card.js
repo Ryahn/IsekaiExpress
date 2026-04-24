@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
 const path = require('path');
-const { getCardImageFolderName } = require('../../../../../libs/cardImageUrl');
+const { formatCardImagePathLabel } = require('../../../../../libs/cardImageUrl');
 
 module.exports = {
     category: path.basename(__dirname),
@@ -52,20 +52,36 @@ module.exports = {
 			}
 
 			const stars = '⭐️'.repeat(card.stars);
-			const folder = getCardImageFolderName(card.image_url);
+			const artPath = formatCardImagePathLabel(card.image_url);
+			const catalog = card.base_power != null;
+
+			const fields = [
+				{ name: 'UUID', value: card.uuid || 'N/A', inline: false },
+				{ name: 'Stars', value: stars || 'N/A', inline: false },
+				{ name: 'Class', value: card.class || 'N/A', inline: true },
+				{ name: 'Rarity', value: card.rarity || 'N/A', inline: true },
+				{ name: 'Art path', value: artPath, inline: false },
+			];
+			if (catalog) {
+				fields.push(
+					{ name: 'Base power (Lv1)', value: String(card.base_power), inline: true },
+					{
+						name: 'Base stats',
+						value: `ATK ${card.base_atk} · DEF ${card.base_def} · SPD ${card.base_spd} · HP ${card.base_hp}`,
+						inline: false,
+					},
+				);
+			} else {
+				fields.push(
+					{ name: 'Level', value: String(card.level) || 'N/A', inline: true },
+					{ name: 'Power', value: String(card.power) || 'N/A', inline: true },
+				);
+			}
 
 			const embed = new EmbedBuilder()
 				.setTitle(card.name)
 				.setDescription(card.description || 'No description')
-				.addFields(
-					{ name: 'UUID', value: card.uuid || 'N/A', inline: false },
-					{ name: 'Stars', value: stars || 'N/A', inline: false },
-					{ name: 'Level', value: String(card.level) || 'N/A', inline: true },
-					{ name: 'Power', value: String(card.power) || 'N/A', inline: true },
-					{ name: 'Class', value: card.class || 'N/A', inline: true },
-					{ name: 'Rarity', value: card.rarity || 'N/A', inline: true },
-					{ name: 'Folder', value: folder || 'N/A', inline: true }
-				)
+				.addFields(fields)
 				.setImage(card.image_url || null);
 
 			await interaction.editReply({ embeds: [embed] });
