@@ -71,16 +71,10 @@ async function runSpar(client, discordUser) {
     hp: Math.round(Number(enemyTemplate.base_hp) * mult),
   };
 
-  const sim = tcgBattle.simulateMainVsMain(
-    pStats,
-    enemyStats,
-    playerRow.element,
-    enemyTemplate.element,
-    {
-      playerLabel: playerRow.name || 'You',
-      enemyLabel: enemyTemplate.name ? `${enemyTemplate.name} (spar)` : 'Spar bot',
-    },
-  );
+  const sim = tcgBattle.simulateMainVsMain(pStats, enemyStats, playerRow.element, enemyTemplate.element, {
+    playerLabel: playerRow.name || 'You',
+    enemyLabel: enemyTemplate.name ? `${enemyTemplate.name} (spar)` : 'Spar bot',
+  });
 
   const won = sim.outcome === 'win';
   let goldGained = 0;

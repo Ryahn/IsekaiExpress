@@ -4,6 +4,8 @@ const tcgEconomy = require('../../../../../libs/tcgEconomy');
 const tcgInventory = require('../../../../../libs/tcgInventory');
 const tcgLoadout = require('../../../../../libs/tcgLoadout');
 const tcgSpar = require('../../../../../libs/tcgSpar');
+const tcgPve = require('../../../../../libs/tcgPve');
+const { battlesRequiredForTier } = require('../../../../../libs/tcgPveConfig');
 const { DISPLAY_LABEL } = require('../../../tcg/elements');
 const { statLevelMultiplier } = require('../../../tcg/cardLayout');
 
@@ -137,6 +139,29 @@ module.exports = {
         .setName('spar')
         .setDescription(
           `Practice fight: your **main** vs random catalog card (win **+${tcgSpar.SPAR_WIN_GOLD}**g, PvE XP rules)`,
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub.setName('pve_progress').setDescription('PvE region, tier, and progress toward tier clear'),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('pve_fight')
+        .setDescription('Fight a PvE battle (main card; region rules, gold by tier, advances on win)'),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('pve_travel')
+        .setDescription('Move to an unlocked region/tier to revisit content (resets streak & tier wins)')
+        .addIntegerOption((o) =>
+          o.setName('region').setDescription('Region 1–6').setRequired(true).setMinValue(1).setMaxValue(6),
+        )
+        .addIntegerOption((o) =>
+          o
+            .setName('tier')
+            .setDescription('Tier for that region (omit = first tier available in region)')
+            .setMinValue(1)
+            .setMaxValue(10),
         ),
     )
     .addSubcommand((sub) =>
@@ -329,7 +354,7 @@ module.exports = {
           `${fmt(detail.main, 'Main', detail.row.main_user_card_id)}\n`
             + `${fmt(detail.support1, 'Support 1', detail.row.support1_user_card_id)}\n`
             + `${fmt(detail.support2, 'Support 2', detail.row.support2_user_card_id)}\n\n`
-            + '_Support bonuses and region effects are not applied in this build — main card only for `/tcg spar`._',
+            + '_Support synergies are not in combat yet. **Main** is used for `/tcg spar` and `/tcg pve_fight` (PvE applies region passives to the fight)._',
         )
         .setColor(0x9b59b6);
       return interaction.editReply({ embeds: [embed], ephemeral: true });
@@ -376,6 +401,133 @@ module.exports = {
           { name: 'Result', value: `${sim.outcome.toUpperCase()} · ${sim.rounds} steps`, inline: true },
           { name: 'Gold', value: goldLine, inline: true },
           { name: 'XP', value: 'Applied via PvE rules (`awardTcgBattleXp`)', inline: false },
+        )
+        .setColor(won ? 0x57f287 : 0xed4245);
+      return interaction.editReply({ embeds: [embed], ephemeral: true });
+    }
+
+    if (sub === 'pve_progress') {
+      const s = await tcgPve.getProgressSummary(client, discordUser);
+      if (!s) {
+        return interaction.editReply({ content: 'Could not load PvE progress.', ephemeral: true });
+      }
+      const need = s.battlesRequired;
+      const wins = Number(s.wins_in_tier);
+      const nextIsBoss = need > 0 && wins === need - 1;
+      const embed = new EmbedBuilder()
+        .setTitle('PvE progression')
+        .setDescription(
+          `**${s.regionName}** · Tier **${s.tierRoman}**\n`
+            + `Wins this tier: **${wins} / ${need}**${
+              nextIsBoss
+                ? '\n_Next fight: **Battle Boss** (tougher enemy, bonus gold on win)._\n'
+                : '\n'
+            }`
+            + `Regions unlocked: **1 – ${s.max_region_unlocked}**\n`
+            + `Win streak (Dev Sanctum ATK bonus): **${s.pve_win_streak}**\n`
+            + `Battle boss pool pity: **${Number(s.pve_bb_pity) || 0} / 11** (card on win, resets on drop)`,
+        )
+        .setFooter({
+          text: 'Battle boss wins can drop a random pool card (40% / 5% dupe; 11th forces). Tier-boss fights later.',
+        })
+        .setColor(0x3498db);
+      return interaction.editReply({ embeds: [embed], ephemeral: true });
+    }
+
+    if (sub === 'pve_travel') {
+      const region = interaction.options.getInteger('region', true);
+      const tierOpt = interaction.options.getInteger('tier');
+      const t = await tcgPve.travelTo(client, discordUser, { region, tier: tierOpt });
+      if (!t.ok) {
+        return interaction.editReply({ content: t.error, ephemeral: true });
+      }
+      const need = battlesRequiredForTier(t.progress.current_tier);
+      const embed = new EmbedBuilder()
+        .setTitle('PvE — travel')
+        .setDescription(
+          `**${t.regionName}** · Tier **${t.tierRoman}**\n`
+            + `Wins this tier: **0 / ${need}**\n`
+            + 'Win streak was reset. Use `/tcg pve_fight` to continue.',
+        )
+        .setColor(0x3498db);
+      return interaction.editReply({ embeds: [embed], ephemeral: true });
+    }
+
+    if (sub === 'pve_fight') {
+      const result = await tcgPve.runPveFight(client, discordUser);
+      if (!result.ok) {
+        return interaction.editReply({ content: result.error, ephemeral: true });
+      }
+      const {
+        sim,
+        goldGained,
+        won,
+        playerLabel,
+        enemyLabel,
+        playerLevel,
+        regionName,
+        tierRoman,
+        progress,
+        battlesRequired,
+        tierClearBonus,
+        tierCleared,
+        battleBossGold,
+        isBattleBoss,
+        battleBossDrop,
+      } = result;
+      const title = won ? 'PvE — victory' : sim.outcome === 'draw' ? 'PvE — draw' : 'PvE — defeat';
+      const logText = sim.log.slice(0, 12).join('\n') || '—';
+      let goldLine = '**0**g';
+      if (won) {
+        const nexus = result.fightRegion === 1 ? ' · Nexus +10% on gold' : '';
+        const clear =
+          tierCleared && tierClearBonus > 0 ? ` · **${tierClearBonus}**g tier clear` : '';
+        const boss = battleBossGold > 0 ? ` · **${battleBossGold}**g battle boss` : '';
+        goldLine = `**+${goldGained}**g${boss}${clear}${nexus}`;
+      }
+      const progLine = won
+        ? `Tier **${tierRoman}** · ${progress.wins_in_tier} / ${battlesRequired} wins`
+        : `Tier **${tierRoman}** · ${progress.wins_in_tier} / ${battlesRequired} wins (no progress on loss)`;
+      let poolDropField = null;
+      if (isBattleBoss && won && battleBossDrop) {
+        const d = battleBossDrop;
+        if (d.granted) {
+          const el = d.template.element ? `${DISPLAY_LABEL[d.template.element] || d.template.element}` : '—';
+          poolDropField = {
+            name: 'Pool drop',
+            value:
+              `**${d.template.name}** · ${d.template.rarity} · ${el} · copy **#${d.userCardId}**${
+                d.hardPity ? ' _(pity)_' : ''
+              }`,
+            inline: false,
+          };
+        } else if (d.reason === 'grant_failed') {
+          poolDropField = {
+            name: 'Pool drop',
+            value: `No card — ${d.error}`,
+            inline: false,
+          };
+        } else {
+          poolDropField = {
+            name: 'Pool drop',
+            value: `No card this time · pity **${d.pityAfter} / 11**`,
+            inline: false,
+          };
+        }
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle(title)
+        .setDescription(
+          `**${regionName}** · ${progLine}${isBattleBoss ? '\n_Battle Boss encounter._' : ''}\n`
+            + `**${playerLabel}** (Lv${playerLevel}) vs **${enemyLabel}**\n`
+            + `${sim.elementSummary}\n\n${logText}${sim.log.length > 12 ? '\n…' : ''}`,
+        )
+        .addFields(
+          { name: 'Result', value: sim.outcome.toUpperCase(), inline: true },
+          { name: 'Gold', value: goldLine, inline: true },
+          { name: 'Streak', value: String(progress.pve_win_streak), inline: true },
+          ...(poolDropField ? [poolDropField] : []),
         )
         .setColor(won ? 0x57f287 : 0xed4245);
       return interaction.editReply({ embeds: [embed], ephemeral: true });

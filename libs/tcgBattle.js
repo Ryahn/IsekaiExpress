@@ -11,16 +11,36 @@ function damageForHit(attackerAtk, attackerElement, defenderDef, defenderElement
 
 /**
  * Turn-based: higher SPD strikes first each round; then the other counterattacks if alive.
- * Passives / loadout synergies not applied yet (Stage 4 baseline).
+ *
+ * @param {object} opts
+ * @param {string} [opts.playerLabel]
+ * @param {string} [opts.enemyLabel]
+ * @param {number} [opts.maxRounds=40]
+ * @param {boolean} [opts.fracturedMeridianSpdSwap] Region 6 — swap effective SPD at start of rounds 3, 6, 9…
  */
-function simulateMainVsMain(playerStats, enemyStats, playerElement, enemyElement, labels = {}, maxRounds = 40) {
-  const { playerLabel = 'You', enemyLabel = 'Foe' } = labels;
+function simulateMainVsMain(playerStats, enemyStats, playerElement, enemyElement, opts = {}) {
+  const {
+    playerLabel = 'You',
+    enemyLabel = 'Foe',
+    maxRounds = 40,
+    fracturedMeridianSpdSwap = false,
+  } = opts;
+
+  let spdP = playerStats.spd;
+  let spdE = enemyStats.spd;
   let hpP = playerStats.hp;
   let hpE = enemyStats.hp;
   const log = [];
 
   for (let round = 1; round <= maxRounds && hpP > 0 && hpE > 0; round += 1) {
-    const playerFirst = playerStats.spd >= enemyStats.spd;
+    if (fracturedMeridianSpdSwap && round > 1 && round % 3 === 0) {
+      const t = spdP;
+      spdP = spdE;
+      spdE = t;
+      log.push(`_R${round}: SPD swap (Fractured Meridian)_`);
+    }
+
+    const playerFirst = spdP >= spdE;
 
     if (playerFirst) {
       const dmg = damageForHit(playerStats.atk, playerElement, enemyStats.def, enemyElement);
