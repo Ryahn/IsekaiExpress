@@ -8,6 +8,7 @@ const { getCachedAllowedChannel } = require('../../utils/cache');
 const { checkMessageGlobalCommandLock } = require('../../middleware/globalCommandLock');
 const { checkCommandCooldown, setCooldown } = require('../../middleware/commandMiddleware');
 const { executeWithRateLimit } = require('../../middleware/apiMiddleware');
+const { handleFarmMessage } = require('./farmMessage');
 
 function parseCommandContent(content, message) {
     const randomPattern = /\{random:(.*?)\}/g;
@@ -48,6 +49,11 @@ module.exports = class MessageEvent extends BaseEvent {
                 } catch (error) {
                     client.logger.error('Error updating channel stats:', error);
                 }
+            }
+
+            const farmHandled = await handleFarmMessage(message);
+            if (farmHandled) {
+                return;
             }
 
             if (usedPrefix === prefix) {

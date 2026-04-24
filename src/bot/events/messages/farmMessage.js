@@ -1,4 +1,3 @@
-const BaseEvent = require('../../utils/structures/BaseEvent');
 const { farmManager } = require('../../utils/farm/farmManager');
 const { handleFarmHelp } = require('../../commands/chatCommands/farm/help');
 const { handleFarmLogin } = require('../../commands/chatCommands/farm/login');
@@ -10,7 +9,6 @@ const { handleFarmSell } = require('../../commands/chatCommands/farm/sell');
 const { handleFarmExpand } = require('../../commands/chatCommands/farm/expand');
 const { handleCropList } = require('../../commands/chatCommands/farm/cropList');
 const { handleFarmBuy } = require('../../commands/chatCommands/farm/buy');
-const { handleRoleList } = require('../../commands/chatCommands/farm/roleShop');
 
 /**
  * Prefix-based farm minigame (separate from guild cmdPrefix).
@@ -123,18 +121,14 @@ async function handleFarmMessage(message) {
 		}
 	}
 	catch (err) {
-		message.client.logger.error('Farm command error:', err);
+		const errText =
+			err instanceof Error
+				? `${err.message}${err.stack ? `\n${err.stack}` : ''}`
+				: String(err);
+		message.client.logger.error(`Farm command error: ${errText}`);
 		await message.reply('❌ An error occurred while processing your command.').catch(() => undefined);
 		return true;
 	}
 }
 
-module.exports = class FarmMessageEvent extends BaseEvent {
-	constructor() {
-		super('messageCreate');
-	}
-
-	async run(client, message) {
-		await handleFarmMessage(message);
-	}
-};
+module.exports = { handleFarmMessage };
