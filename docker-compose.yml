@@ -69,9 +69,24 @@ services:
     restart: unless-stopped
     volumes:
       - ./src/bot/media/cards:/usr/src/app/src/bot/media/cards
+    networks:
+      - default
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.f95bot-web.rule=Host(`bot.zonies.xyz`)"
+      - "traefik.http.routers.f95bot-web.entrypoints=websecure"
+      - "traefik.http.routers.f95bot-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.f95bot-web.middlewares=public@file"
+      - "traefik.http.services.f95bot-web.loadbalancer.server.port=${PORT:-3000}"
+      - "traefik.http.routers.f95bot-web.service=f95bot-web"
     profiles:
       - web
 
 volumes:
   mysql_data:
   redis_data:
+
+networks:
+  traefik-network:
+    external: true
