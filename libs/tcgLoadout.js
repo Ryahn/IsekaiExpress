@@ -57,6 +57,9 @@ async function getLoadoutDetail(client, discordUser) {
       'card_data.name',
       'card_data.rarity',
       'card_data.element',
+      'card_data.class',
+      'card_data.member_id',
+      'card_data.tcg_region',
       'card_data.image_url',
     );
 

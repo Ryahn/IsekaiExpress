@@ -4,6 +4,7 @@ const tcgEconomy = require('./tcgEconomy');
 const tcgInventory = require('./tcgInventory');
 const tcgLoadout = require('./tcgLoadout');
 const tcgBattle = require('./tcgBattle');
+const tcgSynergy = require('./tcgSynergy');
 const {
   REGION_NAMES,
   TIER_ROMAN,
@@ -334,6 +335,18 @@ async function runPveFight(client, discordUser) {
   const isBattleBoss =
     tierBattlesRequired > 0 && Number(progress.wins_in_tier) === tierBattlesRequired - 1;
 
+  const enemyTemplate = await pickEnemyTemplate(region, tier);
+  if (!enemyTemplate) {
+    return { ok: false, error: 'No catalog templates available for this encounter.' };
+  }
+
+  const synMod = tcgSynergy.computeCombatSynergy(
+    { main: detail.main, support1: detail.support1, support2: detail.support2 },
+    enemyTemplate.element,
+    fightRegion,
+  );
+  pStats = tcgSynergy.applySynergyToStats(pStats, synMod);
+
   if (region === 3 && Number(progress.pve_win_streak) > 0) {
     const bonus = 1 + 0.05 * Number(progress.pve_win_streak);
     pStats = {
@@ -346,11 +359,6 @@ async function runPveFight(client, discordUser) {
       ...pStats,
       spd: Math.round(pStats.spd * 1.05),
     };
-  }
-
-  const enemyTemplate = await pickEnemyTemplate(region, tier);
-  if (!enemyTemplate) {
-    return { ok: false, error: 'No catalog templates available for this encounter.' };
   }
 
   const lv = Math.min(5, Math.max(1, Number(playerRow.level) || 1));
@@ -390,6 +398,7 @@ async function runPveFight(client, discordUser) {
     playerLabel: playerRow.name || 'You',
     enemyLabel: enemyTemplate.name ? `${enemyTemplate.name} (PvE${bossTag})` : `Enemy${bossTag}`,
     fracturedMeridianSpdSwap: region === 6,
+    defenderWeaknessImmune: synMod.weaknessImmune,
   });
 
   const won = sim.outcome === 'win';
@@ -419,7 +428,9 @@ async function runPveFight(client, discordUser) {
         battleBossGoldAmount = Math.floor(battleBossGoldAmount * 1.1);
       }
     }
-    const totalGold = pveWinGold + tierClearBonusAmount + battleBossGoldAmount;
+    const totalGold = Math.floor(
+      (pveWinGold + tierClearBonusAmount + battleBossGoldAmount) * synMod.goldMult,
+    );
     const g = await tcgEconomy.addGold(client, discordUser, totalGold);
     if (!g.ok) return g;
     goldGained = totalGold;
@@ -483,6 +494,9 @@ async function runPveFight(client, discordUser) {
     enemyLabel: enemyTemplate.name,
     playerLevel: lv,
     battleBossDrop,
+    synergyLines: synMod.summaryLines,
+    synergyGoldMult: synMod.goldMult,
+    synergyWeaknessImmune: synMod.weaknessImmune,
   };
 }
 

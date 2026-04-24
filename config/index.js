@@ -7,6 +7,19 @@ const str = (k, d = '') => {
   return v;
 };
 
+/** Trim and strip one pair of surrounding quotes (Compose / copy-paste often leaves them in MYSQL_PASS). */
+const unquoteEnv = (v) => {
+  if (v === undefined || v === '') return '';
+  const t = String(v).trim();
+  if (
+    t.length >= 2 &&
+    ((t[0] === '"' && t[t.length - 1] === '"') || (t[0] === "'" && t[t.length - 1] === "'"))
+  ) {
+    return t.slice(1, -1);
+  }
+  return t;
+};
+
 const int = (k, d) => {
   const v = parseInt(str(k, ''), 10);
   return Number.isNaN(v) ? d : v;
@@ -49,7 +62,7 @@ module.exports = {
     host: str('MYSQL_HOST', 'localhost'),
     port: int('MYSQL_PORT', 3306),
     user: str('MYSQL_USER', 'root'),
-    password: str('MYSQL_PASS', ''),
+    password: unquoteEnv(str('MYSQL_PASS', '')),
     database: str('MYSQL_DB', 'f95bot'),
     runMigrations: bool('MYSQL_RUN_MIGRATIONS', false)
   },

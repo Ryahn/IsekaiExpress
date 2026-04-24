@@ -4,6 +4,7 @@ const tcgEconomy = require('./tcgEconomy');
 const tcgInventory = require('./tcgInventory');
 const tcgLoadout = require('./tcgLoadout');
 const tcgBattle = require('./tcgBattle');
+const tcgSynergy = require('./tcgSynergy');
 
 /** [CardSystem.md] PvE Tier I–III win — used for casual spar until region progression ships. */
 const SPAR_WIN_GOLD = 10;
@@ -45,7 +46,7 @@ async function runSpar(client, discordUser) {
     return { ok: false, error: 'Main card is no longer in your inventory. Pick another main.' };
   }
 
-  const pStats = tcgInventory.combatStatsFromJoinedRow(playerRow);
+  let pStats = tcgInventory.combatStatsFromJoinedRow(playerRow);
   if (!pStats) {
     return { ok: false, error: 'Main card is missing base stats (not a catalog template).' };
   }
@@ -62,6 +63,12 @@ async function runSpar(client, discordUser) {
     return { ok: false, error: 'No catalog templates in the database.' };
   }
 
+  const synMod = tcgSynergy.computeCombatSynergy(
+    { main: detail.main, support1: detail.support1, support2: detail.support2 },
+    enemyTemplate.element,
+  );
+  pStats = tcgSynergy.applySynergyToStats(pStats, synMod);
+
   const lv = Math.min(5, Math.max(1, Number(playerRow.level) || 1));
   const mult = statLevelMultiplier(lv);
   const enemyStats = {
@@ -74,14 +81,16 @@ async function runSpar(client, discordUser) {
   const sim = tcgBattle.simulateMainVsMain(pStats, enemyStats, playerRow.element, enemyTemplate.element, {
     playerLabel: playerRow.name || 'You',
     enemyLabel: enemyTemplate.name ? `${enemyTemplate.name} (spar)` : 'Spar bot',
+    defenderWeaknessImmune: synMod.weaknessImmune,
   });
 
   const won = sim.outcome === 'win';
   let goldGained = 0;
   if (won) {
-    const g = await tcgEconomy.addGold(client, discordUser, SPAR_WIN_GOLD);
+    const winGold = Math.floor(SPAR_WIN_GOLD * synMod.goldMult);
+    const g = await tcgEconomy.addGold(client, discordUser, winGold);
     if (!g.ok) return g;
-    goldGained = SPAR_WIN_GOLD;
+    goldGained = winGold;
   }
 
   await tcgEconomy.awardTcgBattleXp(client, discordUser, { won, isPvp: false });
@@ -94,6 +103,9 @@ async function runSpar(client, discordUser) {
     playerLabel: playerRow.name,
     enemyLabel: enemyTemplate.name,
     playerLevel: lv,
+    synergyLines: synMod.summaryLines,
+    synergyGoldMult: synMod.goldMult,
+    synergyWeaknessImmune: synMod.weaknessImmune,
   };
 }
 

@@ -5,8 +5,9 @@ const tcgInventory = require('../../../../../libs/tcgInventory');
 const tcgLoadout = require('../../../../../libs/tcgLoadout');
 const tcgSpar = require('../../../../../libs/tcgSpar');
 const tcgPve = require('../../../../../libs/tcgPve');
+const tcgSynergy = require('../../../../../libs/tcgSynergy');
 const { battlesRequiredForTier } = require('../../../../../libs/tcgPveConfig');
-const { DISPLAY_LABEL } = require('../../../tcg/elements');
+const { DISPLAY_LABEL, ELEMENT_IDS } = require('../../../tcg/elements');
 const { statLevelMultiplier } = require('../../../tcg/cardLayout');
 
 function formatDuration(sec) {
@@ -98,6 +99,21 @@ module.exports = {
     )
     .addSubcommand((sub) =>
       sub.setName('loadout').setDescription('View your main + 2 support slots'),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('synergy')
+        .setDescription('Preview combat synergies (spar vs your current PvE region)')
+        .addStringOption((o) => {
+          o
+            .setName('enemy_element')
+            .setDescription('Optional: include Counter Build vs this element');
+          o.addChoices({ name: '— (skip Counter Build)', value: 'none' });
+          for (const k of ELEMENT_IDS) {
+            o.addChoices({ name: DISPLAY_LABEL[k], value: k });
+          }
+          return o;
+        }),
     )
     .addSubcommand((sub) =>
       sub
@@ -346,7 +362,12 @@ module.exports = {
         }
         if (!c) return `**${label}:** — empty —`;
         const el = c.element ? (DISPLAY_LABEL[c.element] || c.element) : '—';
-        return `**${label}:** ${c.name} (#${c.user_card_id}) · ${c.rarity} · Lv${c.level} · ${el}`;
+        const reg =
+          c.tcg_region != null && c.tcg_region !== ''
+            ? ` · PvE region **${c.tcg_region}**`
+            : '';
+        const cl = c.class ? ` · ${c.class}` : '';
+        return `**${label}:** ${c.name} (#${c.user_card_id}) · ${c.rarity} · Lv${c.level} · ${el}${cl}${reg}`;
       };
       const embed = new EmbedBuilder()
         .setTitle('Loadout')
@@ -354,8 +375,68 @@ module.exports = {
           `${fmt(detail.main, 'Main', detail.row.main_user_card_id)}\n`
             + `${fmt(detail.support1, 'Support 1', detail.row.support1_user_card_id)}\n`
             + `${fmt(detail.support2, 'Support 2', detail.row.support2_user_card_id)}\n\n`
-            + '_Support synergies are not in combat yet. **Main** is used for `/tcg spar` and `/tcg pve_fight` (PvE applies region passives to the fight)._',
+            + '_Synergies in **`/tcg spar`** & **`/tcg pve_fight`** (60% cap). Preview: **`/tcg synergy`**. **Home Turf:** `tcg_region` 1–6, PvE only. **Class:** Commander / Guardian / Artisan (+aliases)._',
         )
+        .setFooter({ text: '/tcg synergy — optional enemy_element for Counter Build' })
+        .setColor(0x9b59b6);
+      return interaction.editReply({ embeds: [embed], ephemeral: true });
+    }
+
+    if (sub === 'synergy') {
+      const enemyOpt = interaction.options.getString('enemy_element');
+      const enemyEl = enemyOpt && enemyOpt !== 'none' ? enemyOpt : null;
+
+      const detail = await tcgLoadout.getLoadoutDetail(client, discordUser);
+      if (!detail || !detail.row.main_user_card_id) {
+        return interaction.editReply({
+          content: 'Equip a **main** card first (`/tcg equip`).',
+          ephemeral: true,
+        });
+      }
+
+      const summary = await tcgPve.getProgressSummary(client, discordUser);
+      if (!summary) {
+        return interaction.editReply({ content: 'Could not load PvE progress.', ephemeral: true });
+      }
+
+      const loadout = {
+        main: detail.main,
+        support1: detail.support1,
+        support2: detail.support2,
+      };
+
+      const synSpar = tcgSynergy.computeCombatSynergy(loadout, enemyEl, null);
+      const synPve = tcgSynergy.computeCombatSynergy(
+        loadout,
+        enemyEl,
+        Number(summary.current_region),
+      );
+
+      const fmt = (syn, label) => {
+        const lines =
+          syn.summaryLines && syn.summaryLines.length
+            ? syn.summaryLines.map((l) => `· ${l}`).join('\n')
+            : '_No synergies matched — try supports, classes, rarities, elements, or `tcg_region`._';
+        const bits = [];
+        if (syn.weaknessImmune) bits.push('Weakness immunity');
+        if (syn.goldMult > 1) bits.push(`×${syn.goldMult.toFixed(2)} battle gold`);
+        const foot = bits.length ? `\n_${bits.join(' · ')}_` : '';
+        return `**${label}**\n${lines}${foot}`;
+      };
+
+      const enLine = enemyEl
+        ? `Counter Build includes **${DISPLAY_LABEL[enemyEl] || enemyEl}**.`
+        : '_Pick **enemy_element** to preview Counter Build._';
+
+      const embed = new EmbedBuilder()
+        .setTitle('Loadout — synergy preview')
+        .setDescription(
+          `${fmt(synSpar, 'Spar (no Home Turf)')}\n\n${fmt(
+            synPve,
+            `PvE — ${summary.regionName} · Tier ${summary.tierRoman}`,
+          )}\n\n${enLine}\n_Bonuses use the 60% cap ([CardSystem.md])._`,
+        )
+        .setFooter({ text: '/tcg pve_fight uses the PvE column; /tcg spar uses the Spar column.' })
         .setColor(0x9b59b6);
       return interaction.editReply({ embeds: [embed], ephemeral: true });
     }
@@ -387,14 +468,23 @@ module.exports = {
       if (!result.ok) {
         return interaction.editReply({ content: result.error, ephemeral: true });
       }
-      const { sim, goldGained, won, playerLabel, enemyLabel, playerLevel } = result;
+      const { sim, goldGained, won, playerLabel, enemyLabel, playerLevel, synergyLines, synergyGoldMult } =
+        result;
       const title = won ? 'Spar — victory' : sim.outcome === 'draw' ? 'Spar — draw' : 'Spar — defeat';
       const logText = sim.log.slice(0, 14).join('\n') || '—';
-      const goldLine = goldGained ? `**+${goldGained}**g` : '**0**g (win for gold)';
+      const goldLine = goldGained
+        ? `**+${goldGained}**g${
+            synergyGoldMult > 1 ? ` _(×${synergyGoldMult.toFixed(2)} from Pure / Triangle)_` : ''
+          }`
+        : '**0**g (win for gold)';
+      const synBlock =
+        synergyLines && synergyLines.length
+          ? `\n_Synergy:_ ${synergyLines.join(' · ')}\n`
+          : '';
       const embed = new EmbedBuilder()
         .setTitle(title)
         .setDescription(
-          `**${playerLabel}** (Lv${playerLevel} main) vs **${enemyLabel}** (scaled)\n`
+          `**${playerLabel}** (Lv${playerLevel} main) vs **${enemyLabel}** (scaled)${synBlock}`
             + `${sim.elementSummary}\n\n${logText}${sim.log.length > 14 ? '\n…' : ''}`,
         )
         .addFields(
@@ -474,6 +564,8 @@ module.exports = {
         battleBossGold,
         isBattleBoss,
         battleBossDrop,
+        synergyLines,
+        synergyGoldMult,
       } = result;
       const title = won ? 'PvE — victory' : sim.outcome === 'draw' ? 'PvE — draw' : 'PvE — defeat';
       const logText = sim.log.slice(0, 12).join('\n') || '—';
@@ -483,7 +575,9 @@ module.exports = {
         const clear =
           tierCleared && tierClearBonus > 0 ? ` · **${tierClearBonus}**g tier clear` : '';
         const boss = battleBossGold > 0 ? ` · **${battleBossGold}**g battle boss` : '';
-        goldLine = `**+${goldGained}**g${boss}${clear}${nexus}`;
+        const synGold =
+          synergyGoldMult > 1 ? ` · ×${synergyGoldMult.toFixed(2)} synergy gold` : '';
+        goldLine = `**+${goldGained}**g${boss}${clear}${nexus}${synGold}`;
       }
       const progLine = won
         ? `Tier **${tierRoman}** · ${progress.wins_in_tier} / ${battlesRequired} wins`
@@ -516,10 +610,15 @@ module.exports = {
         }
       }
 
+      const synLine =
+        synergyLines && synergyLines.length
+          ? `\n_Synergy:_ ${synergyLines.join(' · ')}`
+          : '';
+
       const embed = new EmbedBuilder()
         .setTitle(title)
         .setDescription(
-          `**${regionName}** · ${progLine}${isBattleBoss ? '\n_Battle Boss encounter._' : ''}\n`
+          `**${regionName}** · ${progLine}${isBattleBoss ? '\n_Battle Boss encounter._' : ''}${synLine}\n`
             + `**${playerLabel}** (Lv${playerLevel}) vs **${enemyLabel}**\n`
             + `${sim.elementSummary}\n\n${logText}${sim.log.length > 12 ? '\n…' : ''}`,
         )
