@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en-US" dir="ltr" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="IsekaiExpress farming minigame — commands, crops, economy, and strategy.">
+  <title>Farming guide · IsekaiExpress</title>
+  <link rel="shortcut icon" type="image/x-icon" href="/public/assets/img/favicons/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link href="/public/assets/css/theme.min.css" rel="stylesheet">
+  <link href="/public/assets/css/custom.css" rel="stylesheet">
+  <style>
+    :root {
+      --farm-bg: #0c0f12;
+      --farm-surface: #141a21;
+      --farm-border: rgba(120, 200, 150, 0.12);
+      --farm-accent: #6ecf8e;
+      --farm-accent-dim: #4a9d63;
+      --farm-muted: #8b9aab;
+      --farm-warn: #e8c468;
+    }
+    .farm-docs {
+      font-family: "DM Sans", system-ui, sans-serif;
+      background: var(--farm-bg);
+      color: #e6edf3;
+      min-height: 100vh;
+    }
+    .farm-docs__hero {
+      background: linear-gradient(165deg, var(--farm-surface) 0%, var(--farm-bg) 55%);
+      border-bottom: 1px solid var(--farm-border);
+      padding: 2.5rem 0 2rem;
+    }
+    .farm-docs__hero h1 {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.5rem;
+      color: #f0f4f8;
+    }
+    .farm-docs__hero p.lead {
+      color: var(--farm-muted);
+      max-width: 42rem;
+      margin: 0;
+      font-size: 1.05rem;
+    }
+    .farm-docs__badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--farm-accent);
+      border: 1px solid var(--farm-border);
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      margin-bottom: 0.75rem;
+    }
+    .farm-docs__toc {
+      position: sticky;
+      top: 1rem;
+      align-self: start;
+      font-size: 0.9rem;
+    }
+    .farm-docs__toc a {
+      color: var(--farm-muted);
+      text-decoration: none;
+      display: block;
+      padding: 0.35rem 0;
+      border-left: 2px solid transparent;
+      padding-left: 0.75rem;
+    }
+    .farm-docs__toc a:hover { color: var(--farm-accent); border-left-color: var(--farm-accent-dim); }
+    .farm-docs section {
+      margin-bottom: 3rem;
+      scroll-margin-top: 1.25rem;
+    }
+    .farm-docs h2 {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 1.65rem;
+      font-weight: 400;
+      margin: 0 0 1rem;
+      color: #f0f4f8;
+    }
+    .farm-docs h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 1.5rem 0 0.65rem;
+      color: #c5d4e0;
+    }
+    .farm-docs .callout {
+      background: var(--farm-surface);
+      border: 1px solid var(--farm-border);
+      border-radius: 0.5rem;
+      padding: 1rem 1.15rem;
+      margin: 1rem 0;
+    }
+    .farm-docs .callout--warn {
+      border-color: rgba(232, 196, 104, 0.35);
+      color: #f0e6c8;
+    }
+    .farm-docs table {
+      width: 100%;
+      font-size: 0.875rem;
+      border-collapse: collapse;
+    }
+    .farm-docs table th,
+    .farm-docs table td {
+      padding: 0.55rem 0.65rem;
+      text-align: left;
+      border-bottom: 1px solid var(--farm-border);
+    }
+    .farm-docs table th {
+      color: var(--farm-muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .farm-docs code {
+      font-size: 0.88em;
+      background: rgba(110, 207, 142, 0.1);
+      padding: 0.12em 0.35em;
+      border-radius: 0.25rem;
+    }
+    .farm-docs ul { color: var(--farm-muted); }
+    .farm-docs ul strong { color: #c5d4e0; }
+    .farm-docs footer {
+      border-top: 1px solid var(--farm-border);
+      padding: 2rem 0;
+      margin-top: 3rem;
+      color: var(--farm-muted);
+      font-size: 0.85rem;
+    }
+    .tier-pill {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.25rem;
+      background: rgba(110, 207, 142, 0.12);
+      color: var(--farm-accent);
+    }
+    .tier-pill--mid { background: rgba(120, 170, 220, 0.12); color: #8ec5ff; }
+    .tier-pill--long { background: rgba(200, 150, 230, 0.1); color: #d4b5ff; }
+  </style>
+</head>
+<body class="farm-docs">
+  <header class="farm-docs__hero">
+    <div class="container">
+      <span class="farm-docs__badge">Player guide</span>
+      <h1>Farming minigame</h1>
+      <p class="lead">Commands, crop reference, how prices work, land expansion, and practical strategy — same rules as the Discord bot. Your server may use a custom prefix (default <code>h</code>); slash commands are always <code>/farm …</code>.</p>
+      <p class="lead mt-2 mb-0"><small class="text-body-secondary">Canonical link: <a href="{{ publicBaseUrl }}/docs/farm" class="link-success">{{ publicBaseUrl }}/docs/farm</a> — set <code>PUBLIC_BASE_URL</code> in production.</small></p>
+    </div>
+  </header>
+
+  <div class="container py-4">
+    <div class="row g-4">
+      <aside class="col-lg-3 d-none d-lg-block">
+        <nav class="farm-docs__toc" aria-label="On this page">
+          <strong class="d-block text-body-secondary small mb-2">Contents</strong>
+          <a href="#setup">Setup &amp; access</a>
+          <a href="#commands">Commands</a>
+          <a href="#economy">Economy &amp; prices</a>
+          <a href="#crops">Crop reference</a>
+          <a href="#land">Land expansion</a>
+          <a href="#strategy">Strategy</a>
+        </nav>
+      </aside>
+      <div class="col-lg-9">
+        <main id="main">
+
+          <section id="setup">
+            <h2>Setup &amp; access</h2>
+            <p class="text-body-secondary">Staff turn the feature on for the server; you opt in personally for prefix commands.</p>
+            <ul>
+              <li><strong>Server</strong>: <code>/farm server on</code> or <code>off</code> (admins / configured staff role).</li>
+              <li><strong>You</strong>: <code>/farm enable</code> or <code>disable</code> — required before prefix commands work.</li>
+              <li><strong>Channel lock</strong>: staff may restrict farm play to one channel (or threads under it) with <code>/farm server lock</code>.</li>
+              <li><strong>Prefix</strong>: change with <code>/farm prefix</code> (1–3 characters). Slash help: <code>/farm help</code>.</li>
+            </ul>
+            <div class="callout callout--warn">
+              <strong>Message commands need the Message Content intent</strong> on the bot application, or prefix lines won’t be read in servers.
+            </div>
+          </section>
+
+          <section id="commands">
+            <h2>Commands</h2>
+            <p class="text-body-secondary">Replace <code>{p}</code> with your server’s farm prefix.</p>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Usage</th>
+                    <th>What it does</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td><code>{p}login</code> / <code>{p}daily</code></td><td>Daily bonus <strong>$10,000</strong> (once per calendar day, <strong>UTC+7</strong>).</td></tr>
+                  <tr><td><code>{p}status</code> / <code>{p}stats</code> / <code>{p}farm</code> [user]</td><td>Your farm (or another user).</td></tr>
+                  <tr><td><code>{p}grow</code> / <code>{p}plant</code> &lt;crop&gt;</td><td>Plant one crop across <strong>all</strong> land slots; cost = buy price × slots.</td></tr>
+                  <tr><td><code>{p}harvest</code> / <code>{p}reap</code></td><td>Harvest when ready. <strong>10% yield loss per hour</strong> overdue after maturity.</td></tr>
+                  <tr><td><code>{p}sell</code> …</td><td>Sell from inventory (per crop or <code>all</code>).</td></tr>
+                  <tr><td><code>{p}buy</code> / <code>{p}purchase</code> …</td><td>Buy seeds at current period buy price.</td></tr>
+                  <tr><td><code>{p}expand</code></td><td>Buy +1 land slot (cap <strong>100</strong>).</td></tr>
+                  <tr><td><code>{p}crop list</code> / <code>{p}crop</code> … / <code>{p}info</code></td><td>Crop list and crop info.</td></tr>
+                  <tr><td><code>{p}help</code> / <code>{p}h</code></td><td>In-Discord multi-page help.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="economy">
+            <h2>Economy &amp; prices</h2>
+            <ul>
+              <li><strong>Starting cash</strong>: $5,000 on first profile.</li>
+              <li><strong>Price periods</strong>: Market updates every <strong>6 hours</strong>, keyed to <strong>UTC+7</strong> (same anchor as daily login).</li>
+              <li><strong>Sell price</strong>: Per unit, roughly <strong>$1–$10</strong> per crop per period (seeded pseudo-random for that crop + period).</li>
+              <li><strong>Buy price</strong>: Sell price plus <strong>$1–$3</strong> markup for that crop + period — you pay more than you’d get selling back immediately.</li>
+            </ul>
+            <p class="text-body-secondary mb-0">Because prices move, “best crop” shifts over time — check <code>{p}crop list</code> / info in-game for current numbers.</p>
+          </section>
+
+          <section id="crops">
+            <h2>Crop reference</h2>
+            <p class="text-body-secondary">Base stats from game data. <em>Yield</em> is total units at harvest (before overdue penalty). <em>Yield/hr</em> is a simple efficiency hint for comparing growth lengths.</p>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Crop</th>
+                    <th>Tier</th>
+                    <th>Growth</th>
+                    <th>Yield</th>
+                    <th>Yield / hr</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for c in cropList %}
+                  <tr>
+                    <td>{{ c.displayName }} <small class="text-body-secondary">({{ c.id }})</small></td>
+                    <td>
+                      {% if c.growthHours < 6 %}
+                      <span class="tier-pill">Fast</span>
+                      {% elif c.growthHours <= 24 %}
+                      <span class="tier-pill tier-pill--mid">Mid</span>
+                      {% else %}
+                      <span class="tier-pill tier-pill--long">Long</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ c.growthLabel }}</td>
+                    <td>{{ c.yield }}</td>
+                    <td>{{ c.yieldPerHour }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="land">
+            <h2>Land expansion</h2>
+            <p>Next slot price: <code>20,000 + (currentSlots × 5,000)</code> — you pay for the <em>next</em> slot based on how many you already have.</p>
+            <h3>Examples</h3>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Current slots</th>
+                    <th>Cost for +1 slot</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for ex in expandExamples %}
+                  <tr>
+                    <td>{{ ex.slots }}</td>
+                    <td>${{ ex.nextPrice.toLocaleString() }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="strategy">
+            <h2>Strategy</h2>
+            <h3>Early progression</h3>
+            <ul>
+              <li><strong>Claim daily</strong> on schedule — it’s a large bump vs starting money.</li>
+              <li><strong>Short crops</strong> (fast tier) cycle cash and XP faster if you can check in often; they’re weaker if you often miss harvest windows.</li>
+              <li><strong>Missed harvests hurt</strong>: 10%/hour overdue stacks; set reminders for long crops.</li>
+            </ul>
+            <h3>Mid / late game</h3>
+            <ul>
+              <li><strong>Slots multiply everything</strong>: planting cost and harvest volume both scale with land — expand when you have buffer cash.</li>
+              <li><strong>Buy low / sell high in spirit</strong>: compare period buy vs sell; you’re rarely profitable buying and instantly selling the same crop.</li>
+              <li><strong>Yield per hour</strong> is a planning tool — pair it with how often you actually open Discord.</li>
+            </ul>
+            <h3>“Crop path” ideas</h3>
+            <ul>
+              <li><strong>Active player</strong>: rotate fast crops, harvest on time, reinvest in slots.</li>
+              <li><strong>Casual player</strong>: bias toward mid/long crops and protect harvest time; accept slower cycles.</li>
+              <li><strong>Inventory play</strong>: sell into strong sell periods; avoid panic-selling everything if you’re tracking the 6h clock.</li>
+            </ul>
+          </section>
+
+        </main>
+
+        <footer>
+          <p class="mb-1">IsekaiExpress / F95Zone bot — farming minigame documentation.</p>
+          <p class="mb-0">&copy; {{ docYear }} · Stats auto-sync from bot crop config.</p>
+        </footer>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -80,11 +80,42 @@ app.use((req, res, next) => {
   if (
     req.path.startsWith('/public') ||
     req.path === '/auth/login' ||
-    req.path === '/auth/discord/callback'
+    req.path === '/auth/discord/callback' ||
+    req.path === '/docs/farm'
   ) {
     return next();
   }
   return checkSessionExpiration(req, res, next);
+});
+
+app.get('/docs/farm', (req, res) => {
+  const { crops, formatTime, calculateSlotPrice } = require('../bot/utils/farm/cropManager');
+  const cropList = Object.entries(crops)
+    .map(([id, c]) => {
+      const hours = c.growthTime / (60 * 60 * 1000);
+      return {
+        id,
+        displayName: c.displayName,
+        yield: c.yield,
+        growthMs: c.growthTime,
+        growthLabel: formatTime(c.growthTime),
+        growthHours: hours,
+        yieldPerHour: hours > 0 ? Math.round((c.yield / hours) * 10) / 10 : 0,
+      };
+    })
+    .sort((a, b) => a.growthMs - b.growthMs);
+
+  const expandExamples = [9, 10, 49, 50, 99].map((slots) => ({
+    slots,
+    nextPrice: calculateSlotPrice(slots),
+  }));
+
+  res.render('farmDocs', {
+    cropList,
+    expandExamples,
+    publicBaseUrl: config.url,
+    docYear: new Date().getFullYear(),
+  });
 });
 
 const indexRouter = require("./routes/routerIndex");

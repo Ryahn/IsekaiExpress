@@ -1,6 +1,7 @@
 const {
 	EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } = require('discord.js');
+const config = require('../../../../config');
 const { farmManager } = require('./farmManager');
 
 const HELP_COLOR = 0x00ff00;
@@ -38,6 +39,11 @@ async function buildFarmHelpPages(guildId) {
 					'• `/farm enable` / `/farm disable` — opt in or out of prefix farm commands\n'
 					+ '• `/farm help` — this guide (multi-page)\n'
 					+ `• \`${p}help\` or \`${p}h\` — same help via prefix`,
+				inline: false,
+			},
+			{
+				name: 'Full guide (web)',
+				value: `Crop table, prices, expansion math, strategy: ${config.url}/docs/farm`,
 				inline: false,
 			},
 		)
