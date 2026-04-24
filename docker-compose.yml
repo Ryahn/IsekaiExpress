@@ -1,4 +1,5 @@
-# Copy .env from .env.example, set secrets, and use MYSQL_HOST=mysql / REDIS_URL=redis://redis:6379 in Compose.
+# Copy .env from .env.example, set secrets. In Compose use container names for DB/Redis so multi-network
+# services (e.g. web on traefik-network) never resolve a foreign `mysql` / `redis` on another network.
 services:
   mysql:
     image: mysql:8.0
@@ -29,8 +30,8 @@ services:
     env_file: .env
     command: sh -c "sleep 8 && npx knex migrate:latest && npx knex seed:run"
     environment:
-      MYSQL_HOST: mysql
-      REDIS_URL: redis://redis:6379
+      MYSQL_HOST: f95bot-mysql
+      REDIS_URL: redis://f95bot-redis:6379
     depends_on:
       - mysql
     profiles:
@@ -42,8 +43,8 @@ services:
     env_file: .env
     command: npm run start:bot
     environment:
-      MYSQL_HOST: mysql
-      REDIS_URL: redis://redis:6379
+      MYSQL_HOST: f95bot-mysql
+      REDIS_URL: redis://f95bot-redis:6379
     depends_on:
       - mysql
       - redis
@@ -61,8 +62,8 @@ services:
     ports:
       - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
     environment:
-      MYSQL_HOST: mysql
-      REDIS_URL: redis://redis:6379
+      MYSQL_HOST: f95bot-mysql
+      REDIS_URL: redis://f95bot-redis:6379
     depends_on:
       - mysql
       - redis
