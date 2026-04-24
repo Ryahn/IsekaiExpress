@@ -19,3 +19,4 @@ src/bot/tcg/uploader_data.json
 f95bot.sql
 batch_*.json
 CardSystem.md
+.cursor/

@@ -1,4 +1,6 @@
-# Copy .env from .env.example, set secrets, and use MYSQL_HOST=mysql / REDIS_URL=redis://redis:6379 in Compose.
+# Copy .env from .env.example, set secrets, and use MYSQL_HOST=f95bot-mysql / REDIS_URL=redis://redis:6379 in Compose.
+# Use the mysql container name (f95bot-mysql), not the service name "mysql", if web shares networks with
+# other stacks: otherwise "mysql" can resolve to a different host on the Traefik network.
 services:
   mysql:
     image: mysql:8.0
@@ -29,7 +31,7 @@ services:
     env_file: .env
     command: sh -c "sleep 8 && npx knex migrate:latest && npx knex seed:run"
     environment:
-      MYSQL_HOST: mysql
+      MYSQL_HOST: f95bot-mysql
       REDIS_URL: redis://redis:6379
     depends_on:
       - mysql
@@ -42,7 +44,7 @@ services:
     env_file: .env
     command: npm run start:bot
     environment:
-      MYSQL_HOST: mysql
+      MYSQL_HOST: f95bot-mysql
       REDIS_URL: redis://redis:6379
     depends_on:
       - mysql
@@ -61,7 +63,7 @@ services:
     ports:
       - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
     environment:
-      MYSQL_HOST: mysql
+      MYSQL_HOST: f95bot-mysql
       REDIS_URL: redis://redis:6379
     depends_on:
       - mysql
