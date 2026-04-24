@@ -50,7 +50,11 @@ module.exports = class InteractionEvent extends BaseEvent {
             // Set cooldown after successful execution
             setCooldown(client, interaction.user.id, interaction.commandName);
         } catch (err) {
-            client.logger.error('Slash command error:', err);
+            const errText =
+                err instanceof Error
+                    ? `${err.message}${err.stack ? `\n${err.stack}` : ''}`
+                    : String(err);
+            client.logger.error(`Slash command error: ${errText}`);
             const payload = { content: 'An error occurred while executing this command.', ephemeral: true };
             try {
                 await interaction.editReply(payload);

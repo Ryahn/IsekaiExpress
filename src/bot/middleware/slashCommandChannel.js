@@ -12,14 +12,25 @@ async function assertSlashCommandChannel(client, interaction) {
   const allowedChannel = await client.db.getAllowedChannel(hash);
   if (!allowedChannel) return true;
 
-  const guild = client.guilds.cache.get(interaction.guildId);
+  let guild = client.guilds.cache.get(interaction.guildId);
+  if (!guild) {
+    try {
+      guild = await client.guilds.fetch(interaction.guildId);
+    } catch {
+      await interaction.editReply({
+        content: 'Could not load this server. Please try again in a moment.',
+        ephemeral: true
+      });
+      return false;
+    }
+  }
   const member = await guild.members.fetch(interaction.user.id);
   const roles = member.roles.cache.map((role) => role.id);
   if (
     allowedChannel.channel_id === 'all' ||
     allowedChannel.channel_id !== interaction.channelId
   ) {
-    if (!roles.some((role) => client.allowed.includes(role))) {
+    if (!roles.some((role) => client.allowed?.includes(role))) {
       await interaction.editReply({
         content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`,
         ephemeral: true

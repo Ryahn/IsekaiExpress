@@ -243,6 +243,13 @@ module.exports = {
 		),
 
 	async execute(client, interaction) {
+		if (!interaction.inGuild()) {
+			await interaction.editReply({
+				content: 'Farm commands can only be used in a server.',
+				ephemeral: true,
+			});
+			return;
+		}
 		const subcommandGroup = interaction.options.getSubcommandGroup(false);
 		if (subcommandGroup === 'server') {
 			const sub = interaction.options.getSubcommand();

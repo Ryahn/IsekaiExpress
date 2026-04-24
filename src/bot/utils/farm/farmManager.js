@@ -15,6 +15,14 @@ function defaultFarmState() {
 
 function parseJson(val, fallback) {
 	if (val == null) return fallback;
+	if (Buffer.isBuffer(val)) {
+		try {
+			return JSON.parse(val.toString('utf8'));
+		}
+		catch {
+			return fallback;
+		}
+	}
 	if (typeof val === 'object') return val;
 	try {
 		return JSON.parse(val);

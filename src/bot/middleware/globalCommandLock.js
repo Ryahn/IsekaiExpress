@@ -40,7 +40,11 @@ async function checkInteractionGlobalCommandLock(client, interaction) {
   if (!state?.locked) {
     return { allowed: true };
   }
-  const member = await interaction.guild.members.fetch(interaction.user.id);
+  let guild = interaction.guild;
+  if (!guild) {
+    guild = await client.guilds.fetch(interaction.guildId);
+  }
+  const member = await guild.members.fetch(interaction.user.id);
   if (globalLockAllows(client, state, interaction.channelId, member)) {
     return { allowed: true };
   }
