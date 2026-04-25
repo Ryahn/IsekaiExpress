@@ -5,6 +5,12 @@
 # If MySQL was first started without MYSQL_DATABASE, or you reused an old volume, you may get
 # "Unknown database" (ER_BAD_DB_ERROR). With the stack running: sh scripts/ensure-mysql-db.sh
 # then: docker compose --profile migrate run --rm migrate
+#
+# Full MySQL volume wipe + import f95bot.sql (set passwords in .env first): after backing up, run
+#   CONFIRM_RESET=yes sh scripts/reset-mysql-volume-and-restore.sh
+# f95bot.sql is app data only; MySQL users use MYSQL_ROOT_PASSWORD / MYSQL_USER / MYSQL_PASS.
+# After an old-dump import, the script runs knex migrate:latest (see app_state + custom commands).
+# Manual fix if bot errors on "custom commands": docker compose --profile migrate run --rm migrate sh -c "npx knex migrate:latest"
 services:
   mysql:
     image: mysql:8.0
@@ -16,7 +22,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-f95bot}
       MYSQL_PASSWORD: ${MYSQL_PASS:-f95bot}
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
 
@@ -25,7 +31,7 @@ services:
     container_name: f95bot-redis
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
 
@@ -36,7 +42,7 @@ services:
     command: sh -c "sleep 8 && npx knex migrate:latest && npx knex seed:run"
     environment:
       MYSQL_HOST: f95bot-mysql
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://f95bot-redis:6379
     depends_on:
       - mysql
     profiles:
@@ -49,7 +55,7 @@ services:
     command: npm run start:bot
     environment:
       MYSQL_HOST: f95bot-mysql
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://f95bot-redis:6379
     depends_on:
       - mysql
       - redis
@@ -68,7 +74,7 @@ services:
       - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
     environment:
       MYSQL_HOST: f95bot-mysql
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://f95bot-redis:6379
     depends_on:
       - mysql
       - redis
