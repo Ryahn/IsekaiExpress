@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const config = require('./config');
-const logger = require('silly-logger');
+const logger = require('./libs/logger');
 const path = require('path');
 const fs = require('fs');
 const { POWER_SCORE_L1 } = require('./src/bot/tcg/cardLayout.js');
@@ -20,11 +20,14 @@ const { POWER_SCORE_L1 } = require('./src/bot/tcg/cardLayout.js');
 const CARD_CLASSES = {
   staff: 'Commander',
   mod: 'Guardian',
+  trialmod: 'Guardian',
   uploader: 'Artisan',
   retired: 'Artisan',
+  respected: 'Artisan',
 };
 
 const ALL_TIERS_ON = { C: 1, UC: 1, R: 1, EP: 1, L: 1, M: 1 };
+const tcgDir = path.join(__dirname, 'src', 'bot', 'tcg');
 
 function getAvatar(avatar, userId) {
   return avatar
@@ -32,118 +35,141 @@ function getAvatar(avatar, userId) {
     : 'https://cdn.discordapp.com/embed/avatars/0.png';
 }
 
+function buildHeroRow(member, classKey) {
+  return {
+    name: member.username,
+    discord_id: member.discord_id,
+    type: 'hero',
+    class: CARD_CLASSES[classKey],
+    level: 1,
+    powerByRarity: { ...POWER_SCORE_L1 },
+    avatar: getAvatar(member.avatar, member.user_id),
+    rarity: { ...ALL_TIERS_ON },
+  };
+}
+
+function logError(context, err) {
+  const stack = err && err.stack ? err.stack : String(err);
+  const msg = err && err.message ? err.message : String(err);
+  logger.error(`${context}: ${msg}`);
+  if (stack && stack !== msg) {
+    logger.error(stack);
+  }
+}
+
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildPresences,
-  ],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 });
 
-client.once('ready', async () => {
-  logger.startup('Bot has started!');
+function shutdown(exitCode) {
+  return client.destroy().then(
+    () => {
+      process.exit(exitCode);
+    },
+    (destroyErr) => {
+      logError('import_from_discord: client.destroy() failed', destroyErr);
+      process.exit(1);
+    }
+  );
+}
 
-  const guild = await client.guilds.fetch(config.discord.guildId);
+client.once('clientReady', async () => {
+  let exitCode = 0;
+  try {
+    logger.startup('Connected. Fetching guild and roles...');
 
-  const getRoleMembers = async (roleId) => {
-    const role = await guild.roles.fetch(roleId);
-    if (!role) return [];
-    return role.members.map((m) => ({
-      username: m.displayName,
-      discord_id: m.user.id,
-      avatar: m.user.avatar,
-      user_id: m.user.id,
-    }));
-  };
+    const guild = await client.guilds.fetch(config.discord.guildId);
+    if (!guild) {
+      throw new Error(`Guild not found: ${config.discord.guildId}`);
+    }
 
-  const [uploaders, mods, staff, retired] = await Promise.all([
-    getRoleMembers(config.roles.uploader),
-    getRoleMembers(config.roles.mod),
-    getRoleMembers(config.roles.staff),
-    getRoleMembers('1404624122209767656'),
-  ]);
+    // `Role#members` only includes cached guild members. Without a full fetch, lists are
+    // incomplete (often 0–1 after refactors that dropped implicit caching). See discord.js
+    // GuildMemberManager#fetch and Role.members.
+    logger.startup('Fetching all guild members (required for full role rosters)...');
+    const fetched = await guild.members.fetch();
+    logger.info(`Guild member cache: ${fetched.size} member(s).`);
 
-  const uploader_data = path.join(__dirname, './src/bot/tcg/uploader_data.json');
-  const mods_data = path.join(__dirname, './src/bot/tcg/mods_data.json');
-  const staff_data = path.join(__dirname, './src/bot/tcg/staff_data.json');
-  const retired_data = path.join(__dirname, './src/bot/tcg/retired_data.json');
+    const getRoleMembers = async (roleId) => {
+      if (!roleId) return [];
+      const role = await guild.roles.fetch(roleId);
+      if (!role) {
+        logger.warn(`Role not found (check env id): ${roleId}`);
+        return [];
+      }
+      return role.members.map((m) => ({
+        username: m.displayName,
+        discord_id: m.user.id,
+        avatar: m.user.avatar,
+        user_id: m.user.id,
+      }));
+    };
 
-  const filteredUploaders = uploaders.filter((uploaderMember) => {
-    const hasModRole = mods.some((m) => m.discord_id === uploaderMember.discord_id);
-    const hasStaffRole = staff.some((s) => s.discord_id === uploaderMember.discord_id);
-    return !hasModRole && !hasStaffRole;
-  });
+    const [uploaders, mods, staff, retired, respected, trialmod] = await Promise.all([
+      getRoleMembers(config.roles.uploader),
+      getRoleMembers(config.roles.mod),
+      getRoleMembers(config.roles.staff),
+      getRoleMembers(config.roles.retired),
+      getRoleMembers(config.roles.respected),
+      getRoleMembers(config.roles.trialmod),
+    ]);
 
-  const filteredMods = mods.filter((modMember) => {
-    const hasStaffRole = staff.some((s) => s.discord_id === modMember.discord_id);
-    return !hasStaffRole;
-  });
+    const modIds = new Set(mods.map((m) => m.discord_id));
+    const staffIds = new Set(staff.map((s) => s.discord_id));
+    const filteredUploaders = uploaders.filter(
+      (u) => !modIds.has(u.discord_id) && !staffIds.has(u.discord_id)
+    );
+    const filteredMods = mods.filter((m) => !staffIds.has(m.discord_id));
 
-  const UploaderJson = [];
-  const ModsJson = [];
-  const StaffJson = [];
-  const RetiredJson = [];
+    const outputFiles = [
+      { file: 'uploader_data.json', classKey: 'uploader', members: filteredUploaders },
+      { file: 'mods_data.json', classKey: 'mod', members: filteredMods },
+      { file: 'staff_data.json', classKey: 'staff', members: staff },
+      { file: 'retired_data.json', classKey: 'retired', members: retired },
+      { file: 'respected_data.json', classKey: 'respected', members: respected },
+      { file: 'trialmod_data.json', classKey: 'trialmod', members: trialmod },
+    ];
 
-  for (const uploader of filteredUploaders) {
-    UploaderJson.push({
-      name: uploader.username,
-      discord_id: uploader.discord_id,
-      type: 'hero',
-      class: CARD_CLASSES.uploader,
-      level: 1,
-      powerByRarity: { ...POWER_SCORE_L1 },
-      avatar: getAvatar(uploader.avatar, uploader.user_id),
-      rarity: { ...ALL_TIERS_ON },
-    });
+    await Promise.all(
+      outputFiles.map(({ file, classKey, members }) => {
+        const data = members.map((m) => buildHeroRow(m, classKey));
+        const target = path.join(tcgDir, file);
+        return fs.promises.writeFile(target, JSON.stringify(data, null, 2), 'utf8');
+      })
+    );
+
+    const counts = outputFiles
+      .map(({ file, members }) => `${file.replace(/_data\.json$/, '')}:${members.length}`)
+      .join(', ');
+    logger.success(`import_from_discord: wrote ${outputFiles.length} files (${counts})`);
+  } catch (err) {
+    exitCode = 1;
+    logError('import_from_discord failed', err);
+  } finally {
+    await shutdown(exitCode);
   }
+});
 
-  for (const mod of filteredMods) {
-    ModsJson.push({
-      name: mod.username,
-      discord_id: mod.discord_id,
-      type: 'hero',
-      class: CARD_CLASSES.mod,
-      level: 1,
-      powerByRarity: { ...POWER_SCORE_L1 },
-      avatar: getAvatar(mod.avatar, mod.user_id),
-      rarity: { ...ALL_TIERS_ON },
-    });
-  }
-
-  for (const staffMember of staff) {
-    StaffJson.push({
-      name: staffMember.username,
-      discord_id: staffMember.discord_id,
-      type: 'hero',
-      class: CARD_CLASSES.staff,
-      level: 1,
-      powerByRarity: { ...POWER_SCORE_L1 },
-      avatar: getAvatar(staffMember.avatar, staffMember.user_id),
-      rarity: { ...ALL_TIERS_ON },
-    });
-  }
-
-  for (const retiredMember of retired) {
-    RetiredJson.push({
-      name: retiredMember.username,
-      discord_id: retiredMember.discord_id,
-      type: 'hero',
-      class: CARD_CLASSES.retired,
-      level: 1,
-      powerByRarity: { ...POWER_SCORE_L1 },
-      avatar: getAvatar(retiredMember.avatar, retiredMember.user_id),
-      rarity: { ...ALL_TIERS_ON },
-    });
-  }
-
-  fs.writeFileSync(uploader_data, JSON.stringify(UploaderJson, null, 2));
-  fs.writeFileSync(mods_data, JSON.stringify(ModsJson, null, 2));
-  fs.writeFileSync(staff_data, JSON.stringify(StaffJson, null, 2));
-  fs.writeFileSync(retired_data, JSON.stringify(RetiredJson, null, 2));
+client.on('error', (err) => {
+  logError('Discord client error', err);
 });
 
 (async () => {
-  logger.startup('Bot is starting...');
-  await client.login(config.discord.botToken);
+  try {
+    if (!config.discord.botToken) {
+      logger.error('import_from_discord: set DISCORD_BOT_TOKEN in .env');
+      process.exit(1);
+      return;
+    }
+    if (!config.discord.guildId) {
+      logger.error('import_from_discord: set DISCORD_GUILD_ID in .env');
+      process.exit(1);
+      return;
+    }
+    logger.startup('Logging in to Discord...');
+    await client.login(config.discord.botToken);
+  } catch (err) {
+    logError('import_from_discord: login failed', err);
+    process.exit(1);
+  }
 })();

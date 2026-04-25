@@ -1,7 +1,7 @@
 const fs = require('fs');
 const { generateCard } = require('./create_card');
 const { ELEMENT_IDS } = require('./src/bot/tcg/elements');
-const logger = require('silly-logger');
+const logger = require('./libs/logger');
 
 const BATCH_RARITY_KEYS = ['C', 'UC', 'R', 'EP', 'L', 'M'];
 

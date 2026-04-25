@@ -1,5 +1,6 @@
 const { ADVANTAGE_VS, normalizeElementKey } = require('../src/bot/tcg/elements');
 const { normalizeRarityKey } = require('../src/bot/tcg/cardLayout');
+const { byTier } = require('../src/bot/tcg/abilityPools');
 const { REGION_NAMES } = require('./tcgPveConfig');
 
 const SYN_CAP = 0.6;
@@ -16,7 +17,7 @@ function rarityIndex(norm) {
 }
 
 /**
- * @param {{ element?: string|null, rarity?: string|null, member_id?: number|null }|null} c
+ * @param {{ element?: string|null, rarity?: string|null, member_id?: number|null, discord_id?: string|null }|null} c
  */
 function normEl(c) {
   if (!c || c.element == null) return null;
@@ -98,6 +99,9 @@ function computeCombatSynergy(loadout, enemyElement, pveRegion = null) {
   const s1 = loadout.support1;
   const s2 = loadout.support2;
   const enemyEl = normalizeElementKey(enemyElement);
+
+  /** Full Resonance — temporary Tier 2 ability for main this battle ([CardSystem.md]). */
+  let grantedBattleAbilityKey = null;
 
   const mEl = normEl(main);
   const e1 = normEl(s1);
@@ -230,20 +234,21 @@ function computeCombatSynergy(loadout, enemyElement, pveRegion = null) {
     }
   }
 
-  const mid = (c) => (c && c.member_id != null ? Number(c.member_id) : null);
+  /** Same catalog face: prefer `discord_id` on templates; legacy `member_id` still works. */
+  const mid = (c) => {
+    if (!c) return null;
+    if (c.discord_id != null && String(c.discord_id).trim() !== '') return `d:${String(c.discord_id)}`;
+    if (c.member_id != null) return `u:${Number(c.member_id)}`;
+    return null;
+  };
   const mM = mid(main);
   const m1 = mid(s1);
   const m2 = mid(s2);
   if (main && s1 && s2 && mM != null && mM === m1 && mM === m2) {
-    raw.push({
-      prio: PRIO.set,
-      id: 'full_resonance',
-      label: 'Full Resonance (+12% all stats)',
-      atk: 0,
-      all: 0.12,
-      def: 0,
-      highest: 0,
-    });
+    const pool = byTier[2];
+    if (pool && pool.length) {
+      grantedBattleAbilityKey = pool[Math.floor(Math.random() * pool.length)];
+    }
   } else if (main && s1 && s2) {
     const samePair =
       (mM != null && m1 != null && mM === m1)
@@ -380,6 +385,13 @@ function computeCombatSynergy(loadout, enemyElement, pveRegion = null) {
     else if (take > 0) appliedLabels.push(`${b.label} _(capped)_`);
   }
 
+  const summaryLines = [...appliedLabels];
+  if (grantedBattleAbilityKey) {
+    summaryLines.push(
+      `Full Resonance — bonus **Tier 2** ability (\`${grantedBattleAbilityKey}\`) this battle`,
+    );
+  }
+
   return {
     atk,
     all,
@@ -389,7 +401,8 @@ function computeCombatSynergy(loadout, enemyElement, pveRegion = null) {
     hp,
     weaknessImmune,
     goldMult,
-    summaryLines: appliedLabels,
+    summaryLines,
+    grantedBattleAbilityKey,
   };
 }
 

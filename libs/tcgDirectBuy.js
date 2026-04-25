@@ -5,8 +5,9 @@ const tcgEconomy = require('./tcgEconomy');
 const {
   grantTemplateWithTrx,
   countPlayerInstancesWithClient,
-  effectiveInventoryCap,
+  DEFAULT_INVENTORY_CAP,
 } = require('./tcgInventory');
+const tcgCollectionSets = require('./tcgCollectionSets');
 
 /** [CardSystem.md] Direct purchase (gold only). */
 const DIRECT_BUY_GOLD_BY_RARITY = {
@@ -68,7 +69,7 @@ async function buyDirectCatalogCopy(client, buyerDiscordUser, targetDiscordUser,
         throw new Error('ABORT');
       }
 
-      const cap = effectiveInventoryCap(w);
+      const cap = await tcgCollectionSets.resolveInventoryCap(trx, buyerInternalId, w, DEFAULT_INVENTORY_CAP);
       const owned = await countPlayerInstancesWithClient(buyerInternalId, trx);
       if (owned + 1 > cap) {
         const free = cap - owned;

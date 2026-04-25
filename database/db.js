@@ -1,6 +1,6 @@
 const knex = require('knex');
 const config = require('../config');
-const logger = require('silly-logger');
+const logger = require('../libs/logger');
 const { Model } = require('objection');
 /** Do not import libs/utils here — it would require this module for `db` and create a circular dependency. */
 const nowUnix = () => Math.floor(Date.now() / 1000);

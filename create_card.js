@@ -5,7 +5,7 @@ const NAMESPACE = uuidv5.URL;
 const path = require('path');
 const config = require('./config');
 const { timestamp } = require('./libs/utils');
-const logger = require('silly-logger');
+const logger = require('./libs/logger');
 const {
   CARD,
   RARITY,
@@ -26,6 +26,7 @@ const {
   normalizeElementKey,
   resolveElementIconPath,
 } = require('./src/bot/tcg/elements.js');
+const { pickRandomHomeRegionForElement } = require('./libs/tcgPveConfig');
 
 const repoRoot = __dirname;
 const ORBITRON_WOFF2 = path.join(repoRoot, 'tools', 'fonts', 'Orbitron-Bold.woff2');
@@ -153,16 +154,20 @@ async function generateCard(
   const buffer = canvas.toBuffer('image/png');
   fs.writeFileSync(outputPath, buffer);
 
-  let member_id = null;
-  if (!options.skipDb) {
-    try {
-      const dbmod = require('./database/db');
-      const userRow = await dbmod.query('users').where({ discord_id: String(discordId) }).first();
-      if (userRow) member_id = userRow.id;
-    } catch (e) {
-      logger.warn(`member_id lookup skipped: ${e.message}`);
-    }
+  const mode = config.tcg && config.tcg.catalogRegionMode;
+  let tcgRegion = null;
+  if (mode && mode.type === 'random') {
+    tcgRegion = pickRandomHomeRegionForElement(resolvedElementKey);
+  } else if (mode && mode.type === 'fixed') {
+    tcgRegion = mode.region;
   }
+  /** Catalog L1; instance progression lives on `user_cards.level`. */
+  const levelValue = '1';
+  const powerValue = String(basePower);
+  /**
+   * Mythic templates are tagged for Boss Pack pool (`tcgPacks` uses `is_boss_card`); other tiers 0.
+   */
+  const isBossCard = norm === 'M' ? 1 : 0;
 
   const card = {
     discord_id: discordId,
@@ -171,8 +176,8 @@ async function generateCard(
     name: characterName,
     rarity: norm,
     class: className,
-    level: null,
-    power: null,
+    level: levelValue,
+    power: powerValue,
     element: resolvedElementKey,
     ability_key: null,
     base_atk: baseStats.atk,
@@ -180,13 +185,12 @@ async function generateCard(
     base_spd: baseStats.spd,
     base_hp: baseStats.hp,
     base_power: basePower,
+    tcg_region: tcgRegion,
+    is_boss_card: isBossCard,
     image_url,
     created_at: timestamp(),
     updated_at: timestamp(),
   };
-  if (member_id != null) {
-    card.member_id = member_id;
-  }
 
   if (!options.skipDb) {
     try {

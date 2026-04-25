@@ -1,4 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
+const db = require('../database/db');
+const tcgEconomy = require('./tcgEconomy');
 
 const self = module.exports = {
 	xpSystem: async (client, message) => {
@@ -15,6 +17,19 @@ const self = module.exports = {
 		
 				if (settings.double_xp_enabled || self.isWeekend(settings.weekend_days)) {
 					xpGain *= settings.weekend_multiplier;
+				}
+
+				try {
+					const internalId = await tcgEconomy.getInternalUserId(message.author.id);
+					if (internalId) {
+						const w = await db.query('user_wallets').where({ user_id: internalId }).first();
+						const until = w && w.tcg_xp_booster_until != null ? Number(w.tcg_xp_booster_until) : 0;
+						if (until > Math.floor(Date.now() / 1000)) {
+							xpGain *= 2;
+						}
+					}
+				} catch (_) {
+					/* optional booster */
 				}
 		
 				user.xp += xpGain;

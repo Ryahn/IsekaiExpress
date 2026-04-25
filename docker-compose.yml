@@ -1,6 +1,10 @@
 # Copy .env from .env.example, set secrets, and use MYSQL_HOST=f95bot-mysql / REDIS_URL=redis://redis:6379 in Compose.
 # Use the mysql container name (f95bot-mysql), not the service name "mysql", if web shares networks with
 # other stacks: otherwise "mysql" can resolve to a different host on the Traefik network.
+#
+# If MySQL was first started without MYSQL_DATABASE, or you reused an old volume, you may get
+# "Unknown database" (ER_BAD_DB_ERROR). With the stack running: sh scripts/ensure-mysql-db.sh
+# then: docker compose --profile migrate run --rm migrate
 services:
   mysql:
     image: mysql:8.0

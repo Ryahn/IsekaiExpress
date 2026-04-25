@@ -6,16 +6,8 @@
 test.js
 slashCommands.json
 **/src/bot/media/cards/*
-**/src/bot/tcg/staff_data.json
-**/src/bot/tcg/retired_data.json
-**/src/bot/tcg/mods_data.json
-**/src/bot/tcg/uploader_data.json
-src/bot/tcg/mods_data.json
-src/bot/tcg/retired_data.json
-src/bot/tcg/staff_data.json
-src/bot/tcg/uploader_data.json
+**/src/bot/tcg/*_data.json
 *.txt
-**/*.txt
 f95bot.sql
 batch_*.json
 CardSystem.md

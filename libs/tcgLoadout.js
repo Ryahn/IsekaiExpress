@@ -58,7 +58,7 @@ async function getLoadoutDetail(client, discordUser) {
       'card_data.rarity',
       'card_data.element',
       'card_data.class',
-      'card_data.member_id',
+      'card_data.discord_id',
       'card_data.tcg_region',
       'card_data.image_url',
     );
@@ -127,9 +127,39 @@ async function setLoadoutSlot(client, discordUser, slot, userCardId) {
   return { ok: true, cleared: false };
 }
 
+/**
+ * Clear any loadout slot pointing at this instance (e.g. before trade transfer).
+ * @param {import('knex').Knex} trx
+ * @param {number} internalUserId
+ * @param {number} userCardId
+ */
+async function clearLoadoutSlotsReferencingInstance(trx, internalUserId, userCardId) {
+  const lo = await trx('tcg_user_loadouts').where({ user_id: internalUserId }).forUpdate().first();
+  if (!lo) return;
+  const id = Number(userCardId);
+  const patch = { updated_at: nowUnix() };
+  let changed = false;
+  if (lo.main_user_card_id != null && Number(lo.main_user_card_id) === id) {
+    patch.main_user_card_id = null;
+    changed = true;
+  }
+  if (lo.support1_user_card_id != null && Number(lo.support1_user_card_id) === id) {
+    patch.support1_user_card_id = null;
+    changed = true;
+  }
+  if (lo.support2_user_card_id != null && Number(lo.support2_user_card_id) === id) {
+    patch.support2_user_card_id = null;
+    changed = true;
+  }
+  if (changed) {
+    await trx('tcg_user_loadouts').where({ user_id: internalUserId }).update(patch);
+  }
+}
+
 module.exports = {
   SLOT_COLUMN,
   getLoadoutDetail,
   setLoadoutSlot,
   ensureLoadoutRow,
+  clearLoadoutSlotsReferencingInstance,
 };

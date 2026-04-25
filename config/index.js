@@ -109,11 +109,32 @@ module.exports = {
   url: str('PUBLIC_BASE_URL', baseUrl),
   cardUrl: str('CARD_PUBLIC_URL', `${baseUrl}/public/cards`),
 
+  /**
+   * Batch card generation — `card_data.tcg_region` (Home Turf 1–6 for Region packs / synergy):
+   * - unset/invalid: no tag (null)
+   * - 1–6: every template gets that same region (legacy)
+   * - "random" / "auto": per card, random valid region for that **element** (see
+   *   `pickRandomHomeRegionForElement` in `libs/tcgPveConfig.js` vs PvE `elementPoolForEncounter`)
+   */
+  tcg: {
+    catalogRegionMode: (() => {
+      const v = str('TCG_CATALOG_DEFAULT_REGION', '').trim().toLowerCase();
+      if (v === '' || v === '0') return { type: 'none' };
+      if (v === 'random' || v === 'auto') return { type: 'random' };
+      const n = parseInt(v, 10);
+      if (Number.isFinite(n) && n >= 1 && n <= 6) return { type: 'fixed', region: n };
+      return { type: 'none' };
+    })(),
+  },
+
   roles: {
     staff: str('ROLE_STAFF', str('DISCORD_STAFF_ROLE_ID', '')),
     mod: str('ROLE_MOD', ''),
     uploader: str('ROLE_UPLOADER', ''),
-    user: str('ROLE_USER', '')
+    user: str('ROLE_USER', ''),
+    retired: str('ROLE_RETIRED', ''),
+    respected: str('ROLE_RESPECTED', ''),
+    trialmod: str('ROLE_TRIALMOD', ''),
   },
 
   emojis: {

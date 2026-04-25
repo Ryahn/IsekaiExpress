@@ -2,7 +2,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { createStream } = require('rotating-file-stream');
-const logger = require('silly-logger');
+const logger = require('./libs/logger');
 
 function startProcess(name, scriptPath, logDir) {
   if (!fs.existsSync(logDir)) {

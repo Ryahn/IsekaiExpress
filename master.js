@@ -1,12 +1,15 @@
 const fs = require('fs');
 const path = require('path');
 const { fork } = require('child_process');
-const logger = require('silly-logger');
+const logger = require('./libs/logger');
 
 const uploaderData = require('./src/bot/tcg/uploader_data.json');
 const modData = require('./src/bot/tcg/mods_data.json');
 const staffData = require('./src/bot/tcg/staff_data.json');
 const retiredData = require('./src/bot/tcg/retired_data.json');
+const respectedData = require('./src/bot/tcg/respected_data.json');
+const trialmodData = require('./src/bot/tcg/trialmod_data.json');
+
 const BATCH_SIZE = 5;
 
 /** 6 rarities × 10 elements per character in batch_worker */
@@ -14,6 +17,34 @@ const CARDS_PER_CHARACTER = 60;
 /** Upper bound per card (load avatar + composite + optional DB); keep generous on slow disks/network */
 const MS_PER_CARD_ESTIMATE = 5000;
 const WORKER_TIMEOUT_MIN_MS = 3 * 60 * 1000;
+
+/**
+ * Same shapes as `import_from_discord.js` (hero rows with `powerByRarity`, `rarity`, `class`, etc.).
+ * When a user appears in more than one role list (e.g. mod + trialmod), the earlier source wins.
+ */
+function mergeByDiscordIdPriority(sources) {
+  const seen = new Set();
+  const out = [];
+  for (const list of sources) {
+    for (const row of list) {
+      if (!row || row.discord_id == null) continue;
+      const id = String(row.discord_id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(row);
+    }
+  }
+  return out;
+}
+
+const allCharacterData = mergeByDiscordIdPriority([
+  staffData,
+  modData,
+  trialmodData,
+  uploaderData,
+  retiredData,
+  respectedData,
+]);
 
 async function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -95,4 +126,16 @@ async function runBatches(data) {
   }
 }
 
-runBatches(modData);
+const counts = {
+  staff: staffData.length,
+  mod: modData.length,
+  trialmod: trialmodData.length,
+  uploader: uploaderData.length,
+  retired: retiredData.length,
+  respected: respectedData.length,
+  merged: allCharacterData.length,
+};
+logger.startup(
+  `TCG batch: files staff=${counts.staff} mod=${counts.mod} trialmod=${counts.trialmod} uploader=${counts.uploader} retired=${counts.retired} respected=${counts.respected} → merged unique=${counts.merged}`,
+);
+runBatches(allCharacterData);

@@ -8,7 +8,7 @@ const path = require('path');
 const { getDiscordAvatarUrl, timestamp, logAudit, checkSessionExpiration } = require('../../libs/utils');
 const nunjucks = require('nunjucks');
 const config = require('../../config');
-const logger = require('silly-logger');
+const logger = require('../../libs/logger');
 
 logger.startup('Web Panel is starting....')
 

@@ -1,10 +1,11 @@
 const db = require('../database/db');
 const { normalizeRarityKey } = require('../src/bot/tcg/cardLayout');
 const tcgEconomy = require('./tcgEconomy');
+const tcgCollectionSets = require('./tcgCollectionSets');
 const {
   grantTemplateWithTrx,
   countPlayerInstancesWithClient,
-  effectiveInventoryCap,
+  DEFAULT_INVENTORY_CAP,
 } = require('./tcgInventory');
 
 /** [CardSystem.md] Basic Pack */
@@ -239,7 +240,7 @@ async function buyBasicPack(client, discordUser) {
         throw new Error('PACK_ABORT');
       }
 
-      const cap = effectiveInventoryCap(w);
+      const cap = await tcgCollectionSets.resolveInventoryCap(trx, internalId, w, DEFAULT_INVENTORY_CAP);
       const owned = await countPlayerInstancesWithClient(internalId, trx);
       if (owned + BASIC_PACK_COUNT > cap) {
         const free = cap - owned;
@@ -326,7 +327,7 @@ async function buyAdvancedPack(client, discordUser) {
         throw new Error('PACK_ABORT');
       }
 
-      const cap = effectiveInventoryCap(w);
+      const cap = await tcgCollectionSets.resolveInventoryCap(trx, internalId, w, DEFAULT_INVENTORY_CAP);
       const owned = await countPlayerInstancesWithClient(internalId, trx);
       if (owned + ADVANCED_PACK_COUNT > cap) {
         const free = cap - owned;
@@ -420,7 +421,7 @@ async function buyPremiumPack(client, discordUser) {
         throw new Error('PACK_ABORT');
       }
 
-      const cap = effectiveInventoryCap(w);
+      const cap = await tcgCollectionSets.resolveInventoryCap(trx, internalId, w, DEFAULT_INVENTORY_CAP);
       const owned = await countPlayerInstancesWithClient(internalId, trx);
       if (owned + PREMIUM_PACK_COUNT > cap) {
         const free = cap - owned;
@@ -527,7 +528,7 @@ async function buyBossPack(client, discordUser) {
         throw new Error('PACK_ABORT');
       }
 
-      const cap = effectiveInventoryCap(w);
+      const cap = await tcgCollectionSets.resolveInventoryCap(trx, internalId, w, DEFAULT_INVENTORY_CAP);
       const owned = await countPlayerInstancesWithClient(internalId, trx);
       if (owned + BOSS_PACK_COUNT > cap) {
         const free = cap - owned;
@@ -616,7 +617,7 @@ async function buyRegionPack(client, discordUser, regionId) {
         throw new Error('PACK_ABORT');
       }
 
-      const cap = effectiveInventoryCap(w);
+      const cap = await tcgCollectionSets.resolveInventoryCap(trx, internalId, w, DEFAULT_INVENTORY_CAP);
       const owned = await countPlayerInstancesWithClient(internalId, trx);
       if (owned + REGION_PACK_COUNT > cap) {
         const free = cap - owned;

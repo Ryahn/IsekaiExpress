@@ -1,6 +1,11 @@
 /**
  * Item shop daily counters ([CardSystem.md]) + permanent inventory bonus from Inventory Expander.
  */
+const {
+  resolveUsersIdType,
+  alignUserIdColumnAndFk,
+} = require('./helpers/mysqlUsersId');
+
 exports.up = async function up(knex) {
   const hasCol = await knex.schema.hasColumn('user_wallets', 'tcg_inventory_bonus_slots');
   if (!hasCol) {
@@ -21,14 +26,19 @@ exports.up = async function up(knex) {
 
   const hasUser = await knex.schema.hasTable('tcg_shop_user_daily');
   if (!hasUser) {
+    const { idType: userIdType } = await resolveUsersIdType(knex);
     await knex.schema.createTable('tcg_shop_user_daily', (table) => {
-      table.bigInteger('user_id').unsigned().notNullable();
+      table.specificType('user_id', userIdType).notNullable();
       table.date('day_utc').notNullable();
       table.string('sku', 64).notNullable();
       table.integer('purchase_count').unsigned().notNullable().defaultTo(0);
       table.primary(['user_id', 'day_utc', 'sku']);
+    });
+    await knex.schema.alterTable('tcg_shop_user_daily', (table) => {
       table.foreign('user_id').references('id').inTable('users').onDelete('CASCADE');
     });
+  } else {
+    await alignUserIdColumnAndFk(knex, 'tcg_shop_user_daily', { onDelete: 'CASCADE' });
   }
 };
 

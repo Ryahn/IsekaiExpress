@@ -2,7 +2,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
 const knex = require('knex');
-const logger = require('silly-logger');
+const logger = require('./libs/logger');
 
 const exampleEnv = path.join(__dirname, '.env.example');
 const envPath = path.join(__dirname, '.env');

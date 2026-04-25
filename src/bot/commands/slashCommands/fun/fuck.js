@@ -3,6 +3,14 @@ const { EmbedBuilder } = require('discord.js');
 const fetch = require('node-fetch');
 const path = require('path');
 
+function channelIsNsfw(channel) {
+    if (!channel) return false;
+    if (channel.isThread()) {
+        return channel.parent?.nsfw === true;
+    }
+    return channel.nsfw === true;
+}
+
 module.exports = {
     category: path.basename(__dirname),
     
@@ -28,12 +36,29 @@ module.exports = {
 
             const user = interaction.options.getUser('target');
 
+            let channel = interaction.channel;
+            if (!channel && interaction.channelId) {
+                channel = await client.channels.fetch(interaction.channelId).catch(() => null);
+            }
 
-            if (interaction.channel.nsfw) {
+            if (channelIsNsfw(channel)) {
                 const response = await client.rateLimitHandler.executeWithRateLimit('eckigerluca-api', async () => {
                     return await fetch('https://eckigerluca.com/api/fuck');
                 });
-                const data = await response.json();
+                if (!response.ok) {
+                    const snippet = (await response.text()).slice(0, 200);
+                    throw new Error(`eckigerluca API ${response.status} ${response.statusText}: ${snippet}`);
+                }
+                const raw = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(raw);
+                } catch {
+                    throw new Error(`eckigerluca API returned non-JSON (length ${raw.length})`);
+                }
+                if (typeof data?.image !== 'string' || !data.image) {
+                    throw new Error('eckigerluca API response missing image URL');
+                }
 
                 const embed = new EmbedBuilder()
                     .setDescription(`${interaction.user} bangs the shit out of ${user}`)
@@ -44,9 +69,19 @@ module.exports = {
                 await interaction.editReply('This command can only be used in NSFW channels!');
             }
         } catch (error) {
-            client.logger.error('Error executing the fuck command:', error);
-            if (!interaction.replied) {
-                await interaction.editReply('Something went wrong.');
+            const errText =
+                error instanceof Error
+                    ? `${error.message}${error.stack ? `\n${error.stack}` : ''}`
+                    : String(error);
+            client.logger.error(`Error executing the fuck command: ${errText}`);
+            const payload = {
+                content: 'Could not load the image (the external API may be down or changed).',
+                ephemeral: true,
+            };
+            try {
+                await interaction.editReply(payload);
+            } catch {
+                await interaction.followUp(payload).catch(() => {});
             }
         }
     },

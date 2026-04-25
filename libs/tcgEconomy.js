@@ -90,6 +90,21 @@ async function addGold(client, discordUser, amount) {
   return { ok: true, newGold: Number(w.gold) };
 }
 
+/**
+ * @param {number} internalUserId
+ * @param {number} amount
+ * @param {import('knex').Knex} [trx]
+ */
+async function incrementGoldInternal(internalUserId, amount, trx = db.query) {
+  const n = Math.floor(Number(amount));
+  if (!Number.isFinite(n) || n <= 0) return { ok: false };
+  await ensureWallet(internalUserId, trx);
+  const ts = nowUnix();
+  await trx('user_wallets').where({ user_id: internalUserId }).increment('gold', n);
+  await trx('user_wallets').where({ user_id: internalUserId }).update({ updated_at: ts });
+  return { ok: true };
+}
+
 async function ensureProfileForTcg(client, discordUser) {
   await client.db.checkUser(discordUser);
   const internalId = await getInternalUserId(discordUser.id);
@@ -117,6 +132,8 @@ async function getTcgBalance(client, discordUser) {
     nextDailyAt = lastClaim + DAILY_COOLDOWN_SEC;
     if (now < nextDailyAt) dailyReady = false;
   }
+  const xpBoostUntil =
+    wallet.tcg_xp_booster_until != null ? Number(wallet.tcg_xp_booster_until) : null;
   return {
     gold: Number(wallet.gold),
     xp: Number(xpRow.xp),
@@ -129,6 +146,18 @@ async function getTcgBalance(client, discordUser) {
     premiumLegendaryPity: Number(wallet.tcg_premium_pack_pity_legendary) || 0,
     premiumMythicPity: Number(wallet.tcg_premium_pack_pity_mythic) || 0,
     inventoryBonusSlots: Number(wallet.tcg_inventory_bonus_slots) || 0,
+    shardFocusCharges: Number(wallet.tcg_shard_focus_charges) || 0,
+    ironVeilCharges: Number(wallet.tcg_iron_veil_charges) || 0,
+    overclockCharges: Number(wallet.tcg_overclock_charges) || 0,
+    nullWardCharges: Number(wallet.tcg_null_ward_charges) || 0,
+    reviveShardCharges: Number(wallet.tcg_revive_shard_charges) || 0,
+    fusionCatalystCharges: Number(wallet.tcg_fusion_catalyst_charges) || 0,
+    rarityDustNextFuse: !!Number(wallet.tcg_rarity_dust_next_fuse),
+    tradeLicenseCharges: Number(wallet.tcg_trade_license_charges) || 0,
+    recallTokenCharges: Number(wallet.tcg_recall_token_charges) || 0,
+    preservationSealCharges: Number(wallet.tcg_preservation_seal_charges) || 0,
+    xpBoosterActive: xpBoostUntil != null && xpBoostUntil > now,
+    xpBoosterUntil: xpBoostUntil,
   };
 }
 
@@ -279,4 +308,5 @@ module.exports = {
   getInternalUserId,
   ensureWallet,
   addGold,
+  incrementGoldInternal,
 };

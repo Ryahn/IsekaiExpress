@@ -1,17 +1,6 @@
 const { elementAtkMultiplier, DISPLAY_LABEL } = require('../src/bot/tcg/elements');
-
-/**
- * Damage per [CardSystem.md]: ATK × element modifier − (DEF × 0.5), minimum 1.
- * @param {number} [elementMultOverride] if set, used instead of elementAtkMultiplier(...)
- */
-function damageForHit(attackerAtk, attackerElement, defenderDef, defenderElement, elementMultOverride) {
-  const mult =
-    elementMultOverride != null
-      ? elementMultOverride
-      : elementAtkMultiplier(attackerElement, defenderElement);
-  const raw = attackerAtk * mult - defenderDef * 0.5;
-  return Math.max(1, Math.floor(raw));
-}
+const { damageForHit } = require('./tcgCombatMath');
+const { simulateMainVsMainWithPassives } = require('./tcgAbilityBattle');
 
 /**
  * Turn-based: higher SPD strikes first each round; then the other counterattacks if alive.
@@ -22,81 +11,15 @@ function damageForHit(attackerAtk, attackerElement, defenderDef, defenderElement
  * @param {number} [opts.maxRounds=40]
  * @param {boolean} [opts.fracturedMeridianSpdSwap] Region 6 — swap effective SPD at start of rounds 3, 6, 9…
  * @param {boolean} [opts.defenderWeaknessImmune] Mono Element — cap enemy attack mult vs you at ×1 ([CardSystem.md])
+ * @param {boolean} [opts.negateEnemyElementAdvantageOnce] Null Ward — first time enemy would use ×>1 vs you, use ×1 instead
+ * @param {boolean} [opts.reviveOnLoss] Revive Shard — if you lose at 0 HP, one continuation at 30% max HP vs enemy’s remaining HP
  */
 function simulateMainVsMain(playerStats, enemyStats, playerElement, enemyElement, opts = {}) {
-  const {
-    playerLabel = 'You',
-    enemyLabel = 'Foe',
-    maxRounds = 40,
-    fracturedMeridianSpdSwap = false,
-    defenderWeaknessImmune = false,
-  } = opts;
-
-  let multEnemyVsPlayer = elementAtkMultiplier(enemyElement, playerElement);
-  if (defenderWeaknessImmune && multEnemyVsPlayer > 1) {
-    multEnemyVsPlayer = 1;
-  }
-
-  let spdP = playerStats.spd;
-  let spdE = enemyStats.spd;
-  let hpP = playerStats.hp;
-  let hpE = enemyStats.hp;
-  const log = [];
-
-  for (let round = 1; round <= maxRounds && hpP > 0 && hpE > 0; round += 1) {
-    if (fracturedMeridianSpdSwap && round > 1 && round % 3 === 0) {
-      const t = spdP;
-      spdP = spdE;
-      spdE = t;
-      log.push(`_R${round}: SPD swap (Fractured Meridian)_`);
-    }
-
-    const playerFirst = spdP >= spdE;
-
-    if (playerFirst) {
-      const dmg = damageForHit(playerStats.atk, playerElement, enemyStats.def, enemyElement);
-      hpE -= dmg;
-      log.push(`**R${round}** · ${playerLabel} → ${enemyLabel} **${dmg}** · ${enemyLabel} **${Math.max(0, hpE)}** HP`);
-      if (hpE <= 0) break;
-      const dmg2 = damageForHit(
-        enemyStats.atk,
-        enemyElement,
-        playerStats.def,
-        playerElement,
-        multEnemyVsPlayer,
-      );
-      hpP -= dmg2;
-      log.push(`… ${enemyLabel} → ${playerLabel} **${dmg2}** · ${playerLabel} **${Math.max(0, hpP)}** HP`);
-    } else {
-      const dmg2 = damageForHit(
-        enemyStats.atk,
-        enemyElement,
-        playerStats.def,
-        playerElement,
-        multEnemyVsPlayer,
-      );
-      hpP -= dmg2;
-      log.push(`**R${round}** · ${enemyLabel} → ${playerLabel} **${dmg2}** · ${playerLabel} **${Math.max(0, hpP)}** HP`);
-      if (hpP <= 0) break;
-      const dmg = damageForHit(playerStats.atk, playerElement, enemyStats.def, enemyElement);
-      hpE -= dmg;
-      log.push(`… ${playerLabel} → ${enemyLabel} **${dmg}** · ${enemyLabel} **${Math.max(0, hpE)}** HP`);
-    }
-  }
-
-  let outcome;
-  if (hpP > 0 && hpE <= 0) outcome = 'win';
-  else if (hpP <= 0 && hpE > 0) outcome = 'loss';
-  else outcome = 'draw';
-
-  return {
-    outcome,
-    rounds: log.length,
-    playerHpEnd: Math.max(0, hpP),
-    enemyHpEnd: Math.max(0, hpE),
-    log,
-    elementSummary: elementSummaryLine(playerElement, enemyElement),
-  };
+  const combat = opts.combat ?? { player: {}, enemy: {} };
+  return simulateMainVsMainWithPassives(playerStats, enemyStats, playerElement, enemyElement, {
+    ...opts,
+    combat,
+  });
 }
 
 function elementSummaryLine(playerEl, enemyEl) {

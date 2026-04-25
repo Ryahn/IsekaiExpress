@@ -3,15 +3,17 @@ const { pickRandomAbilityKeyForRarity } = require('../src/bot/tcg/abilityPools')
 const { normalizeRarityKey, statLevelMultiplier } = require('../src/bot/tcg/cardLayout');
 const { DISPLAY_LABEL } = require('../src/bot/tcg/elements');
 const tcgEconomy = require('./tcgEconomy');
+const tcgCollectionSets = require('./tcgCollectionSets');
+const tcgSetProgress = require('./tcgSetProgress');
 
 const DEFAULT_INVENTORY_CAP = 500;
 
 /**
  * @param {{ tcg_inventory_bonus_slots?: number|null }|null|undefined} walletRow
  */
-function effectiveInventoryCap(walletRow) {
+function effectiveInventoryCap(walletRow, setBonusSlots = 0) {
   const bonus = walletRow != null ? Number(walletRow.tcg_inventory_bonus_slots) || 0 : 0;
-  return DEFAULT_INVENTORY_CAP + bonus;
+  return DEFAULT_INVENTORY_CAP + bonus + (Number(setBonusSlots) || 0);
 }
 
 /** @type {Record<string, number[]>} normalized rarity key → breakdown gold L1–L5 */
@@ -59,8 +61,61 @@ function nextElementRerollCost(currentRerollCount) {
   return [500, 1000, 2000, 4000][idx];
 }
 
-async function countDistinctRaritiesForMember(internalUserId, memberDiscordId) {
-  const rows = await db.query('user_cards')
+const RARITY_BUMP_ORDER = ['C', 'UC', 'R', 'EP', 'L', 'M'];
+
+function nextRarityTier(normRarity) {
+  const k = normalizeRarityKey(normRarity);
+  const i = RARITY_BUMP_ORDER.indexOf(k);
+  if (i < 0 || i >= RARITY_BUMP_ORDER.length - 1) return null;
+  return RARITY_BUMP_ORDER[i + 1];
+}
+
+/**
+ * @param {import('knex').Knex} trx
+ * @param {number} internalUserId
+ * @param {number} userCardId
+ */
+async function tryRarityDustUpgrade(trx, internalUserId, userCardId) {
+  const w = await trx('user_wallets').where({ user_id: internalUserId }).forUpdate().first();
+  if (!w || !Number(w.tcg_rarity_dust_next_fuse)) return { upgraded: false };
+
+  await trx('user_wallets').where({ user_id: internalUserId }).update({
+    tcg_rarity_dust_next_fuse: 0,
+    updated_at: nowUnix(),
+  });
+
+  if (Math.random() >= 0.12) return { upgraded: false, dustConsumed: true };
+
+  const row = await trx('user_cards')
+    .join('card_data', 'user_cards.card_id', 'card_data.card_id')
+    .where({ 'user_cards.user_card_id': userCardId, 'user_cards.user_id': internalUserId })
+    .select('card_data.discord_id', 'card_data.rarity')
+    .first();
+  if (!row || row.discord_id == null) return { upgraded: false, dustConsumed: true };
+
+  const nextR = nextRarityTier(row.rarity);
+  if (!nextR) return { upgraded: false, dustConsumed: true };
+
+  const picks = await trx('card_data')
+    .where({ discord_id: row.discord_id, rarity: nextR })
+    .whereNotNull('base_atk')
+    .whereNotNull('base_def')
+    .whereNotNull('base_spd')
+    .whereNotNull('base_hp')
+    .select('*');
+  if (!picks.length) return { upgraded: false, dustConsumed: true };
+
+  const pick = picks[Math.floor(Math.random() * picks.length)];
+  await trx('user_cards').where({ user_card_id: userCardId }).update({
+    card_id: pick.card_id,
+    updated_at: nowUnix(),
+  });
+
+  return { upgraded: true, dustConsumed: true, newRarity: pick.rarity, templateName: pick.name };
+}
+
+async function countDistinctRaritiesForMember(internalUserId, memberDiscordId, trx = db.query) {
+  const rows = await trx('user_cards')
     .join('card_data', 'user_cards.card_id', 'card_data.card_id')
     .where({ 'user_cards.user_id': internalUserId })
     .andWhere({ 'card_data.discord_id': String(memberDiscordId) })
@@ -93,6 +148,17 @@ async function countInventoryForDiscordUser(client, discordUser) {
 }
 
 /**
+ * Shop bonus slots + set-collection (5/6) bonus per member ([CardSystem.md]).
+ * @param {number} internalUserId
+ */
+async function getEffectiveInventoryCapForUser(internalUserId) {
+  if (!internalUserId) return DEFAULT_INVENTORY_CAP;
+  await tcgEconomy.ensureWallet(internalUserId);
+  const w = await db.query('user_wallets').where({ user_id: internalUserId }).first();
+  return tcgCollectionSets.resolveInventoryCap(db.query, internalUserId, w, DEFAULT_INVENTORY_CAP);
+}
+
+/**
  * Insert one owned copy from a catalog row (transaction-safe).
  * @param {import('knex').Knex} trx
  * @param {number} internalUserId
@@ -103,7 +169,7 @@ async function grantTemplateWithTrx(trx, internalUserId, template, opts = {}) {
   if (!opts.skipCapCheck) {
     await tcgEconomy.ensureWallet(internalUserId, trx);
     const w = await trx('user_wallets').where({ user_id: internalUserId }).first();
-    const cap = effectiveInventoryCap(w);
+    const cap = await tcgCollectionSets.resolveInventoryCap(trx, internalUserId, w, DEFAULT_INVENTORY_CAP);
     const owned = await countPlayerInstancesWithClient(internalUserId, trx);
     if (owned >= cap) {
       return { ok: false, error: `Inventory full (${cap} cards).` };
@@ -124,9 +190,13 @@ async function grantTemplateWithTrx(trx, internalUserId, template, opts = {}) {
     is_lent: false,
     is_escrowed: false,
     element_reroll_count: 0,
+    tcg_preservation_sealed: false,
+    lent_source_user_card_id: null,
     updated_at: ts,
     created_at: ts,
   });
+
+  await tcgSetProgress.syncTitleUnlocks(trx, internalUserId);
 
   return {
     ok: true,
@@ -187,6 +257,10 @@ async function breakdownInstance(client, discordUser, userCardId) {
       result = { ok: false, error: 'Cannot break down a lent or escrowed card.' };
       return;
     }
+    if (Number(inst.tcg_preservation_sealed)) {
+      result = { ok: false, error: 'Preservation Sealed cards cannot be broken down.' };
+      return;
+    }
 
     const template = await trx('card_data').where({ card_id: inst.card_id }).first();
     if (!template) {
@@ -196,10 +270,8 @@ async function breakdownInstance(client, discordUser, userCardId) {
 
     let gold = breakdownGoldFor(template.rarity, inst.level);
     if (template.discord_id != null) {
-      const n = await countDistinctRaritiesForMember(internalId, template.discord_id);
-      if (n >= 4) {
-        gold = Math.floor(gold * 1.05);
-      }
+      const n = await countDistinctRaritiesForMember(internalId, template.discord_id, trx);
+      gold = Math.floor(gold * tcgCollectionSets.breakdownMultiplier(n));
     }
 
     await trx('user_cards').where({ user_card_id: userCardId }).delete();
@@ -221,11 +293,19 @@ async function breakdownInstance(client, discordUser, userCardId) {
  * @param {import('discord.js').Client} client
  * @param {{ id: string, username: string }} discordUser
  * @param {number} instanceA
- * @param {number} instanceB
+ * @param {number|null} instanceB
+ * @param {{ fusionCatalyst?: boolean }} [opts]
  */
-async function fuseInstances(client, discordUser, instanceA, instanceB) {
-  if (instanceA === instanceB) {
+async function fuseInstances(client, discordUser, instanceA, instanceB, opts = {}) {
+  const fusionCatalyst = !!opts.fusionCatalyst;
+  if (instanceA === instanceB && instanceB != null) {
     return { ok: false, error: 'Choose two different copies.' };
+  }
+  if (fusionCatalyst && instanceB != null) {
+    return { ok: false, error: 'With a **Fusion Catalyst**, fuse using **one** copy only (omit second ID).' };
+  }
+  if (!fusionCatalyst && (instanceB == null || instanceB === undefined)) {
+    return { ok: false, error: 'Provide **two** copy IDs, or enable **catalyst** with one copy.' };
   }
 
   await client.db.checkUser(discordUser);
@@ -235,15 +315,90 @@ async function fuseInstances(client, discordUser, instanceA, instanceB) {
   let result;
   await db.query.transaction(async (trx) => {
     const a = await loadOwnedInstance(internalId, instanceA, trx);
-    const b = await loadOwnedInstance(internalId, instanceB, trx);
-    if (!a || !b) {
-      result = { ok: false, error: 'One or both cards are not in your inventory.' };
+    if (!a) {
+      result = { ok: false, error: 'Card not found in your inventory.' };
       return;
     }
-    if (a.is_lent || a.is_escrowed || b.is_lent || b.is_escrowed) {
+    if (a.is_lent || a.is_escrowed) {
       result = { ok: false, error: 'Cannot fuse lent or escrowed cards.' };
       return;
     }
+    if (Number(a.tcg_preservation_sealed)) {
+      result = { ok: false, error: 'Cannot fuse a Preservation Sealed card.' };
+      return;
+    }
+    if (a.lent_source_user_card_id) {
+      result = { ok: false, error: 'Cannot fuse a **borrowed** copy.' };
+      return;
+    }
+
+    let b = null;
+    if (!fusionCatalyst) {
+      b = await loadOwnedInstance(internalId, instanceB, trx);
+      if (!b) {
+        result = { ok: false, error: 'Second copy not found in your inventory.' };
+        return;
+      }
+      if (b.is_lent || b.is_escrowed) {
+        result = { ok: false, error: 'Cannot fuse lent or escrowed cards.' };
+        return;
+      }
+      if (Number(b.tcg_preservation_sealed)) {
+        result = { ok: false, error: 'Cannot fuse a Preservation Sealed card.' };
+        return;
+      }
+      if (b.lent_source_user_card_id) {
+        result = { ok: false, error: 'Cannot fuse a **borrowed** copy.' };
+        return;
+      }
+    }
+
+    if (fusionCatalyst) {
+      if (a.level >= 5) {
+        result = { ok: false, error: 'Card is already max level (5).' };
+        return;
+      }
+      await tcgEconomy.ensureWallet(internalId, trx);
+      const wCat = await trx('user_wallets').where({ user_id: internalId }).forUpdate().first();
+      const catNow = Number(wCat.tcg_fusion_catalyst_charges) || 0;
+      if (catNow < 1) {
+        result = { ok: false, error: 'You need a **Fusion Catalyst** charge (shop: Fusion Catalyst).' };
+        return;
+      }
+      const newLevel = a.level + 1;
+      const ts = nowUnix();
+      await trx('user_cards').where({ user_card_id: a.user_card_id }).delete();
+      const [newId] = await trx('user_cards').insert({
+        user_id: internalId,
+        card_id: a.card_id,
+        ability_key: a.ability_key,
+        level: newLevel,
+        acquired_at: ts,
+        is_lent: false,
+        is_escrowed: false,
+        element_reroll_count: 0,
+        tcg_preservation_sealed: false,
+        lent_source_user_card_id: null,
+        updated_at: ts,
+        created_at: ts,
+      });
+      await trx('user_wallets')
+        .where({ user_id: internalId })
+        .update({
+          tcg_fusion_catalyst_charges: catNow - 1,
+          updated_at: ts,
+        });
+      const dust = await tryRarityDustUpgrade(trx, internalId, newId);
+      result = {
+        ok: true,
+        userCardId: newId,
+        newLevel,
+        fusionCatalystUsed: true,
+        rarityDust: dust,
+      };
+      return;
+    }
+
     if (a.card_id !== b.card_id) {
       result = { ok: false, error: 'Fuse requires two copies of the **same** catalog card (same template).' };
       return;
@@ -271,11 +426,14 @@ async function fuseInstances(client, discordUser, instanceA, instanceB) {
       is_lent: false,
       is_escrowed: false,
       element_reroll_count: 0,
+      tcg_preservation_sealed: false,
+      lent_source_user_card_id: null,
       updated_at: ts,
       created_at: ts,
     });
 
-    result = { ok: true, userCardId: newId, newLevel };
+    const dust = await tryRarityDustUpgrade(trx, internalId, newId);
+    result = { ok: true, userCardId: newId, newLevel, rarityDust: dust };
   });
 
   return result;
@@ -300,6 +458,10 @@ async function rerollElement(client, discordUser, userCardId) {
     }
     if (inst.is_lent || inst.is_escrowed) {
       result = { ok: false, error: 'Cannot reroll a lent or escrowed card.' };
+      return;
+    }
+    if (Number(inst.tcg_preservation_sealed)) {
+      result = { ok: false, error: 'Preservation Sealed — reroll blocked ([CardSystem.md]).' };
       return;
     }
 
@@ -406,6 +568,52 @@ async function fetchInventoryPage(client, discordUser, page = 1, pageSize = 8) {
  * @param {{ id: string, username: string }} discordUser
  * @param {number} userCardId
  */
+async function applyPreservationSeal(client, discordUser, userCardId) {
+  await client.db.checkUser(discordUser);
+  const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
+  if (!internalId) return { ok: false, error: 'User not found.' };
+
+  let result;
+  await db.query.transaction(async (trx) => {
+    await tcgEconomy.ensureWallet(internalId, trx);
+    const w = await trx('user_wallets').where({ user_id: internalId }).forUpdate().first();
+    const seals = Number(w.tcg_preservation_seal_charges) || 0;
+    if (seals < 1) {
+      result = { ok: false, error: 'No **Preservation Seal** applications — buy in `/tcg shop`.' };
+      return;
+    }
+    const inst = await loadOwnedInstance(internalId, userCardId, trx);
+    if (!inst) {
+      result = { ok: false, error: 'Copy not found.' };
+      return;
+    }
+    if (inst.is_lent || inst.is_escrowed) {
+      result = { ok: false, error: 'Cannot seal a lent or escrowed copy.' };
+      return;
+    }
+    if (Number(inst.tcg_preservation_sealed)) {
+      result = { ok: false, error: 'This copy is already sealed.' };
+      return;
+    }
+    const ts = nowUnix();
+    await trx('user_wallets').where({ user_id: internalId }).update({
+      tcg_preservation_seal_charges: seals - 1,
+      updated_at: ts,
+    });
+    await trx('user_cards').where({ user_card_id: userCardId }).update({
+      tcg_preservation_sealed: true,
+      updated_at: ts,
+    });
+    result = { ok: true, sealsLeft: seals - 1 };
+  });
+  return result;
+}
+
+/**
+ * @param {import('discord.js').Client} client
+ * @param {{ id: string, username: string }} discordUser
+ * @param {number} userCardId
+ */
 async function getInstanceDetailForOwner(client, discordUser, userCardId) {
   await client.db.checkUser(discordUser);
   const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
@@ -441,6 +649,7 @@ async function getInstanceDetailForOwner(client, discordUser, userCardId) {
 module.exports = {
   DEFAULT_INVENTORY_CAP,
   effectiveInventoryCap,
+  DEFAULT_INVENTORY_CAP,
   BREAKDOWN_GOLD_BY_RARITY,
   breakdownGoldFor,
   nextElementRerollCost,
@@ -450,8 +659,10 @@ module.exports = {
   grantCardToPlayer,
   breakdownInstance,
   fuseInstances,
+  applyPreservationSeal,
   rerollElement,
   countInventoryForDiscordUser,
+  getEffectiveInventoryCapForUser,
   fetchInventoryPage,
   getInstanceDetailForOwner,
 };

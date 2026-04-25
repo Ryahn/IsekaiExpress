@@ -267,8 +267,9 @@ function combatStatsAtLevel(rarityKey, level = 1) {
 }
 
 /**
- * Layout for catalog PNGs (frame, portrait, element, name, class only).
- * Geometry matches `cardLayoutForRarity`; level/power/ability are simply not drawn.
+ * Layout for static catalog PNGs: frame, portrait, element, name, class, overlay only.
+ * Per [CardSystem.md], level, power, abilities, and traits are **not** baked into art — they
+ * live in `card_data` / `user_cards` and are shown in Discord embeds.
  */
 function cardLayoutForRarityCatalog(norm) {
   return cardLayoutForRarity(norm);

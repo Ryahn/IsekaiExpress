@@ -44,6 +44,8 @@ class UserCard extends Model {
         is_lent: { type: 'boolean' },
         is_escrowed: { type: 'boolean' },
         element_reroll_count: { type: 'integer' },
+        tcg_preservation_sealed: { type: 'boolean' },
+        lent_source_user_card_id: { type: ['integer', 'null'] },
         updated_at: { type: 'number' },
         created_at: { type: 'number' },
       },

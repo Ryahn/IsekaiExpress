@@ -3,12 +3,11 @@
  * Inventory: user_cards per-instance (drop quantity + composite unique), ability/level on instance.
  */
 
-async function currentDatabaseName(knex) {
-  let name = knex.client.database();
-  if (name) return name;
-  const [rows] = await knex.raw('SELECT DATABASE() AS db');
-  return rows && rows[0] ? rows[0].db : null;
-}
+const {
+  currentDatabaseName,
+  ensureNullableUserFkColumn,
+  hasUserForeignKey,
+} = require('./helpers/mysqlUsersId');
 
 exports.up = async function up(knex) {
   const hasBaseAtk = await knex.schema.hasColumn('card_data', 'base_atk');
@@ -22,13 +21,7 @@ exports.up = async function up(knex) {
     });
   }
 
-  const hasMemberId = await knex.schema.hasColumn('card_data', 'member_id');
-  if (!hasMemberId) {
-    await knex.schema.alterTable('card_data', (table) => {
-      table.bigInteger('member_id').unsigned().nullable()
-        .references('id').inTable('users');
-    });
-  }
+  await ensureNullableUserFkColumn(knex, 'card_data', 'member_id');
 
   const hasLevelCol = await knex.schema.hasColumn('card_data', 'level');
   if (hasLevelCol) {
@@ -102,8 +95,13 @@ exports.down = async function down(knex) {
   }
 
   if (await knex.schema.hasColumn('card_data', 'member_id')) {
+    const dbName = await currentDatabaseName(knex);
+    if (dbName && (await hasUserForeignKey(knex, dbName, 'card_data', 'member_id'))) {
+      await knex.schema.alterTable('card_data', (table) => {
+        table.dropForeign(['member_id']);
+      });
+    }
     await knex.schema.alterTable('card_data', (table) => {
-      table.dropForeign(['member_id']);
       table.dropColumn('member_id');
     });
   }

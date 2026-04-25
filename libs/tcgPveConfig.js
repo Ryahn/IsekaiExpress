@@ -83,6 +83,37 @@ function elementPoolForEncounter(region, tier) {
   return [...physical, ...meta];
 }
 
+/**
+ * PvE region ids (1–6) where this element can appear in `elementPoolForEncounter` for at least one tier.
+ * Used to assign `card_data.tcg_region` (Home Turf) when batch mode is `random` — a valid home for that element.
+ * @param {string} elementKey - canonical id (e.g. fire, cosmic)
+ * @returns {number[]} sorted unique region numbers
+ */
+function regionsWhereElementCanAppear(elementKey) {
+  const e = String(elementKey || '').toLowerCase().trim();
+  if (!e) return [];
+  const out = [];
+  for (let r = 1; r <= 6; r += 1) {
+    for (let t = 1; t <= 10; t += 1) {
+      if (elementPoolForEncounter(r, t).includes(e)) {
+        out.push(r);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * @param {string} elementKey
+ * @returns {number|null} random valid Home Turf region, or null if none
+ */
+function pickRandomHomeRegionForElement(elementKey) {
+  const regions = regionsWhereElementCanAppear(elementKey);
+  if (regions.length === 0) return null;
+  return regions[Math.floor(Math.random() * regions.length)];
+}
+
 function enemyDifficultyMultiplier(region, tier) {
   const reg = Math.min(6, Math.max(1, Number(region) || 1));
   const ti = Math.min(10, Math.max(1, Number(tier) || 1));
@@ -115,5 +146,7 @@ module.exports = {
   battleBossStatMultiplierForTier,
   battleBossWinGoldForTier,
   elementPoolForEncounter,
+  regionsWhereElementCanAppear,
+  pickRandomHomeRegionForElement,
   enemyDifficultyMultiplier,
 };

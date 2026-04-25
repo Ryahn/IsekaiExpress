@@ -9,6 +9,11 @@ const tcgSynergy = require('../../../../../libs/tcgSynergy');
 const tcgPacks = require('../../../../../libs/tcgPacks');
 const tcgDirectBuy = require('../../../../../libs/tcgDirectBuy');
 const tcgShop = require('../../../../../libs/tcgShop');
+const tcgTrade = require('../../../../../libs/tcgTrade');
+const tcgLend = require('../../../../../libs/tcgLend');
+const tcgPvp = require('../../../../../libs/tcgPvp');
+const tcgSetProgress = require('../../../../../libs/tcgSetProgress');
+const db = require('../../../../../database/db');
 const { battlesRequiredForTier } = require('../../../../../libs/tcgPveConfig');
 const { DISPLAY_LABEL, ELEMENT_IDS } = require('../../../tcg/elements');
 const { statLevelMultiplier } = require('../../../tcg/cardLayout');
@@ -21,6 +26,18 @@ function formatDuration(sec) {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${r}s`;
   return `${r}s`;
+}
+
+function combatItemsEmbedValue(result) {
+  if (!result?.combatItemsUsed) return null;
+  const u = result.combatItemsUsed;
+  const parts = [];
+  if (u.shardFocus) parts.push('**Shard** +15% ATK');
+  if (u.ironVeil) parts.push('**Veil** +20% DEF');
+  if (u.overclock) parts.push('**Overclock** +25% SPD');
+  if (u.nullWard) parts.push(`**Null Ward**${result.nullWardUsed ? ' (proc)' : ''}`);
+  if (result.reviveUsed) parts.push('**Revive** 30% rally');
+  return parts.length ? `${parts.join(' · ')} — charges consumed.` : null;
 }
 
 function formatTcgPullLines(pulls) {
@@ -91,12 +108,25 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName('fuse')
-        .setDescription('Combine two identical copies (same template & level) → +1 level')
+        .setDescription('Fuse two copies **or** one copy + Fusion Catalyst (shop) → +1 level')
         .addIntegerOption((o) =>
-          o.setName('first').setDescription('First copy ID').setRequired(true).setMinValue(1),
+          o.setName('first').setDescription('Copy ID (first of two, or only copy with catalyst)').setRequired(true).setMinValue(1),
         )
         .addIntegerOption((o) =>
-          o.setName('second').setDescription('Second copy ID').setRequired(true).setMinValue(1),
+          o.setName('second').setDescription('Second copy ID (omit with catalyst)').setRequired(false).setMinValue(1),
+        )
+        .addBooleanOption((o) =>
+          o
+            .setName('use_catalyst')
+            .setDescription('Use 1× Fusion Catalyst instead of a second copy'),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('seal')
+        .setDescription('Apply 1× Preservation Seal charge to a copy (blocks reroll/trade/breakdown)')
+        .addIntegerOption((o) =>
+          o.setName('instance').setDescription('Copy ID').setRequired(true).setMinValue(1),
         ),
     )
     .addSubcommand((sub) =>
@@ -167,27 +197,32 @@ module.exports = {
           `Practice fight: your **main** vs random catalog card (win **+${tcgSpar.SPAR_WIN_GOLD}**g, PvE XP rules)`,
         ),
     )
-    .addSubcommand((sub) =>
-      sub.setName('pve_progress').setDescription('PvE region, tier, and progress toward tier clear'),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('pve_fight')
-        .setDescription('Fight a PvE battle (main card; region rules, gold by tier, advances on win)'),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('pve_travel')
-        .setDescription('Move to an unlocked region/tier to revisit content (resets streak & tier wins)')
-        .addIntegerOption((o) =>
-          o.setName('region').setDescription('Region 1–6').setRequired(true).setMinValue(1).setMaxValue(6),
+    .addSubcommandGroup((group) =>
+      group
+        .setName('pve')
+        .setDescription('PvE progression, travel, and battles')
+        .addSubcommand((sub) =>
+          sub.setName('progress').setDescription('Region, tier, and progress toward tier clear'),
         )
-        .addIntegerOption((o) =>
-          o
-            .setName('tier')
-            .setDescription('Tier for that region (omit = first tier available in region)')
-            .setMinValue(1)
-            .setMaxValue(10),
+        .addSubcommand((sub) =>
+          sub
+            .setName('fight')
+            .setDescription('Fight a PvE battle (main card; region rules, gold by tier, advances on win)'),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('travel')
+            .setDescription('Move to an unlocked region/tier (resets streak & tier wins)')
+            .addIntegerOption((o) =>
+              o.setName('region').setDescription('Region 1–6').setRequired(true).setMinValue(1).setMaxValue(6),
+            )
+            .addIntegerOption((o) =>
+              o
+                .setName('tier')
+                .setDescription('Tier for that region (omit = first tier available in region)')
+                .setMinValue(1)
+                .setMaxValue(10),
+            ),
         ),
     )
     .addSubcommand((sub) =>
@@ -281,19 +316,622 @@ module.exports = {
         });
       return b;
     })
+    .addSubcommandGroup((group) =>
+      group
+        .setName('trade')
+        .setDescription('Card trades + optional gold (3% tax; Trade License skips tax)')
+        .addSubcommand((sub) =>
+          sub
+            .setName('offer')
+            .setDescription('Offer your copy for one of theirs (they accept)')
+            .addUserOption((o) =>
+              o.setName('partner').setDescription('Other player').setRequired(true),
+            )
+            .addIntegerOption((o) =>
+              o
+                .setName('give')
+                .setDescription('Your copy ID (from /tcg inventory)')
+                .setRequired(true)
+                .setMinValue(1),
+            )
+            .addIntegerOption((o) =>
+              o
+                .setName('take')
+                .setDescription('Their copy ID you want')
+                .setRequired(true)
+                .setMinValue(1),
+            )
+            .addIntegerOption((o) =>
+              o.setName('you_pay_gold').setDescription('Gold you give them on accept (0 ok)').setMinValue(0),
+            )
+            .addIntegerOption((o) =>
+              o.setName('they_pay_gold').setDescription('Gold they give you on accept (0 ok)').setMinValue(0),
+            )
+            .addBooleanOption((o) =>
+              o
+                .setName('use_license')
+                .setDescription('Consume 1 Trade License — skip 3% tax if gold is involved'),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('accept')
+            .setDescription('Accept a pending trade where you are the counterparty')
+            .addIntegerOption((o) =>
+              o.setName('trade_id').setDescription('Trade # from /tcg trade list').setRequired(true).setMinValue(1),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('cancel')
+            .setDescription('Cancel a pending trade you are part of')
+            .addIntegerOption((o) =>
+              o.setName('trade_id').setDescription('Trade #').setRequired(true).setMinValue(1),
+            ),
+        )
+        .addSubcommand((sub) => sub.setName('list').setDescription('Your pending trade offers')),
+    )
+    .addSubcommandGroup((group) =>
+      group
+        .setName('lend')
+        .setDescription('Lend a copy — borrower gets a PvE-usable temp copy ([CardSystem.md])')
+        .addSubcommand((sub) =>
+          sub
+            .setName('offer')
+            .setDescription('Offer a lend (they accept; optional price & battle cap)')
+            .addUserOption((o) => o.setName('borrower').setDescription('Player who may accept').setRequired(true))
+            .addIntegerOption((o) =>
+              o.setName('instance').setDescription('Your copy ID').setRequired(true).setMinValue(1),
+            )
+            .addIntegerOption((o) =>
+              o.setName('price').setDescription('Gold they pay you on accept (0 = free)').setMinValue(0),
+            )
+            .addIntegerOption((o) =>
+              o.setName('hours').setDescription('Loan length in hours (1–168)').setMinValue(1).setMaxValue(168),
+            )
+            .addIntegerOption((o) =>
+              o
+                .setName('max_battles')
+                .setDescription('Optional: auto-return after this many PvE fights')
+                .setMinValue(1)
+                .setMaxValue(500),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('accept')
+            .setDescription('Accept a lend aimed at you')
+            .addIntegerOption((o) => o.setName('lend_id').setDescription('From /tcg lend list').setRequired(true).setMinValue(1)),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('return')
+            .setDescription('Borrower: return the card early (no gold refund)')
+            .addIntegerOption((o) =>
+              o.setName('lend_id').setDescription('From /tcg lend list').setRequired(true).setMinValue(1),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('recall')
+            .setDescription('Either party: spend Recall Token to end an active loan')
+            .addIntegerOption((o) =>
+              o.setName('lend_id').setDescription('From /tcg lend list').setRequired(true).setMinValue(1),
+            ),
+        )
+        .addSubcommand((sub) => sub.setName('list').setDescription('Your pending & active lends')),
+    )
+    .addSubcommandGroup((group) =>
+      group
+        .setName('pvp')
+        .setDescription(`Wager duels — max **${tcgPvp.MAX_GOLD_WAGER}**g stake (5% house on pot)`)
+        .addSubcommand((sub) =>
+          sub
+            .setName('challenge')
+            .setDescription('Challenge someone (they /tcg pvp accept)')
+            .addUserOption((o) => o.setName('opponent').setDescription('Target').setRequired(true))
+            .addIntegerOption((o) =>
+              o
+                .setName('wager')
+                .setDescription(`Gold each player puts in (0–${tcgPvp.MAX_GOLD_WAGER})`)
+                .setMinValue(0)
+                .setMaxValue(tcgPvp.MAX_GOLD_WAGER),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('accept')
+            .setDescription('Accept a pending challenge')
+            .addIntegerOption((o) =>
+              o.setName('session_id').setDescription('From /tcg pvp list').setRequired(true).setMinValue(1),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('pick')
+            .setDescription('Lock your fighter (ephemeral) — both picks resolve the match')
+            .addIntegerOption((o) =>
+              o.setName('session_id').setDescription('From /tcg pvp list').setRequired(true).setMinValue(1),
+            )
+            .addIntegerOption((o) => o.setName('instance').setDescription('Your copy ID').setRequired(true).setMinValue(1)),
+        )
+        .addSubcommand((sub) => sub.setName('list').setDescription('Your open PvP sessions')),
+    )
     .addSubcommand((sub) =>
       sub
-        .setName('grant')
-        .setDescription('Staff: grant a catalog card to a user (by template UUID)')
-        .addUserOption((o) => o.setName('user').setDescription('Recipient').setRequired(true))
-        .addStringOption((o) =>
-          o.setName('uuid').setDescription('Catalog card UUID').setRequired(true),
+        .setName('titles')
+        .setDescription('Set-collection cosmetic titles (3+ rarities of one member)'),
+    )
+    .addSubcommandGroup((group) =>
+      group
+        .setName('staff')
+        .setDescription('Staff-only catalog tools')
+        .addSubcommand((sub) =>
+          sub
+            .setName('grant')
+            .setDescription('Grant a catalog card to a user (by template UUID)')
+            .addUserOption((o) => o.setName('user').setDescription('Recipient').setRequired(true))
+            .addStringOption((o) =>
+              o.setName('uuid').setDescription('Catalog card UUID').setRequired(true),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('set_signature')
+            .setDescription('Assign 6/6 Mythic signature ability for a catalog member')
+            .addStringOption((o) =>
+              o
+                .setName('member_discord_id')
+                .setDescription('card_data.discord_id for that person')
+                .setRequired(true),
+            )
+            .addStringOption((o) =>
+              o
+                .setName('ability_key')
+                .setDescription('Tier 4 ability_key (e.g. eternal_flame, void_touch)')
+                .setRequired(true),
+            ),
         ),
     ),
 
   async execute(client, interaction) {
     const discordUser = interaction.user;
+    const subcommandGroup = interaction.options.getSubcommandGroup(false);
     const sub = interaction.options.getSubcommand();
+
+    if (subcommandGroup === 'trade') {
+      if (sub === 'offer') {
+        const partner = interaction.options.getUser('partner', true);
+        const give = interaction.options.getInteger('give', true);
+        const take = interaction.options.getInteger('take', true);
+        const youPay = interaction.options.getInteger('you_pay_gold') ?? 0;
+        const theyPay = interaction.options.getInteger('they_pay_gold') ?? 0;
+        const useLicense = interaction.options.getBoolean('use_license') ?? false;
+        const result = await tcgTrade.createTradeOffer(client, discordUser, partner, give, take, {
+          proposerGold: youPay,
+          counterpartyGold: theyPay,
+          useTradeLicense: useLicense,
+        });
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        const exp = `<t:${Math.floor(Number(result.expiresAt))}:R>`;
+        const goldNote =
+          result.proposerGold + result.counterpartyGold > 0
+            ? ` · **${result.proposerGold}**g from you / **${result.counterpartyGold}**g from them${
+                result.taxExempt ? ' · _Trade License (no tax)_' : ' · _3% tax on accept_'
+              }`
+            : '';
+        return interaction.editReply({
+          content: `Trade **#${result.tradeId}** proposed${goldNote}. ${partner}, use \`/tcg trade list\` then \`/tcg trade accept\`. Expires ${exp}.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'accept') {
+        const tradeId = interaction.options.getInteger('trade_id', true);
+        const result = await tcgTrade.acceptTradeOffer(client, discordUser, tradeId);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `Trade **#${result.tradeId}** completed — copies swapped. Gold used **3%** tax on each side’s outgoing amount unless the offer used a **Trade License**.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'cancel') {
+        const tradeId = interaction.options.getInteger('trade_id', true);
+        const result = await tcgTrade.cancelTradeOffer(client, discordUser, tradeId);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `Trade **#${result.tradeId}** cancelled.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'list') {
+        const out = await tcgTrade.listMyTradeOffers(client, discordUser);
+        if (!out.ok) {
+          return interaction.editReply({ content: out.error, ephemeral: true });
+        }
+        if (!out.rows.length) {
+          return interaction.editReply({
+            content: `No pending trades. Max **${tcgTrade.MAX_OPEN_TRADES_PER_USER}** open offers per player; offers expire in **24h** ([CardSystem.md]).`,
+            ephemeral: true,
+          });
+        }
+        const lines = out.rows.map((r) => {
+          const exp = Math.floor(Number(r.expires_at));
+          const iAmProposer = Number(r.proposer_user_id) === out.internalId;
+          const g1 = Math.floor(Number(r.proposer_gold) || 0);
+          const g2 = Math.floor(Number(r.counterparty_gold) || 0);
+          const goldStr =
+            g1 || g2
+              ? ` · **${g1}**g / **${g2}**g${Number(r.tax_exempt) ? ' · _no tax_' : ''}`
+              : '';
+          if (iAmProposer) {
+            return `**#${r.trade_id}** — You trade **${r.proposer_card_name}** (${r.proposer_rarity}) ↔ their **${r.counterparty_card_name}** (${r.counterparty_rarity})${goldStr} · ends <t:${exp}:R>`;
+          }
+          return `**#${r.trade_id}** — They offer **${r.proposer_card_name}** (${r.proposer_rarity}) for your **${r.counterparty_card_name}** (${r.counterparty_rarity})${goldStr} · \`/tcg trade accept trade_id:${r.trade_id}\` · ends <t:${exp}:R>`;
+        });
+        return interaction.editReply({
+          content: `${lines.join('\n')}`,
+          ephemeral: true,
+        });
+      }
+      return interaction.editReply({ content: 'Unknown trade subcommand.', ephemeral: true });
+    }
+
+    if (subcommandGroup === 'lend') {
+      if (sub === 'offer') {
+        const borrower = interaction.options.getUser('borrower', true);
+        const instance = interaction.options.getInteger('instance', true);
+        const price = interaction.options.getInteger('price') ?? 0;
+        const hours = interaction.options.getInteger('hours') ?? 24;
+        const maxBattles = interaction.options.getInteger('max_battles');
+        const r = await tcgLend.createLendOffer(
+          client,
+          discordUser,
+          borrower,
+          instance,
+          price,
+          hours,
+          maxBattles,
+        );
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        const exp = `<t:${Math.floor(Number(r.offerExpiresAt))}:R>`;
+        return interaction.editReply({
+          content: `Lend **#${r.lendId}** proposed to ${borrower}. They \`/tcg lend accept lend_id:${r.lendId}\`. Offer expires ${exp}.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'accept') {
+        const lendId = interaction.options.getInteger('lend_id', true);
+        const r = await tcgLend.acceptLendOffer(client, discordUser, lendId);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        return interaction.editReply({
+          content: `Lend **#${lendId}** active — your temp copy is **#${r.borrowerCopyId}** (equip for PvE). Ends <t:${r.loanEndAt}:R>.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'return') {
+        const lendId = interaction.options.getInteger('lend_id', true);
+        const r = await tcgLend.returnBorrowedCard(client, discordUser, lendId);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        return interaction.editReply({ content: `Lend **#${lendId}** — card returned to owner.`, ephemeral: true });
+      }
+      if (sub === 'recall') {
+        const lendId = interaction.options.getInteger('lend_id', true);
+        const r = await tcgLend.recallLendWithToken(client, discordUser, lendId);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        return interaction.editReply({ content: `Recall Token used — lend **#${lendId}** ended.`, ephemeral: true });
+      }
+      if (sub === 'list') {
+        const out = await tcgLend.listMyLends(client, discordUser);
+        if (!out.rows.length) {
+          return interaction.editReply({ content: 'No pending or active lends.', ephemeral: true });
+        }
+        const lines = out.rows.map((row) => {
+          const st = row.status;
+          const who =
+            Number(row.lender_user_id) === out.internalId
+              ? 'You **lend**'
+              : 'You **borrow**';
+          const cap = row.max_battles != null ? ` · cap **${row.battles_used}/${row.max_battles}** fights` : '';
+          const end =
+            row.loan_end_at && st === 'active'
+              ? ` · ends <t:${Math.floor(Number(row.loan_end_at))}:R>`
+              : '';
+          return `**#${row.lend_id}** ${who} **${row.card_name}** (${row.rarity}) · **${st}**${cap}${end}`;
+        });
+        return interaction.editReply({ content: lines.join('\n'), ephemeral: true });
+      }
+      return interaction.editReply({ content: 'Unknown lend subcommand.', ephemeral: true });
+    }
+
+    if (subcommandGroup === 'pvp') {
+      if (sub === 'challenge') {
+        const opponent = interaction.options.getUser('opponent', true);
+        const wager = interaction.options.getInteger('wager') ?? 0;
+        const r = await tcgPvp.createChallenge(client, discordUser, opponent, wager);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        const exp = `<t:${Math.floor(Number(r.acceptDeadline))}:R>`;
+        return interaction.editReply({
+          content: `PvP **#${r.sessionId}** — **${wager}**g wager. ${opponent}: \`/tcg pvp accept session_id:${r.sessionId}\`. Expires ${exp}.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'accept') {
+        const sessionId = interaction.options.getInteger('session_id', true);
+        const r = await tcgPvp.acceptChallenge(client, discordUser, sessionId);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        const pd = `<t:${Math.floor(Number(r.pickDeadline))}:R>`;
+        return interaction.editReply({
+          content: `Accepted — both stakes locked. Pick **ephemerally**: \`/tcg pvp pick session_id:${sessionId} instance:<your copy>\`. Deadline ${pd}.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'pick') {
+        const myId = await tcgEconomy.getInternalUserId(discordUser.id);
+        const sessionId = interaction.options.getInteger('session_id', true);
+        const instance = interaction.options.getInteger('instance', true);
+        const r = await tcgPvp.submitPick(client, discordUser, sessionId, instance);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (r.waitingForOpponent) {
+          return interaction.editReply({ content: 'Pick locked — waiting for opponent.', ephemeral: true });
+        }
+        const sim = r.sim;
+        const logText = sim.log.slice(0, 14).join('\n') || '—';
+        const title =
+          r.winnerUserId == null
+            ? 'PvP — draw'
+            : r.winnerUserId === myId
+              ? 'PvP — you won'
+              : 'PvP — you lost';
+        const potLine =
+          r.potGold > 0
+            ? r.winnerUserId
+              ? `Pot **${r.potGold}**g · winner gains **${r.goldToWinner}**g (after ${Math.round(tcgPvp.HOUSE_TAX * 100)}% tax).`
+              : `Pot split **${Math.floor(r.potGold / 2)}**g each (draw).`
+            : 'Friendly match — no wager.';
+        let color = 0x95a5a6;
+        if (r.winnerUserId != null) {
+          color = r.winnerUserId === myId ? 0x57f287 : 0xed4245;
+        }
+        const embed = new EmbedBuilder()
+          .setTitle(title)
+          .setDescription(
+            `**${r.challengerLabel}** vs **${r.targetLabel}**\n${sim.elementSummary}\n\n${logText}${sim.log.length > 14 ? '\n…' : ''}\n\n${potLine}`,
+          )
+          .setColor(color);
+        return interaction.editReply({ embeds: [embed], ephemeral: true });
+      }
+      if (sub === 'list') {
+        const rows = await tcgPvp.listMyPendingPvp(client, discordUser);
+        if (!rows.length) {
+          return interaction.editReply({ content: 'No pending PvP sessions.', ephemeral: true });
+        }
+        const uid = await tcgEconomy.getInternalUserId(discordUser.id);
+        const lines = await Promise.all(
+          rows.map(async (s) => {
+            const isCh = Number(s.challenger_user_id) === uid;
+            const otherId = isCh ? s.target_user_id : s.challenger_user_id;
+            const other = await db.query('users').where({ id: otherId }).first();
+            const tag = other ? `<@${other.discord_id}>` : `internal #${otherId}`;
+            const w = Number(s.wager_gold) || 0;
+            if (s.status === 'pending_accept') {
+              return `**#${s.session_id}** · **${w}**g · pending accept · ${isCh ? `waiting on ${tag}` : `you: /tcg pvp accept`} · <t:${s.accept_deadline}:R>`;
+            }
+            return `**#${s.session_id}** · **${w}**g · pick phase · <t:${s.pick_deadline}:R>`;
+          }),
+        );
+        return interaction.editReply({ content: lines.join('\n'), ephemeral: true });
+      }
+      return interaction.editReply({ content: 'Unknown pvp subcommand.', ephemeral: true });
+    }
+
+    if (subcommandGroup === 'staff') {
+      if (!isStaff(client, interaction)) {
+        return interaction.editReply({
+          content: 'Only staff can use **`/tcg staff`** commands.',
+          ephemeral: true,
+        });
+      }
+      if (sub === 'grant') {
+        const target = interaction.options.getUser('user', true);
+        const uuid = interaction.options.getString('uuid', true);
+        const result = await tcgInventory.grantCardToPlayer(client, target, { uuid });
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `Granted **${result.template.name}** (${result.template.rarity}, ${result.template.element || '—'}) to ${target} — copy **#${result.userCardId}**, ability **${result.ability_key}**.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'set_signature') {
+        const memberDid = interaction.options.getString('member_discord_id', true);
+        const abilityKey = interaction.options.getString('ability_key', true);
+        let out;
+        await db.query.transaction(async (trx) => {
+          out = await tcgSetProgress.upsertCatalogSignature(trx, memberDid, abilityKey);
+        });
+        if (!out.ok) {
+          return interaction.editReply({ content: out.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `Catalog **6/6** signature for member \`${out.member_discord_id}\`: **${out.ability_key}** (Mythic battles use this before random Tier 4).`,
+          ephemeral: true,
+        });
+      }
+      return interaction.editReply({ content: 'Unknown staff subcommand.', ephemeral: true });
+    }
+
+    if (subcommandGroup === 'pve') {
+      if (sub === 'progress') {
+        const s = await tcgPve.getProgressSummary(client, discordUser);
+        if (!s) {
+          return interaction.editReply({ content: 'Could not load PvE progress.', ephemeral: true });
+        }
+        const need = s.battlesRequired;
+        const wins = Number(s.wins_in_tier);
+        const nextIsBoss = need > 0 && wins === need - 1;
+        const embed = new EmbedBuilder()
+          .setTitle('PvE progression')
+          .setDescription(
+            `**${s.regionName}** · Tier **${s.tierRoman}**\n`
+              + `Wins this tier: **${wins} / ${need}**${
+                nextIsBoss
+                  ? '\n_Next fight: **Battle Boss** (tougher enemy, bonus gold on win)._\n'
+                  : '\n'
+              }`
+              + `Regions unlocked: **1 – ${s.max_region_unlocked}**\n`
+              + `Win streak (Dev Sanctum ATK bonus): **${s.pve_win_streak}**\n`
+              + `Battle boss pool pity: **${Number(s.pve_bb_pity) || 0} / 11** (card on win, resets on drop)`,
+          )
+          .setFooter({
+            text: 'Battle boss wins can drop a random pool card (40% / 5% dupe; 11th forces). Tier-boss fights later.',
+          })
+          .setColor(0x3498db);
+        return interaction.editReply({ embeds: [embed], ephemeral: true });
+      }
+      if (sub === 'travel') {
+        const region = interaction.options.getInteger('region', true);
+        const tierOpt = interaction.options.getInteger('tier');
+        const t = await tcgPve.travelTo(client, discordUser, { region, tier: tierOpt });
+        if (!t.ok) {
+          return interaction.editReply({ content: t.error, ephemeral: true });
+        }
+        const need = battlesRequiredForTier(t.progress.current_tier);
+        const embed = new EmbedBuilder()
+          .setTitle('PvE — travel')
+          .setDescription(
+            `**${t.regionName}** · Tier **${t.tierRoman}**\n`
+              + `Wins this tier: **0 / ${need}**\n`
+              + 'Win streak was reset. Use `/tcg pve fight` to continue.',
+          )
+          .setColor(0x3498db);
+        return interaction.editReply({ embeds: [embed], ephemeral: true });
+      }
+      if (sub === 'fight') {
+        const result = await tcgPve.runPveFight(client, discordUser);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        const {
+          sim,
+          goldGained,
+          won,
+          playerLabel,
+          enemyLabel,
+          playerLevel,
+          regionName,
+          tierRoman,
+          progress,
+          battlesRequired,
+          tierClearBonus,
+          tierCleared,
+          battleBossGold,
+          isBattleBoss,
+          battleBossDrop,
+          synergyLines,
+          synergyGoldMult,
+          shardFocusConsumed,
+          encounterPlayerStats,
+          encounterEnemyStats,
+        } = result;
+        const combatExtraPve = combatItemsEmbedValue(result);
+        const title = won ? 'PvE — victory' : sim.outcome === 'draw' ? 'PvE — draw' : 'PvE — defeat';
+        const logText = sim.log.slice(0, 12).join('\n') || '—';
+        let goldLine = '**0**g';
+        if (won) {
+          const nexus = result.fightRegion === 1 ? ' · Nexus +10% on gold' : '';
+          const clear =
+            tierCleared && tierClearBonus > 0 ? ` · **${tierClearBonus}**g tier clear` : '';
+          const boss = battleBossGold > 0 ? ` · **${battleBossGold}**g battle boss` : '';
+          const synGold =
+            synergyGoldMult > 1 ? ` · ×${synergyGoldMult.toFixed(2)} synergy gold` : '';
+          goldLine = `**+${goldGained}**g${boss}${clear}${nexus}${synGold}`;
+        }
+        const progLine = won
+          ? `Tier **${tierRoman}** · ${progress.wins_in_tier} / ${battlesRequired} wins`
+          : `Tier **${tierRoman}** · ${progress.wins_in_tier} / ${battlesRequired} wins (no progress on loss)`;
+        let poolDropField = null;
+        if (isBattleBoss && won && battleBossDrop) {
+          const d = battleBossDrop;
+          if (d.granted) {
+            const el = d.template.element ? `${DISPLAY_LABEL[d.template.element] || d.template.element}` : '—';
+            poolDropField = {
+              name: 'Pool drop',
+              value:
+                `**${d.template.name}** · ${d.template.rarity} · ${el} · copy **#${d.userCardId}**${
+                  d.hardPity ? ' _(pity)_' : ''
+                }`,
+              inline: false,
+            };
+          } else if (d.reason === 'grant_failed') {
+            poolDropField = {
+              name: 'Pool drop',
+              value: `No card — ${d.error}`,
+              inline: false,
+            };
+          } else {
+            poolDropField = {
+              name: 'Pool drop',
+              value: `No card this time · pity **${d.pityAfter} / 11**`,
+              inline: false,
+            };
+          }
+        }
+
+        const synLine =
+          synergyLines && synergyLines.length
+            ? `\n_Synergy:_ ${synergyLines.join(' · ')}`
+            : '';
+
+        const st = (s) =>
+          s
+            ? `ATK **${s.atk}** · DEF **${s.def}** · SPD **${s.spd}** · HP **${s.hp}**`
+            : '—';
+        const encounterStatsField =
+          encounterPlayerStats && encounterEnemyStats
+            ? {
+                name: 'This fight (not saved)',
+                value: `**You:** ${st(encounterPlayerStats)}\n**Enemy:** ${st(encounterEnemyStats)}`,
+                inline: false,
+              }
+            : null;
+
+        const embed = new EmbedBuilder()
+          .setTitle(title)
+          .setDescription(
+            `**${regionName}** · ${progLine}${isBattleBoss ? '\n_Battle Boss encounter._' : ''}${synLine}\n`
+              + `**${playerLabel}** (Lv${playerLevel}) vs **${enemyLabel}**\n`
+              + `${sim.elementSummary}\n\n${logText}${sim.log.length > 12 ? '\n…' : ''}`,
+          )
+          .addFields(
+            ...(encounterStatsField ? [encounterStatsField] : []),
+            { name: 'Result', value: sim.outcome.toUpperCase(), inline: true },
+            { name: 'Gold', value: goldLine, inline: true },
+            { name: 'Streak', value: String(progress.pve_win_streak), inline: true },
+            ...(poolDropField ? [poolDropField] : []),
+            ...(combatExtraPve
+              ? [{ name: 'Combat items', value: combatExtraPve, inline: false }]
+              : shardFocusConsumed
+                ? [
+                    {
+                      name: 'Shard of Focus',
+                      value: '**+15% ATK** applied this fight · 1 charge consumed.',
+                      inline: false,
+                    },
+                  ]
+                : []),
+          )
+          .setColor(won ? 0x57f287 : 0xed4245);
+        return interaction.editReply({ embeds: [embed], ephemeral: true });
+      }
+      return interaction.editReply({ content: 'Unknown pve subcommand.', ephemeral: true });
+    }
 
     if (sub === 'buy_pack') {
       const pack = interaction.options.getString('pack', true);
@@ -474,8 +1112,17 @@ module.exports = {
         result.bonusSlotsAdded > 0
           ? `\nInventory cap **+${result.bonusSlotsAdded}** (total shop bonus: **${result.inventoryBonusSlots}**).`
           : '';
+      const chargeLine =
+        result.chargeColumn && result.chargeAfter != null
+          ? `\n**${result.label}** stack: **${result.chargeAfter}** stored.`
+          : '';
+      const dustLine = result.rarityDustPrimed ? '\n**Rarity Dust** primed for your **next** fuse.' : '';
+      const xpLine =
+        result.xpBoosterUntil != null
+          ? `\n**XP Booster** active until <t:${Math.floor(Number(result.xpBoosterUntil))}:R>.`
+          : '';
       return interaction.editReply({
-        content: `**${result.label}** — **−${result.cost}**g · **${result.newGold.toLocaleString()}**g remaining${bonusLine}`,
+        content: `**${result.label}** — **−${result.cost}**g · **${result.newGold.toLocaleString()}**g remaining${bonusLine}${chargeLine}${dustLine}${xpLine}`,
         ephemeral: true,
       });
     }
@@ -486,7 +1133,16 @@ module.exports = {
         return interaction.editReply({ content: 'Could not load your profile.', ephemeral: true });
       }
       const owned = await tcgInventory.countInventoryForDiscordUser(client, discordUser);
-      const cap = tcgInventory.DEFAULT_INVENTORY_CAP + bal.inventoryBonusSlots;
+      const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
+      let titleCount = 0;
+      if (internalId) {
+        await tcgSetProgress.syncTitleUnlocks(db.query, internalId);
+        const titleRows = await tcgSetProgress.listUnlockedTitles(internalId);
+        titleCount = titleRows.length;
+      }
+      const cap = internalId
+        ? await tcgInventory.getEffectiveInventoryCapForUser(internalId)
+        : tcgInventory.DEFAULT_INVENTORY_CAP + bal.inventoryBonusSlots;
       const dailyLine = bal.dailyReady
         ? 'Daily login: **ready** (`/tcg daily`)'
         : `Daily login: on cooldown (~${formatDuration(bal.dailyRemainingSec)} remaining)`;
@@ -546,9 +1202,28 @@ module.exports = {
           { name: 'XP', value: String(bal.xp), inline: true },
           { name: 'Level', value: String(bal.level), inline: true },
           {
+            name: 'Shop combat charges',
+            value: [
+              `Focus **${bal.shardFocusCharges}** · Veil **${bal.ironVeilCharges}** · Overclock **${bal.overclockCharges}**`,
+              `Null Ward **${bal.nullWardCharges}** · Revive **${bal.reviveShardCharges}**`,
+            ].join('\n'),
+            inline: false,
+          },
+          {
+            name: 'Other shop stock',
+            value: [
+              `Catalyst **${bal.fusionCatalystCharges}** · Dust _${bal.rarityDustNextFuse ? '**primed**' : 'off'}_`,
+              `Seals **${bal.preservationSealCharges}** · Recall **${bal.recallTokenCharges}** · License **${bal.tradeLicenseCharges}**`,
+              bal.xpBoosterActive
+                ? `XP Booster **on** → <t:${bal.xpBoosterUntil}:R>`
+                : 'XP Booster off',
+            ].join('\n'),
+            inline: false,
+          },
+          {
             name: 'Collection',
             value:
-              `${owned} / ${cap} cards` +
+              `${owned} / ${cap} cards · **${titleCount}** set title(s) (\`/tcg titles\`)` +
               (bal.inventoryBonusSlots > 0
                 ? `\n_Shop bonus:_ **+${bal.inventoryBonusSlots}** slots (\`/tcg shop\`)`
                 : ''),
@@ -563,7 +1238,7 @@ module.exports = {
               `Boss **${tcgPacks.BOSS_PACK_COST}**g · 4× · 1× Rare+ · boss-tag chance`,
               `Region **${tcgPacks.REGION_PACK_COST}**g · 4× pool · \`region\` ${tcgPacks.REGION_ID_MIN}–${tcgPacks.REGION_ID_MAX}`,
               `Direct **buy_card** — C **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.C}**g · UC **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.UC}**g · R **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.R}**g · EP **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.EP}**g · L **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.L}**g · M **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.M}**g`,
-              `\`/tcg buy_pack\` · \`/tcg buy_card\` · \`/tcg shop\``,
+              `\`/tcg buy_pack\` · \`/tcg buy_card\` · \`/tcg shop\` · \`/tcg trade\``,
             ].join('\n'),
             inline: false,
           },
@@ -614,7 +1289,7 @@ module.exports = {
       );
       if (!total) {
         return interaction.editReply({
-          content: `No cards yet. Open a **Basic Pack** with \`/tcg buy_pack\` or ask staff for \`/tcg grant\`.`,
+          content: `No cards yet. Open a **Basic Pack** with \`/tcg buy_pack\` or ask staff for \`/tcg staff grant\`.`,
           ephemeral: true,
         });
       }
@@ -685,13 +1360,37 @@ module.exports = {
 
     if (sub === 'fuse') {
       const first = interaction.options.getInteger('first', true);
-      const second = interaction.options.getInteger('second', true);
-      const result = await tcgInventory.fuseInstances(client, discordUser, first, second);
+      const second = interaction.options.getInteger('second');
+      const useCatalyst = interaction.options.getBoolean('use_catalyst') ?? false;
+      const result = await tcgInventory.fuseInstances(client, discordUser, first, second ?? null, {
+        fusionCatalyst: useCatalyst,
+      });
+      if (!result.ok) {
+        return interaction.editReply({ content: result.error, ephemeral: true });
+      }
+      let extra = '';
+      if (result.rarityDust?.upgraded) {
+        extra = ` **Rarity Dust:** upgraded toward **${result.rarityDust.newRarity}** (**${result.rarityDust.templateName}**).`;
+      } else if (result.rarityDust?.dustConsumed) {
+        extra = ' _(Rarity Dust consumed — no rarity bump this time)._';
+      }
+      if (result.fusionCatalystUsed) {
+        extra = ` _(Fusion Catalyst used)._${extra}`;
+      }
+      return interaction.editReply({
+        content: `Fused into one **Lv${result.newLevel}** copy (**#${result.userCardId}**).${extra}`,
+        ephemeral: true,
+      });
+    }
+
+    if (sub === 'seal') {
+      const instanceId = interaction.options.getInteger('instance', true);
+      const result = await tcgInventory.applyPreservationSeal(client, discordUser, instanceId);
       if (!result.ok) {
         return interaction.editReply({ content: result.error, ephemeral: true });
       }
       return interaction.editReply({
-        content: `Fused into one **Lv${result.newLevel}** copy (**#${result.userCardId}**).`,
+        content: `Preservation Seal applied to **#${instanceId}**. **${result.sealsLeft}** seal charge(s) left.`,
         ephemeral: true,
       });
     }
@@ -732,7 +1431,7 @@ module.exports = {
           `${fmt(detail.main, 'Main', detail.row.main_user_card_id)}\n`
             + `${fmt(detail.support1, 'Support 1', detail.row.support1_user_card_id)}\n`
             + `${fmt(detail.support2, 'Support 2', detail.row.support2_user_card_id)}\n\n`
-            + '_Synergies in **`/tcg spar`** & **`/tcg pve_fight`** (60% cap). Preview: **`/tcg synergy`**. **Home Turf:** `tcg_region` 1–6, PvE only. **Class:** Commander / Guardian / Artisan (+aliases)._',
+            + '_Synergies in **`/tcg spar`** & **`/tcg pve fight`** (60% cap). Preview: **`/tcg synergy`**. **Home Turf:** `tcg_region` 1–6, PvE only. **Class:** Commander / Guardian / Artisan (+aliases)._',
         )
         .setFooter({ text: '/tcg synergy — optional enemy_element for Counter Build' })
         .setColor(0x9b59b6);
@@ -793,7 +1492,7 @@ module.exports = {
             `PvE — ${summary.regionName} · Tier ${summary.tierRoman}`,
           )}\n\n${enLine}\n_Bonuses use the 60% cap ([CardSystem.md])._`,
         )
-        .setFooter({ text: '/tcg pve_fight uses the PvE column; /tcg spar uses the Spar column.' })
+        .setFooter({ text: '/tcg pve fight uses the PvE column; /tcg spar uses the Spar column.' })
         .setColor(0x9b59b6);
       return interaction.editReply({ embeds: [embed], ephemeral: true });
     }
@@ -825,8 +1524,18 @@ module.exports = {
       if (!result.ok) {
         return interaction.editReply({ content: result.error, ephemeral: true });
       }
-      const { sim, goldGained, won, playerLabel, enemyLabel, playerLevel, synergyLines, synergyGoldMult } =
-        result;
+      const {
+        sim,
+        goldGained,
+        won,
+        playerLabel,
+        enemyLabel,
+        playerLevel,
+        synergyLines,
+        synergyGoldMult,
+        shardFocusConsumed,
+      } = result;
+      const combatExtra = combatItemsEmbedValue(result);
       const title = won ? 'Spar — victory' : sim.outcome === 'draw' ? 'Spar — draw' : 'Spar — defeat';
       const logText = sim.log.slice(0, 14).join('\n') || '—';
       const goldLine = goldGained
@@ -848,159 +1557,41 @@ module.exports = {
           { name: 'Result', value: `${sim.outcome.toUpperCase()} · ${sim.rounds} steps`, inline: true },
           { name: 'Gold', value: goldLine, inline: true },
           { name: 'XP', value: 'Applied via PvE rules (`awardTcgBattleXp`)', inline: false },
+          ...(combatExtra
+            ? [{ name: 'Combat items', value: combatExtra, inline: false }]
+            : shardFocusConsumed
+              ? [
+                  {
+                    name: 'Shard of Focus',
+                    value: '**+15% ATK** applied this fight · 1 charge consumed.',
+                    inline: false,
+                  },
+                ]
+              : []),
         )
         .setColor(won ? 0x57f287 : 0xed4245);
       return interaction.editReply({ embeds: [embed], ephemeral: true });
     }
 
-    if (sub === 'pve_progress') {
-      const s = await tcgPve.getProgressSummary(client, discordUser);
-      if (!s) {
-        return interaction.editReply({ content: 'Could not load PvE progress.', ephemeral: true });
+    if (sub === 'titles') {
+      await client.db.checkUser(discordUser);
+      const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
+      if (!internalId) {
+        return interaction.editReply({ content: 'Profile not found.', ephemeral: true });
       }
-      const need = s.battlesRequired;
-      const wins = Number(s.wins_in_tier);
-      const nextIsBoss = need > 0 && wins === need - 1;
-      const embed = new EmbedBuilder()
-        .setTitle('PvE progression')
-        .setDescription(
-          `**${s.regionName}** · Tier **${s.tierRoman}**\n`
-            + `Wins this tier: **${wins} / ${need}**${
-              nextIsBoss
-                ? '\n_Next fight: **Battle Boss** (tougher enemy, bonus gold on win)._\n'
-                : '\n'
-            }`
-            + `Regions unlocked: **1 – ${s.max_region_unlocked}**\n`
-            + `Win streak (Dev Sanctum ATK bonus): **${s.pve_win_streak}**\n`
-            + `Battle boss pool pity: **${Number(s.pve_bb_pity) || 0} / 11** (card on win, resets on drop)`,
-        )
-        .setFooter({
-          text: 'Battle boss wins can drop a random pool card (40% / 5% dupe; 11th forces). Tier-boss fights later.',
-        })
-        .setColor(0x3498db);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (sub === 'pve_travel') {
-      const region = interaction.options.getInteger('region', true);
-      const tierOpt = interaction.options.getInteger('tier');
-      const t = await tcgPve.travelTo(client, discordUser, { region, tier: tierOpt });
-      if (!t.ok) {
-        return interaction.editReply({ content: t.error, ephemeral: true });
+      await tcgSetProgress.syncTitleUnlocks(db.query, internalId);
+      const rows = await tcgSetProgress.listUnlockedTitles(internalId);
+      if (!rows.length) {
+        return interaction.editReply({
+          content:
+            'No set titles yet. Own **3+ different rarities** of the same member to unlock a cosmetic title ([CardSystem.md] Set Collection).',
+          ephemeral: true,
+        });
       }
-      const need = battlesRequiredForTier(t.progress.current_tier);
-      const embed = new EmbedBuilder()
-        .setTitle('PvE — travel')
-        .setDescription(
-          `**${t.regionName}** · Tier **${t.tierRoman}**\n`
-            + `Wins this tier: **0 / ${need}**\n`
-            + 'Win streak was reset. Use `/tcg pve_fight` to continue.',
-        )
-        .setColor(0x3498db);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (sub === 'pve_fight') {
-      const result = await tcgPve.runPveFight(client, discordUser);
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      const {
-        sim,
-        goldGained,
-        won,
-        playerLabel,
-        enemyLabel,
-        playerLevel,
-        regionName,
-        tierRoman,
-        progress,
-        battlesRequired,
-        tierClearBonus,
-        tierCleared,
-        battleBossGold,
-        isBattleBoss,
-        battleBossDrop,
-        synergyLines,
-        synergyGoldMult,
-      } = result;
-      const title = won ? 'PvE — victory' : sim.outcome === 'draw' ? 'PvE — draw' : 'PvE — defeat';
-      const logText = sim.log.slice(0, 12).join('\n') || '—';
-      let goldLine = '**0**g';
-      if (won) {
-        const nexus = result.fightRegion === 1 ? ' · Nexus +10% on gold' : '';
-        const clear =
-          tierCleared && tierClearBonus > 0 ? ` · **${tierClearBonus}**g tier clear` : '';
-        const boss = battleBossGold > 0 ? ` · **${battleBossGold}**g battle boss` : '';
-        const synGold =
-          synergyGoldMult > 1 ? ` · ×${synergyGoldMult.toFixed(2)} synergy gold` : '';
-        goldLine = `**+${goldGained}**g${boss}${clear}${nexus}${synGold}`;
-      }
-      const progLine = won
-        ? `Tier **${tierRoman}** · ${progress.wins_in_tier} / ${battlesRequired} wins`
-        : `Tier **${tierRoman}** · ${progress.wins_in_tier} / ${battlesRequired} wins (no progress on loss)`;
-      let poolDropField = null;
-      if (isBattleBoss && won && battleBossDrop) {
-        const d = battleBossDrop;
-        if (d.granted) {
-          const el = d.template.element ? `${DISPLAY_LABEL[d.template.element] || d.template.element}` : '—';
-          poolDropField = {
-            name: 'Pool drop',
-            value:
-              `**${d.template.name}** · ${d.template.rarity} · ${el} · copy **#${d.userCardId}**${
-                d.hardPity ? ' _(pity)_' : ''
-              }`,
-            inline: false,
-          };
-        } else if (d.reason === 'grant_failed') {
-          poolDropField = {
-            name: 'Pool drop',
-            value: `No card — ${d.error}`,
-            inline: false,
-          };
-        } else {
-          poolDropField = {
-            name: 'Pool drop',
-            value: `No card this time · pity **${d.pityAfter} / 11**`,
-            inline: false,
-          };
-        }
-      }
-
-      const synLine =
-        synergyLines && synergyLines.length
-          ? `\n_Synergy:_ ${synergyLines.join(' · ')}`
-          : '';
-
-      const embed = new EmbedBuilder()
-        .setTitle(title)
-        .setDescription(
-          `**${regionName}** · ${progLine}${isBattleBoss ? '\n_Battle Boss encounter._' : ''}${synLine}\n`
-            + `**${playerLabel}** (Lv${playerLevel}) vs **${enemyLabel}**\n`
-            + `${sim.elementSummary}\n\n${logText}${sim.log.length > 12 ? '\n…' : ''}`,
-        )
-        .addFields(
-          { name: 'Result', value: sim.outcome.toUpperCase(), inline: true },
-          { name: 'Gold', value: goldLine, inline: true },
-          { name: 'Streak', value: String(progress.pve_win_streak), inline: true },
-          ...(poolDropField ? [poolDropField] : []),
-        )
-        .setColor(won ? 0x57f287 : 0xed4245);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (sub === 'grant') {
-      if (!isStaff(client, interaction)) {
-        return interaction.editReply({ content: 'Only staff can use `/tcg grant`.', ephemeral: true });
-      }
-      const target = interaction.options.getUser('user', true);
-      const uuid = interaction.options.getString('uuid', true);
-      const result = await tcgInventory.grantCardToPlayer(client, target, { uuid });
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
+      const lines = rows.slice(0, 35).map((r) => `• **${r.display_title}**`);
+      const more = rows.length > 35 ? `\n_…and ${rows.length - 35} more._` : '';
       return interaction.editReply({
-        content: `Granted **${result.template.name}** (${result.template.rarity}, ${result.template.element || '—'}) to ${target} — copy **#${result.userCardId}**, ability **${result.ability_key}**.`,
+        content: `**Set titles** (${rows.length})\n${lines.join('\n')}${more}`,
         ephemeral: true,
       });
     }

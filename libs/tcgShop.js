@@ -1,5 +1,6 @@
 const db = require('../database/db');
 const tcgEconomy = require('./tcgEconomy');
+const { MAX_STORED_COMBAT_CHARGES } = require('./tcgCombatBuffs');
 
 function nowUnix() {
   return Math.floor(Date.now() / 1000);
@@ -9,7 +10,30 @@ function utcDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** [CardSystem.md] Item Shop — extend with more SKUs over time. */
+function capStack(n) {
+  return Math.min(MAX_STORED_COMBAT_CHARGES, Math.max(0, n));
+}
+
+/**
+ * @typedef {object} ShopChargeGrant
+ * @property {string} column
+ * @property {number} perPurchase
+ */
+
+/**
+ * [CardSystem.md] Item Shop — regular table (featured slot not implemented here).
+ * @type {Record<string, {
+ *   label: string,
+ *   description: string,
+ *   cost: number,
+ *   serverDailyLimit: number,
+ *   playerDailyLimit: number,
+ *   bonusSlots?: number,
+ *   charge?: ShopChargeGrant,
+ *   xpBoosterHours?: number,
+ *   setRarityDustNextFuse?: boolean,
+ * }>}
+ */
 const SHOP_ITEMS = Object.freeze({
   inventory_expander: Object.freeze({
     label: 'Inventory Expander',
@@ -18,6 +42,94 @@ const SHOP_ITEMS = Object.freeze({
     serverDailyLimit: 3,
     playerDailyLimit: 1,
     bonusSlots: 10,
+  }),
+  shard_of_focus: Object.freeze({
+    label: 'Shard of Focus',
+    description: '+**15%** ATK on your **next** PvE or spar fight (consumes **1** charge).',
+    cost: 200,
+    serverDailyLimit: 50,
+    playerDailyLimit: 3,
+    charge: { column: 'tcg_shard_focus_charges', perPurchase: 1 },
+  }),
+  iron_veil: Object.freeze({
+    label: 'Iron Veil',
+    description: '+**20%** DEF on your **next** PvE or spar fight (consumes **1** charge).',
+    cost: 200,
+    serverDailyLimit: 50,
+    playerDailyLimit: 3,
+    charge: { column: 'tcg_iron_veil_charges', perPurchase: 1 },
+  }),
+  overclock_chip: Object.freeze({
+    label: 'Overclock Chip',
+    description: '+**25%** SPD on your **next** PvE or spar fight (consumes **1** charge).',
+    cost: 250,
+    serverDailyLimit: 30,
+    playerDailyLimit: 2,
+    charge: { column: 'tcg_overclock_charges', perPurchase: 1 },
+  }),
+  null_ward: Object.freeze({
+    label: 'Null Ward',
+    description: '**Next** fight: negates the **first** enemy elemental **×>1** hit vs you (consumes **1** charge).',
+    cost: 500,
+    serverDailyLimit: 20,
+    playerDailyLimit: 1,
+    charge: { column: 'tcg_null_ward_charges', perPurchase: 1 },
+  }),
+  revive_shard: Object.freeze({
+    label: 'Revive Shard',
+    description: '**Next** fight: if you **lose** at 0 HP, **revive once** at **30%** max HP vs foe’s remaining HP (consumes **1** charge if revive triggers).',
+    cost: 800,
+    serverDailyLimit: 15,
+    playerDailyLimit: 1,
+    charge: { column: 'tcg_revive_shard_charges', perPurchase: 1 },
+  }),
+  fusion_catalyst: Object.freeze({
+    label: 'Fusion Catalyst',
+    description: '**1** use — **next** level-up fuse needs **only one** copy (+catalyst) instead of two ([CardSystem.md]).',
+    cost: 1000,
+    serverDailyLimit: 10,
+    playerDailyLimit: 1,
+    charge: { column: 'tcg_fusion_catalyst_charges', perPurchase: 1 },
+  }),
+  rarity_dust: Object.freeze({
+    label: 'Rarity Dust',
+    description: '**Next** fuse: **12%** chance the result bumps **one** rarity tier (same character pool).',
+    cost: 2500,
+    serverDailyLimit: 5,
+    playerDailyLimit: 1,
+    setRarityDustNextFuse: true,
+  }),
+  preservation_seal: Object.freeze({
+    label: 'Preservation Seal',
+    description: '**1** application charge — use `/tcg seal` on a copy: blocks **reroll**, **trade**, **breakdown**; wager rules when PvP wagers ship.',
+    cost: 1500,
+    serverDailyLimit: 10,
+    playerDailyLimit: 1,
+    charge: { column: 'tcg_preservation_seal_charges', perPurchase: 1 },
+  }),
+  recall_token: Object.freeze({
+    label: 'Recall Token',
+    description: '**1** use — ends an **active** lend instantly (either party, `/tcg lend recall`).',
+    cost: 600,
+    serverDailyLimit: 25,
+    playerDailyLimit: 2,
+    charge: { column: 'tcg_recall_token_charges', perPurchase: 1 },
+  }),
+  trade_license: Object.freeze({
+    label: 'Trade License',
+    description: '**1** trade — when **offering gold** in `/tcg trade offer`, use `tax_free:true` to skip **3%** tax on that deal.',
+    cost: 400,
+    serverDailyLimit: 20,
+    playerDailyLimit: 2,
+    charge: { column: 'tcg_trade_license_charges', perPurchase: 1 },
+  }),
+  xp_booster: Object.freeze({
+    label: 'XP Booster',
+    description: '**2×** message XP for **24h** (stacks by extending time from current booster end).',
+    cost: 1000,
+    serverDailyLimit: 15,
+    playerDailyLimit: 1,
+    xpBoosterHours: 24,
   }),
 });
 
@@ -142,6 +254,25 @@ async function buyShopItem(client, discordUser, sku) {
 
       const walletPatch = { gold: newGold, updated_at: ts };
       if (slotBonus) walletPatch.tcg_inventory_bonus_slots = bonusAfter;
+
+      if (def.charge) {
+        const col = def.charge.column;
+        const per = Number(def.charge.perPurchase) || 0;
+        const before = Number(w[col]) || 0;
+        walletPatch[col] = capStack(before + per);
+      }
+
+      if (def.setRarityDustNextFuse) {
+        walletPatch.tcg_rarity_dust_next_fuse = 1;
+      }
+
+      if (def.xpBoosterHours) {
+        const add = def.xpBoosterHours * 3600;
+        const cur = w.tcg_xp_booster_until != null ? Number(w.tcg_xp_booster_until) : 0;
+        const base = Math.max(ts, cur);
+        walletPatch.tcg_xp_booster_until = base + add;
+      }
+
       await trx('user_wallets').where({ user_id: internalId }).update(walletPatch);
 
       await trx('tcg_shop_server_daily').where({ day_utc: day, sku }).increment('sold_count', 1);
@@ -149,6 +280,9 @@ async function buyShopItem(client, discordUser, sku) {
       await trx('tcg_shop_user_daily')
         .where({ user_id: internalId, day_utc: day, sku })
         .increment('purchase_count', 1);
+
+      const chargeCol = def.charge ? def.charge.column : null;
+      const chargeAfter = chargeCol ? walletPatch[chargeCol] : null;
 
       result = {
         ok: true,
@@ -158,6 +292,10 @@ async function buyShopItem(client, discordUser, sku) {
         newGold,
         bonusSlotsAdded: slotBonus,
         inventoryBonusSlots: slotBonus ? bonusAfter : bonusBefore,
+        chargeColumn: chargeCol,
+        chargeAfter: chargeAfter != null ? chargeAfter : undefined,
+        rarityDustPrimed: !!def.setRarityDustNextFuse,
+        xpBoosterUntil: walletPatch.tcg_xp_booster_until,
       };
     });
   } catch (e) {
@@ -173,4 +311,5 @@ module.exports = {
   utcDateString,
   getShopSnapshot,
   buyShopItem,
+  capStack,
 };
