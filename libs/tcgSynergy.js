@@ -1,5 +1,5 @@
 const { ADVANTAGE_VS, normalizeElementKey } = require('../src/bot/tcg/elements');
-const { normalizeRarityKey } = require('../src/bot/tcg/cardLayout');
+const { rarityRank, sanitizeRarityAbbrev } = require('../src/bot/tcg/rarityOrder');
 const { byTier } = require('../src/bot/tcg/abilityPools');
 const { REGION_NAMES } = require('./tcgPveConfig');
 
@@ -8,11 +8,9 @@ const SYN_CAP = 0.6;
 /** Priority when over cap: Elemental → Class → Set → Rarity → Region — [CardSystem.md] */
 const PRIO = { elemental: 1, class: 2, set: 3, rarity: 4, region: 5 };
 
-const RARITY_ORDER = ['C', 'UC', 'R', 'EP', 'L', 'M'];
-
 function rarityIndex(norm) {
-  const k = normalizeRarityKey(norm);
-  const i = RARITY_ORDER.indexOf(k);
+  const k = sanitizeRarityAbbrev(norm, 'C');
+  const i = rarityRank(k);
   return i >= 0 ? i : 0;
 }
 
@@ -114,7 +112,7 @@ function computeCombatSynergy(loadout, enemyElement, pveRegion = null) {
   );
 
   let goldMult = 1;
-  const rk = (c) => (c && c.rarity ? normalizeRarityKey(c.rarity) : null);
+  const rk = (c) => (c && c.rarity ? sanitizeRarityAbbrev(c.rarity, 'C') : null);
   const k0 = rk(main);
   const k1 = rk(s1);
   const k2 = rk(s2);

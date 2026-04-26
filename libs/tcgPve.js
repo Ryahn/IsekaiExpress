@@ -1,5 +1,7 @@
 const db = require('../database/db');
-const { statLevelMultiplier, normalizeRarityKey } = require('../src/bot/tcg/cardLayout');
+const { statLevelMultiplier, sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
+const { rollRarity } = require('./tcgRarityRoll');
+const { applyRegionAndTier } = require('./tcgRarityModifiers');
 const tcgEconomy = require('./tcgEconomy');
 const tcgInventory = require('./tcgInventory');
 const tcgLoadout = require('./tcgLoadout');
@@ -21,6 +23,7 @@ const {
   battleBossWinGoldForTier,
   elementPoolForEncounter,
   enemyDifficultyMultiplier,
+  battleBossRarityRowsForTier,
 } = require('./tcgPveConfig');
 
 function nowUnix() {
@@ -143,26 +146,13 @@ async function pickEnemyTemplate(region, tier) {
     .first();
 }
 
-function weightedRarityForBossDrop(tier) {
-  const t = Math.min(10, Math.max(1, Number(tier) || 1));
-  const entries =
-    t <= 3
-      ? [['C', 60], ['UC', 28], ['R', 9], ['EP', 2.5], ['L', 0.4], ['M', 0.1]]
-      : t <= 6
-        ? [['C', 35], ['UC', 32], ['R', 22], ['EP', 9], ['L', 1.8], ['M', 0.2]]
-        : [['C', 12], ['UC', 22], ['R', 28], ['EP', 25], ['L', 10], ['M', 3]];
-  let r = Math.random() * entries.reduce((s, [, w]) => s + w, 0);
-  for (const [k, w] of entries) {
-    r -= w;
-    if (r <= 0) return k;
-  }
-  return entries[0][0];
-}
-
 async function pickBattleBossDropTemplate(region, tier) {
   const elements = elementPoolForEncounter(region, tier);
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const rarity = weightedRarityForBossDrop(tier);
+    const baseRows = battleBossRarityRowsForTier(tier);
+    const modded = applyRegionAndTier(baseRows, region, tier);
+    const rolled = rollRarity(modded);
+    const rarity = rolled.abbreviation;
     const row = await db.query('card_data')
       .whereIn('element', elements)
       .whereNotNull('base_atk')
@@ -429,7 +419,7 @@ async function runPveFight(client, discordUser) {
   if (
     memberDiscordId != null
     && memberDistinct >= 6
-    && normalizeRarityKey(playerRow.rarity) === 'M'
+    && sanitizeRarityAbbrev(playerRow.rarity, 'C') === 'M'
   ) {
     mythicSignatureKey = await tcgSetProgress.resolveMythicSignatureKey(memberDiscordId);
   }

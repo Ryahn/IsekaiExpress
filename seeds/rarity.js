@@ -33,22 +33,15 @@ function rarityBaseCardFileStem(abbrev) {
   return row ? rarityNameToBaseCardFileStem(row.name) : null;
 }
 
-/** Game keys not in `rarity` seed; align with equivalent tier (SSR = Super Super Rare) */
-const AUX_RARITY_STARS = {
-  EP: 9,
-};
-
 /**
  * Star count for catalog art / card_data from `stars` on the seed row (by batch abbreviation).
  * @param {string} [abbrev]
- * @returns {number|null} null if unknown — caller may fall back to TCG tier
+ * @returns {number|null} null if unknown
  */
 function rarityStarCount(abbrev) {
   const a = String(abbrev || 'C').toUpperCase();
   const row = RARITY_SEED_ROWS.find((r) => r.abbreviation === a);
-  if (row) return row.stars;
-  if (AUX_RARITY_STARS[a] != null) return AUX_RARITY_STARS[a];
-  return null;
+  return row ? row.stars : null;
 }
 
 exports.RARITY_SEED_ROWS = RARITY_SEED_ROWS;
@@ -62,8 +55,7 @@ exports.seed = async (knex) => knex('rarity')
     RARITY_SEED_ROWS.map((r) => ({
       abbreviation: r.abbreviation,
       name: r.name,
-      high_chance: r.high_chance,
-      low_chance: r.low_chance,
+      weight: r.weight,
       stars: r.stars,
     })),
   ));

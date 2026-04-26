@@ -1,6 +1,7 @@
 const db = require('../database/db');
 const { pickRandomAbilityKeyForRarity } = require('../src/bot/tcg/abilityPools');
-const { normalizeRarityKey, statLevelMultiplier } = require('../src/bot/tcg/cardLayout');
+const { statLevelMultiplier, sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
+const { nextRarityInOrder } = require('../src/bot/tcg/rarityOrder');
 const { DISPLAY_LABEL } = require('../src/bot/tcg/elements');
 const tcgEconomy = require('./tcgEconomy');
 const tcgCollectionSets = require('./tcgCollectionSets');
@@ -16,12 +17,17 @@ function effectiveInventoryCap(walletRow, setBonusSlots = 0) {
   return DEFAULT_INVENTORY_CAP + bonus + (Number(setBonusSlots) || 0);
 }
 
-/** @type {Record<string, number[]>} normalized rarity key → breakdown gold L1–L5 */
+/** @type {Record<string, number[]>} rarity abbreviation → breakdown gold L1–L5 */
 const BREAKDOWN_GOLD_BY_RARITY = {
+  N: [20, 35, 50, 70, 90],
   C: [50, 75, 100, 130, 165],
   UC: [120, 180, 240, 310, 390],
   R: [300, 450, 600, 775, 975],
-  EP: [750, 1125, 1500, 1950, 2450],
+  U: [400, 550, 700, 900, 1100],
+  SR: [500, 700, 900, 1150, 1400],
+  SSR: [750, 1125, 1500, 1950, 2450],
+  SUR: [1000, 1500, 2000, 2550, 3200],
+  UR: [1500, 2200, 3000, 3800, 4800],
   L: [2000, 3000, 4000, 5200, 6500],
   M: [6000, 9000, 12000, 15600, 19500],
 };
@@ -49,7 +55,7 @@ function combatStatsFromJoinedRow(row) {
 }
 
 function breakdownGoldFor(normRarity, level) {
-  const k = normalizeRarityKey(normRarity);
+  const k = sanitizeRarityAbbrev(normRarity, 'C');
   const row = BREAKDOWN_GOLD_BY_RARITY[k];
   if (!row) return 0;
   const lv = Math.min(5, Math.max(1, Number(level) || 1));
@@ -61,13 +67,8 @@ function nextElementRerollCost(currentRerollCount) {
   return [500, 1000, 2000, 4000][idx];
 }
 
-const RARITY_BUMP_ORDER = ['C', 'UC', 'R', 'EP', 'L', 'M'];
-
 function nextRarityTier(normRarity) {
-  const k = normalizeRarityKey(normRarity);
-  const i = RARITY_BUMP_ORDER.indexOf(k);
-  if (i < 0 || i >= RARITY_BUMP_ORDER.length - 1) return null;
-  return RARITY_BUMP_ORDER[i + 1];
+  return nextRarityInOrder(sanitizeRarityAbbrev(normRarity, 'C'));
 }
 
 /**

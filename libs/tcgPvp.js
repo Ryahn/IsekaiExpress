@@ -1,5 +1,5 @@
 const db = require('../database/db');
-const { normalizeRarityKey } = require('../src/bot/tcg/cardLayout');
+const { sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
 const tcgEconomy = require('./tcgEconomy');
 const tcgInventory = require('./tcgInventory');
 const tcgBattle = require('./tcgBattle');
@@ -325,7 +325,7 @@ async function submitPick(client, userDiscord, sessionId, instanceId) {
     if (
       rowCh.discord_id != null
       && nCh >= 6
-      && normalizeRarityKey(rowCh.rarity) === 'M'
+      && sanitizeRarityAbbrev(rowCh.rarity, 'C') === 'M'
     ) {
       sigCh = await tcgSetProgress.resolveMythicSignatureKey(rowCh.discord_id);
     }
@@ -333,7 +333,7 @@ async function submitPick(client, userDiscord, sessionId, instanceId) {
     if (
       rowTg.discord_id != null
       && nTg >= 6
-      && normalizeRarityKey(rowTg.rarity) === 'M'
+      && sanitizeRarityAbbrev(rowTg.rarity, 'C') === 'M'
     ) {
       sigTg = await tcgSetProgress.resolveMythicSignatureKey(rowTg.discord_id);
     }

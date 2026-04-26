@@ -1,5 +1,7 @@
 const db = require('../database/db');
-const { normalizeRarityKey } = require('../src/bot/tcg/cardLayout');
+const { sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
+const { rarityRank, RARITY_ORDER } = require('../src/bot/tcg/rarityOrder');
+const { rollRarity } = require('./tcgRarityRoll');
 const tcgEconomy = require('./tcgEconomy');
 const tcgCollectionSets = require('./tcgCollectionSets');
 const {
@@ -8,102 +10,97 @@ const {
   DEFAULT_INVENTORY_CAP,
 } = require('./tcgInventory');
 
-/** [CardSystem.md] Basic Pack */
+/** [CardSystem.md] Basic Pack — N / C / UC pool from `rarity` table weights. */
 const BASIC_PACK_COST = 500;
 const BASIC_PACK_COUNT = 3;
-/** 70% Common, 30% Uncommon */
-const BASIC_PACK_COMMON_CHANCE = 0.7;
+const BASIC_PITY_ABBREVS = ['N', 'C', 'UC'];
 /** Consecutive packs with no UC in any of the 3 pulls; at >= this, next pack forces UC on last pull if needed. */
 const BASIC_PACK_PITY_FORCE_AT = 9;
 
 /** [CardSystem.md] Advanced Pack */
 const ADVANCED_PACK_COST = 1500;
 const ADVANCED_PACK_COUNT = 4;
-/** Consecutive packs with no EP+ in any pull; at >= this, next pack forces EP on last pull if needed. */
+/** Consecutive packs with no **SSR+** in any pull; at >= this, next pack forces **SSR** on the last pull. */
 const ADVANCED_PACK_PITY_FORCE_AT = 9;
+const PITY_FORCE_ADVANCED_ABBREV = 'SSR';
+
+const ADVANCED_FALLBACK_RARITIES = RARITY_ORDER;
 
 /** [CardSystem.md] Premium Pack */
 const PREMIUM_PACK_COST = 4000;
 const PREMIUM_PACK_COUNT = 5;
-/** Consecutive packs with no L/M; at >= this, next pack forces L on last pull if still needed. */
 const PREMIUM_LEGENDARY_PITY_FORCE_AT = 19;
-/** Consecutive packs with no M; at >= this, next pack forces M on last pull if still needed. */
 const PREMIUM_MYTHIC_PITY_FORCE_AT = 49;
 
-const ADVANCED_WEIGHTS = [
-  ['C', 0.1],
-  ['UC', 0.45],
-  ['R', 0.3],
-  ['EP', 0.14],
-  ['L', 0.01],
-];
-const ADVANCED_FALLBACK_RARITIES = ['C', 'UC', 'R', 'EP', 'L'];
+const PREMIUM_FALLBACK_RARITIES = RARITY_ORDER.filter((a) => a !== 'N');
 
-const PREMIUM_WEIGHTS = [
-  ['UC', 0.05],
-  ['R', 0.35],
-  ['EP', 0.35],
-  ['L', 0.2],
-  ['M', 0.05],
-];
-const PREMIUM_FALLBACK_RARITIES = ['UC', 'R', 'EP', 'L', 'M'];
-
-/** [CardSystem.md] Region Pack — random templates with matching `tcg_region` (Home Turf 1–6). */
 const REGION_PACK_COST = 2000;
 const REGION_PACK_COUNT = 4;
 const REGION_ID_MIN = 1;
 const REGION_ID_MAX = 6;
 
-/** [CardSystem.md] Boss Pack — guaranteed Rare+; optional boss-tagged templates (`is_boss_card`). */
 const BOSS_PACK_COST = 3000;
 const BOSS_PACK_COUNT = 4;
-/** Per pull: try `is_boss_card` pool before normal rarity roll. */
 const BOSS_PACK_BOSS_TAG_CHANCE = 0.06;
-const BOSS_PACK_RARE_PLUS_WEIGHTS = [
-  ['R', 0.55],
-  ['EP', 0.28],
-  ['L', 0.14],
-  ['M', 0.03],
-];
-const BOSS_PACK_RARE_PLUS_KEYS = ['R', 'EP', 'L', 'M'];
+/** "Rare+": R and every abbreviation above in `RARITY_ORDER` */
+const BOSS_RARE_PLUS_ABBREVS = RARITY_ORDER.filter((a) => rarityRank(a) >= rarityRank('R'));
+
+const ADVANCED_POOL_FALLBACK = ADVANCED_FALLBACK_RARITIES;
 
 function nowUnix() {
   return Math.floor(Date.now() / 1000);
 }
 
-function templateIsUncommon(t) {
-  return normalizeRarityKey(t.rarity) === 'UC';
-}
-
-function templateIsEpicOrHigher(t) {
-  const k = normalizeRarityKey(t.rarity);
-  return k === 'EP' || k === 'L' || k === 'M';
-}
-
-function templateIsLegendaryOrHigher(t) {
-  const k = normalizeRarityKey(t.rarity);
-  return k === 'L' || k === 'M';
-}
-
-function templateIsMythic(t) {
-  return normalizeRarityKey(t.rarity) === 'M';
-}
-
-function templateIsRarePlus(t) {
-  return BOSS_PACK_RARE_PLUS_KEYS.includes(normalizeRarityKey(t.rarity));
+/**
+ * @param {import('knex').Knex} trx
+ */
+async function loadRarityTableForRoll(trx) {
+  const rows = await trx('rarity')
+    .select('abbreviation', 'name', 'weight', 'stars')
+    .orderBy('abbreviation', 'asc');
+  const list = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+  return list.filter((r) => r && r.abbreviation && Number(r.weight) > 0);
 }
 
 /**
- * @param {Array<[string, number]>} pairs rarity key, weight (sum ~1)
+ * @param {import('knex').Knex} trx
+ * @param {string[]} allowAbbrevs
  */
-function pickWeightedRarity(pairs) {
-  const r = Math.random();
-  let acc = 0;
-  for (const [rar, w] of pairs) {
-    acc += w;
-    if (r < acc) return rar;
-  }
-  return pairs[pairs.length - 1][0];
+async function loadRarityTableFiltered(trx, allowAbbrevs) {
+  const set = new Set(allowAbbrevs);
+  const all = await loadRarityTableForRoll(trx);
+  return all.filter((r) => set.has(r.abbreviation));
+}
+
+/**
+ * Rares and up (R, U, SR, …) for Boss Pack forced slot
+ */
+function filterRarePlusTable(rows) {
+  return rows.filter((r) => rarityRank(r.abbreviation) >= rarityRank('R'));
+}
+
+function templateIsUncommon(t) {
+  return sanitizeRarityAbbrev(t.rarity, 'C') === 'UC';
+}
+
+function templateIsSsrOrHigher(t) {
+  return rarityRank(sanitizeRarityAbbrev(t.rarity, 'C')) >= rarityRank('SSR');
+}
+
+function templateIsEpicOrHigher(t) {
+  return templateIsSsrOrHigher(t);
+}
+
+function templateIsLegendaryOrHigher(t) {
+  return rarityRank(sanitizeRarityAbbrev(t.rarity, 'C')) >= rarityRank('L');
+}
+
+function templateIsMythic(t) {
+  return sanitizeRarityAbbrev(t.rarity, 'C') === 'M';
+}
+
+function templateIsRarePlus(t) {
+  return rarityRank(sanitizeRarityAbbrev(t.rarity, 'C')) >= rarityRank('R');
 }
 
 /**
@@ -112,14 +109,14 @@ function pickWeightedRarity(pairs) {
  * @param {string[]} fallbackRarities
  */
 async function pickCatalogTemplateForRarity(trx, rarityKey, fallbackRarities) {
-  const norm = normalizeRarityKey(rarityKey);
+  const a = sanitizeRarityAbbrev(rarityKey, 'C');
   const base = () =>
     trx('card_data')
       .whereNotNull('base_atk')
       .whereNotNull('base_def')
       .whereNotNull('base_spd')
       .whereNotNull('base_hp');
-  let row = await base().where({ rarity: norm }).orderByRaw('RAND()').first();
+  let row = await base().where({ rarity: a }).orderByRaw('RAND()').first();
   if (!row && fallbackRarities.length) {
     row = await base().whereIn('rarity', fallbackRarities).orderByRaw('RAND()').first();
   }
@@ -152,9 +149,9 @@ function normalizeRegionPackId(regionId) {
  * @param {string} rarityKey
  */
 async function pickRandomBossTaggedTemplateInRarity(trx, rarityKey) {
-  const norm = normalizeRarityKey(rarityKey);
+  const a = sanitizeRarityAbbrev(rarityKey, 'C');
   return trx('card_data')
-    .where({ is_boss_card: 1, rarity: norm })
+    .where({ is_boss_card: 1, rarity: a })
     .whereNotNull('base_atk')
     .whereNotNull('base_def')
     .whereNotNull('base_spd')
@@ -184,31 +181,38 @@ async function pickRandomBossTaggedInRarities(trx, rarities) {
  * @param {boolean} forceRarePlusSlot last slot when no Rare+ yet — forces R–M distribution
  */
 async function resolveBossPackPullTemplate(trx, forceRarePlusSlot) {
-  const rarity = forceRarePlusSlot
-    ? pickWeightedRarity(BOSS_PACK_RARE_PLUS_WEIGHTS)
-    : pickWeightedRarity(ADVANCED_WEIGHTS);
+  const allRows = await loadRarityTableForRoll(trx);
+  const tableForRoll = forceRarePlusSlot ? filterRarePlusTable(allRows) : allRows;
+  const rarity = tableForRoll.length
+    ? rollRarity(tableForRoll).abbreviation
+    : sanitizeRarityAbbrev('R', 'C');
 
   const tryBoss = Math.random() < BOSS_PACK_BOSS_TAG_CHANCE;
   if (tryBoss) {
-    const allowedFallback = forceRarePlusSlot ? BOSS_PACK_RARE_PLUS_KEYS : ADVANCED_FALLBACK_RARITIES;
+    const allowedFallback = forceRarePlusSlot ? BOSS_RARE_PLUS_ABBREVS : ADVANCED_POOL_FALLBACK;
     let boss = await pickRandomBossTaggedTemplateInRarity(trx, rarity);
     if (!boss) boss = await pickRandomBossTaggedInRarities(trx, allowedFallback);
     if (boss && (!forceRarePlusSlot || templateIsRarePlus(boss))) return boss;
   }
 
-  const fallbacks = forceRarePlusSlot ? BOSS_PACK_RARE_PLUS_KEYS : ADVANCED_FALLBACK_RARITIES;
+  const fallbacks = forceRarePlusSlot ? BOSS_RARE_PLUS_ABBREVS : ADVANCED_POOL_FALLBACK;
   return pickCatalogTemplateForRarity(trx, rarity, fallbacks);
 }
 
 /**
  * @param {import('knex').Knex} trx
  * @param {{ forceRarity?: string }} [opts]
- * @param {Array<[string, number]>} weights
  * @param {string[]} fallbackRarities
  */
-async function pickPackTemplateWeighted(trx, weights, fallbackRarities, opts = {}) {
-  const rarity = opts.forceRarity ? normalizeRarityKey(opts.forceRarity) : pickWeightedRarity(weights);
-  return pickCatalogTemplateForRarity(trx, rarity, fallbackRarities);
+async function pickPackTemplateFromDbRarity(trx, fallbackRarities, opts = {}) {
+  if (opts.forceRarity) {
+    const a = sanitizeRarityAbbrev(opts.forceRarity, 'C');
+    return pickCatalogTemplateForRarity(trx, a, fallbackRarities);
+  }
+  const rows = await loadRarityTableForRoll(trx);
+  if (!rows.length) return null;
+  const a = rollRarity(rows).abbreviation;
+  return pickCatalogTemplateForRarity(trx, a, fallbackRarities);
 }
 
 /**
@@ -216,8 +220,15 @@ async function pickPackTemplateWeighted(trx, weights, fallbackRarities, opts = {
  * @param {{ forceUncommon?: boolean }} [opts]
  */
 async function pickBasicPackTemplate(trx, opts = {}) {
-  const rarity = opts.forceUncommon ? 'UC' : Math.random() < BASIC_PACK_COMMON_CHANCE ? 'C' : 'UC';
-  return pickCatalogTemplateForRarity(trx, rarity, ['C', 'UC']);
+  if (opts.forceUncommon) {
+    return pickCatalogTemplateForRarity(trx, 'UC', BASIC_PITY_ABBREVS);
+  }
+  const pool = await loadRarityTableFiltered(trx, BASIC_PITY_ABBREVS);
+  if (!pool.length) {
+    return pickCatalogTemplateForRarity(trx, 'C', BASIC_PITY_ABBREVS);
+  }
+  const a = rollRarity(pool).abbreviation;
+  return pickCatalogTemplateForRarity(trx, a, BASIC_PITY_ABBREVS);
 }
 
 /**
@@ -343,15 +354,14 @@ async function buyAdvancedPack(client, discordUser) {
       let gotEpicPlus = false;
       const pulls = [];
       for (let i = 0; i < ADVANCED_PACK_COUNT; i += 1) {
-        const forceEp =
+        const forceSsr =
           mustPity && !gotEpicPlus && i === ADVANCED_PACK_COUNT - 1
-            ? { forceRarity: 'EP' }
+            ? { forceRarity: PITY_FORCE_ADVANCED_ABBREV }
             : {};
-        const template = await pickPackTemplateWeighted(
+        const template = await pickPackTemplateFromDbRarity(
           trx,
-          ADVANCED_WEIGHTS,
           ADVANCED_FALLBACK_RARITIES,
-          forceEp,
+          forceSsr,
         );
         if (!template) {
           result = {
@@ -367,7 +377,7 @@ async function buyAdvancedPack(client, discordUser) {
           throw new Error('PACK_ABORT');
         }
         pulls.push(g);
-        if (templateIsEpicOrHigher(template)) gotEpicPlus = true;
+        if (templateIsSsrOrHigher(template)) gotEpicPlus = true;
       }
 
       const pityAfter = gotEpicPlus ? 0 : pityBefore + 1;
@@ -447,9 +457,8 @@ async function buyPremiumPack(client, discordUser) {
           if (mustPityMythic && !gotM) force = { forceRarity: 'M' };
           else if (mustPityLegendary && !gotLegendaryPlus) force = { forceRarity: 'L' };
         }
-        const template = await pickPackTemplateWeighted(
+        const template = await pickPackTemplateFromDbRarity(
           trx,
-          PREMIUM_WEIGHTS,
           PREMIUM_FALLBACK_RARITIES,
           force,
         );

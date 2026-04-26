@@ -9,7 +9,7 @@ const logger = require('./libs/logger');
 const {
   CARD,
   RARITY,
-  normalizeRarityKey,
+  sanitizeRarityAbbrev,
   resolveBaseCardPath,
   safePathSegmentFromName,
   readableTextOuterGlowColor,
@@ -50,8 +50,8 @@ function font(sizePx, weight = 'bold') {
   return `${weight} ${sizePx}px ui-sans-serif, system-ui, sans-serif`;
 }
 
-function generateUUID(characterName, rarityNorm, discordId, elementKey) {
-  return uuidv5(`${characterName}|${rarityNorm}|${discordId}|${elementKey}`, NAMESPACE);
+function generateUUID(characterName, rarityAbbrev, discordId, elementKey) {
+  return uuidv5(`${characterName}|${rarityAbbrev}|${discordId}|${elementKey}`, NAMESPACE);
 }
 
 /**
@@ -76,10 +76,10 @@ async function generateCard(
   elementIconPath = null,
   options = {},
 ) {
-  const norm = normalizeRarityKey(rawRarity);
-  const rSpec = RARITY[norm] || RARITY.C;
+  const abbrev = sanitizeRarityAbbrev(rawRarity, 'C');
+  const rSpec = RARITY[abbrev] || RARITY.C;
   const safeUser = safePathSegmentFromName(characterName);
-  const raritySlug = rarityPathSlugFromKey(norm);
+  const raritySlug = rarityPathSlugFromKey(abbrev);
 
   const resolvedElementKey = normalizeElementKey(elementKey);
   if (!resolvedElementKey) {
@@ -94,10 +94,10 @@ async function generateCard(
     throw new Error(`generateCard: no element icon for ${resolvedElementKey}`);
   }
 
-  const baseStats = BASE_STATS_L1[norm] ?? BASE_STATS_L1.C;
-  const basePower = POWER_SCORE_L1[norm] ?? POWER_SCORE_L1.C;
+  const baseStats = BASE_STATS_L1[abbrev] ?? BASE_STATS_L1.C;
+  const basePower = POWER_SCORE_L1[abbrev] ?? POWER_SCORE_L1.C;
 
-  const uuid = generateUUID(characterName, norm, discordId, resolvedElementKey);
+  const uuid = generateUUID(characterName, abbrev, discordId, resolvedElementKey);
 
   const canvas = createCanvas(CARD.width, CARD.height);
   const ctx = canvas.getContext('2d');
@@ -106,7 +106,7 @@ async function generateCard(
   const baseImage = await loadImage(basePath);
   ctx.drawImage(baseImage, 0, 0, CARD.width, CARD.height);
 
-  const layout = cardLayoutForRarityCatalog(norm);
+  const layout = cardLayoutForRarityCatalog(abbrev);
 
   const profileImage = await loadImage(avatar);
   const p = layout.portrait;
@@ -188,14 +188,14 @@ async function generateCard(
   /**
    * Mythic templates are tagged for Boss Pack pool (`tcgPacks` uses `is_boss_card`); other tiers 0.
    */
-  const isBossCard = norm === 'M' ? 1 : 0;
+  const isBossCard = abbrev === 'M' ? 1 : 0;
 
   const card = {
     discord_id: discordId,
     uuid,
     stars: displayStarCount,
     name: characterName,
-    rarity: norm,
+    rarity: abbrev,
     class: className,
     level: levelValue,
     power: powerValue,

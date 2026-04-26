@@ -7,15 +7,14 @@
  * Null Ward (holder’s consumable) are not opponent effects and are not passed through these opts.
  */
 const { elementAtkMultiplier, DISPLAY_LABEL } = require('../src/bot/tcg/elements');
-const { normalizeRarityKey } = require('../src/bot/tcg/cardLayout');
+const { sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
+const { rarityRank } = require('../src/bot/tcg/rarityOrder');
 const { damageForHit } = require('./tcgCombatMath');
 const { pickRandomAbilityKeyForRarity, byTier } = require('../src/bot/tcg/abilityPools');
 
-const RARITY_ORDER = ['C', 'UC', 'R', 'EP', 'L', 'M'];
-
 function rarityIdx(r) {
-  const k = normalizeRarityKey(r);
-  const i = RARITY_ORDER.indexOf(k);
+  const a = sanitizeRarityAbbrev(r, 'C');
+  const i = rarityRank(a);
   return i >= 0 ? i : 0;
 }
 
@@ -92,7 +91,7 @@ function applyApexMult(attacker, defender) {
 
 function applyColossusMult(attacker, defender) {
   if (!hasAbility(attacker.abilities, 'colossus')) return 1;
-  const d = normalizeRarityKey(defender.rarityKey);
+  const d = sanitizeRarityAbbrev(defender.rarityKey, 'C');
   if (d === 'L' || d === 'M') return 1.2;
   return 1;
 }
@@ -263,7 +262,7 @@ function simulateMainVsMainWithPassives(
   }
 
   if (hasAbility(pKeys, 'colossus')) {
-    const d = normalizeRarityKey(enemy.rarityKey);
+    const d = sanitizeRarityAbbrev(enemy.rarityKey, 'C');
     if (d === 'L' || d === 'M') {
       player.atk = Math.round(player.atk * 1.2);
       player.def = Math.round(player.def * 1.2);
@@ -273,7 +272,7 @@ function simulateMainVsMainWithPassives(
     }
   }
   if (hasAbility(eKeys, 'colossus')) {
-    const d = normalizeRarityKey(player.rarityKey);
+    const d = sanitizeRarityAbbrev(player.rarityKey, 'C');
     if (d === 'L' || d === 'M') {
       enemy.atk = Math.round(enemy.atk * 1.2);
       enemy.def = Math.round(enemy.def * 1.2);
@@ -549,7 +548,7 @@ function buildPlayerCombatSide(opts) {
   if (
     distinctRaritiesForMember != null
     && distinctRaritiesForMember >= 6
-    && normalizeRarityKey(rarityKey || 'C') === 'M'
+    && sanitizeRarityAbbrev(rarityKey || 'C', 'C') === 'M'
   ) {
     const pool = byTier[4];
     const override = signatureOverrideKey ? String(signatureOverrideKey).toLowerCase() : null;

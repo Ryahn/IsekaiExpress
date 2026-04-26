@@ -1,5 +1,5 @@
 const db = require('../database/db');
-const { statLevelMultiplier, normalizeRarityKey } = require('../src/bot/tcg/cardLayout');
+const { statLevelMultiplier, sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
 const tcgEconomy = require('./tcgEconomy');
 const tcgInventory = require('./tcgInventory');
 const tcgLoadout = require('./tcgLoadout');
@@ -112,7 +112,7 @@ async function runSpar(client, discordUser) {
   if (
     memberDiscordId != null
     && memberDistinct >= 6
-    && normalizeRarityKey(playerRow.rarity) === 'M'
+    && sanitizeRarityAbbrev(playerRow.rarity, 'C') === 'M'
   ) {
     mythicSignatureKey = await tcgSetProgress.resolveMythicSignatureKey(memberDiscordId);
   }

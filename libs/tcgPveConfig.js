@@ -2,6 +2,69 @@
  * PvE constants from [CardSystem.md] (regions, tier lengths, gold bands).
  */
 
+const { RARITY_ORDER } = require('../src/bot/tcg/rarityOrder');
+
+/**
+ * Battle-boss card pool weights by PvE tier band (replaces legacy 6-rarity `EP` bucket by splitting
+ * across U / SR / SSR / SUR / UR). Sums to 100 per band; `N` is 0 (boss pool starts at C+).
+ * @type {Record<string, Record<string, number>>}
+ */
+const BATTLE_BOSS_DROP_WEIGHT_BANDS = {
+  low: {
+    N: 0,
+    C: 60,
+    UC: 28,
+    R: 9,
+    U: 0.5,
+    SR: 0.5,
+    SSR: 0.5,
+    SUR: 0.5,
+    UR: 0.5,
+    L: 0.4,
+    M: 0.1,
+  },
+  mid: {
+    N: 0,
+    C: 35,
+    UC: 32,
+    R: 22,
+    U: 1.8,
+    SR: 1.8,
+    SSR: 1.8,
+    SUR: 1.8,
+    UR: 1.8,
+    L: 1.8,
+    M: 0.2,
+  },
+  high: {
+    N: 0,
+    C: 12,
+    UC: 22,
+    R: 28,
+    U: 5,
+    SR: 5,
+    SSR: 5,
+    SUR: 5,
+    UR: 5,
+    L: 10,
+    M: 3,
+  },
+};
+
+/**
+ * @param {number} tier 1–10
+ * @returns {Array<{ abbreviation: string, weight: number }>}
+ */
+function battleBossRarityRowsForTier(tier) {
+  const t = Math.min(10, Math.max(1, Number(tier) || 1));
+  const bandKey = t <= 3 ? 'low' : t <= 6 ? 'mid' : 'high';
+  const band = BATTLE_BOSS_DROP_WEIGHT_BANDS[bandKey];
+  return RARITY_ORDER.map((abbrev) => ({
+    abbreviation: abbrev,
+    weight: band[abbrev] || 0,
+  })).filter((r) => r.weight > 0);
+}
+
 const REGION_NAMES = {
   1: 'Upload Nexus',
   2: 'Moderation Citadel',
@@ -145,6 +208,8 @@ module.exports = {
   tierClearBonusForTier,
   battleBossStatMultiplierForTier,
   battleBossWinGoldForTier,
+  BATTLE_BOSS_DROP_WEIGHT_BANDS,
+  battleBossRarityRowsForTier,
   elementPoolForEncounter,
   regionsWhereElementCanAppear,
   pickRandomHomeRegionForElement,

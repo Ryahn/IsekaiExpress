@@ -4,10 +4,11 @@ const logger = require('./libs/logger');
 const path = require('path');
 const fs = require('fs');
 const { POWER_SCORE_L1 } = require('./src/bot/tcg/cardLayout.js');
+const { RARITY_ORDER } = require('./src/bot/tcg/rarityOrder');
 
 /**
  * Fetches guild role members and writes tcg batch JSON for `master.js` / `create_card.js`.
- * Aligns with [CardSystem.md]: six rarities (C → M), role-based classes, level-1 power scores.
+ * Aligns with [CardSystem.md]: 11 rarities (N → M), role-based classes, level-1 power scores.
  *
  * - Staff   → class **Commander**
  * - Mods    → class **Guardian**
@@ -26,7 +27,13 @@ const CARD_CLASSES = {
   respected: 'Artisan',
 };
 
-const ALL_TIERS_ON = { C: 1, UC: 1, R: 1, EP: 1, L: 1, M: 1 };
+const ALL_TIERS_ON = RARITY_ORDER.reduce(
+  (acc, abbrev) => {
+    acc[abbrev] = 1;
+    return acc;
+  },
+  /** @type {Record<string, number>} */ ({}),
+);
 const tcgDir = path.join(__dirname, 'src', 'bot', 'tcg');
 
 function getAvatar(avatar, userId) {

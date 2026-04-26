@@ -1,9 +1,10 @@
 const fs = require('fs');
 const { generateCard } = require('./create_card');
 const { ELEMENT_IDS } = require('./src/bot/tcg/elements');
+const { RARITY_ORDER } = require('./src/bot/tcg/rarityOrder');
 const logger = require('./libs/logger');
 
-const BATCH_RARITY_KEYS = ['C', 'UC', 'R', 'EP', 'L', 'M'];
+const BATCH_RARITY_KEYS = [...RARITY_ORDER];
 
 const batchFilePath = process.argv[2];
 

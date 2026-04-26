@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { rarityBaseCardFileStem } = require('../../../seeds/rarity');
+const { sanitizeRarityAbbrev } = require('./rarityOrder');
 
 const CARD = {
   width: 1024,
@@ -42,12 +43,7 @@ const CARD = {
  *   - `portrait` — avatar clip: `{ x, y, w, h }` as **deltas** from CARD.portrait.
  */
 const RARITY_LAYOUT_OFFSET = {
-  C: 0,
-  UC: 0,
-  R: 0,
-  EP: 0,
-  L: 0,
-  M: 0,
+  N: 0, C: 0, UC: 0, R: 0, U: 0, SR: 0, SSR: 0, SUR: 0, UR: 0, L: 0, M: 0,
 };
 
 function expandNameClassOffset(entry) {
@@ -131,8 +127,9 @@ function expandRarityLayoutEntry(entry) {
 /**
  * Merged layout for one tier: portrait, level, power, name, description, element/ability — includes CARD + offsets.
  */
-function cardLayoutForRarity(norm) {
-  const o = expandRarityLayoutEntry(RARITY_LAYOUT_OFFSET[norm]);
+function cardLayoutForRarity(abbrev) {
+  const a = sanitizeRarityAbbrev(abbrev, 'C');
+  const o = expandRarityLayoutEntry(RARITY_LAYOUT_OFFSET[a] ?? 0);
   return {
     portrait: {
       x: CARD.portrait.x + o.portrait.x,
@@ -165,14 +162,14 @@ function cardLayoutForRarity(norm) {
   };
 }
 
-function nameAndClassLayout(norm) {
-  const L = cardLayoutForRarity(norm);
+function nameAndClassLayout(abbrev) {
+  const L = cardLayoutForRarity(abbrev);
   return { name: L.name, description: L.description };
 }
 
 /**
  * Luminance-based outer glow: bright rarities (e.g. white/gold) need a dark halo or text vanishes
- * on light frames; same coords look fine on Common but fail on M/L/EP.
+ * on light frames; same coords look fine on low tiers but fail on high (e.g. M/L).
  */
 function readableTextOuterGlowColor(hex) {
   const h = String(hex || '#888888').replace('#', '');
@@ -187,39 +184,23 @@ function readableTextOuterGlowColor(hex) {
 }
 
 const RARITY = {
-  C: { tag: 'C', starCount: 1, accentColor: '#00EFFF', starColor: '#A0A0A0', rarityColor: '#A0A0A0' },
-  UC: { tag: 'UC', starCount: 2, accentColor: '#00CED1', starColor: '#00CED1', rarityColor: '#00CED1' },
-  R: { tag: 'R', starCount: 3, accentColor: '#4169E1', starColor: '#4169E1', rarityColor: '#4169E1' },
-  EP: { tag: 'EP', starCount: 4, accentColor: '#8B00FF', starColor: '#8B00FF', rarityColor: '#8B00FF' },
-  L: { tag: 'L', starCount: 5, accentColor: '#FFD700', starColor: '#FFD700', rarityColor: '#FFD700' },
-  M: { tag: 'M', starCount: 6, accentColor: '#E8E8E8', starColor: '#F5F5F5', rarityColor: '#FFFFFF' },
+  N: { tag: 'N', starCount: 1, accentColor: '#9E9E9E', starColor: '#A0A0A0', rarityColor: '#BDBDBD' },
+  C: { tag: 'C', starCount: 2, accentColor: '#00EFFF', starColor: '#A0A0A0', rarityColor: '#A0A0A0' },
+  UC: { tag: 'UC', starCount: 3, accentColor: '#00CED1', starColor: '#00CED1', rarityColor: '#00CED1' },
+  R: { tag: 'R', starCount: 4, accentColor: '#4169E1', starColor: '#4169E1', rarityColor: '#4169E1' },
+  U: { tag: 'U', starCount: 5, accentColor: '#5DADE2', starColor: '#5DADE2', rarityColor: '#5DADE2' },
+  SR: { tag: 'SR', starCount: 6, accentColor: '#6495ED', starColor: '#6495ED', rarityColor: '#6495ED' },
+  SSR: { tag: 'SSR', starCount: 7, accentColor: '#8B00FF', starColor: '#8B00FF', rarityColor: '#8B00FF' },
+  SUR: { tag: 'SUR', starCount: 8, accentColor: '#BA55D3', starColor: '#BA55D3', rarityColor: '#BA55D3' },
+  UR: { tag: 'UR', starCount: 9, accentColor: '#E040FB', starColor: '#E040FB', rarityColor: '#E040FB' },
+  L: { tag: 'L', starCount: 10, accentColor: '#FFD700', starColor: '#FFD700', rarityColor: '#FFD700' },
+  M: { tag: 'M', starCount: 11, accentColor: '#E8E8E8', starColor: '#F5F5F5', rarityColor: '#FFFFFF' },
 };
 
-const legacyToCardSystemRarity = {
-  N: 'C', C: 'C', UC: 'UC', R: 'R', EP: 'EP', L: 'L', M: 'M',
-  U: 'L', SR: 'R', SSR: 'EP', SUR: 'L', UR: 'M',
-};
-
-function normalizeRarityKey(raw) {
-  const k = String(raw || 'C').toUpperCase();
-  if (RARITY[k]) return k;
-  if (legacyToCardSystemRarity[k]) return legacyToCardSystemRarity[k];
-  return 'C';
-}
-
-/** URL/path folder segment per tier (e.g. `common`, `mythic`). DB `rarity` stays `C`…`M`. */
-const RARITY_PATH_SLUG = {
-  C: 'common',
-  UC: 'uncommon',
-  R: 'rare',
-  EP: 'epic',
-  L: 'legendary',
-  M: 'mythic',
-};
-
+/** URL folder segment: same as `tools/base_card` name stem (see [seeds/rarity.js] `name`). */
 function rarityPathSlugFromKey(rarityKey) {
-  const k = normalizeRarityKey(rarityKey);
-  return RARITY_PATH_SLUG[k] || RARITY_PATH_SLUG.C;
+  const a = sanitizeRarityAbbrev(rarityKey, 'C');
+  return rarityBaseCardFileStem(a) || 'common';
 }
 
 /**
@@ -232,29 +213,34 @@ function statLevelMultiplier(level = 1) {
   return 1 + 0.15 * (lv - 1);
 }
 
-/** Level-1 power scores from [CardSystem.md] — per tier, before level bonus */
+/** Level-1 power scores — per abbreviation, before level bonus */
 const POWER_SCORE_L1 = {
-  C: 627, UC: 816, R: 1058, EP: 1372, L: 1776, M: 2312,
+  N: 500, C: 627, UC: 816, R: 1058, U: 1120, SR: 1240, SSR: 1372, SUR: 1500, UR: 1650, L: 1776, M: 2312,
 };
 
-/** ATK / DEF / SPD / HP at level 1 — [CardSystem.md] base stats */
+/** ATK / DEF / SPD / HP at level 1 */
 const BASE_STATS_L1 = {
+  N: { atk: 85, def: 70, spd: 60, hp: 180 },
   C: { atk: 100, def: 80, spd: 70, hp: 200 },
   UC: { atk: 130, def: 105, spd: 90, hp: 260 },
   R: { atk: 170, def: 135, spd: 115, hp: 340 },
-  EP: { atk: 220, def: 175, spd: 150, hp: 440 },
+  U: { atk: 190, def: 150, spd: 125, hp: 380 },
+  SR: { atk: 200, def: 160, spd: 135, hp: 400 },
+  SSR: { atk: 220, def: 175, spd: 150, hp: 440 },
+  SUR: { atk: 250, def: 198, spd: 168, hp: 500 },
+  UR: { atk: 270, def: 210, spd: 180, hp: 540 },
   L: { atk: 285, def: 225, spd: 190, hp: 570 },
   M: { atk: 370, def: 295, spd: 250, hp: 740 },
 };
 
 
 /**
- * @param {string} rarityKey - batch key (C…M or legacy)
+ * @param {string} rarityKey - abbreviation
  * @param {number} [level=1] - card level 1–5, +15% of base stats per level step (linear)
  * @returns {number}
  */
 function powerScoreAtLevel(rarityKey, level = 1) {
-  const k = normalizeRarityKey(rarityKey);
+  const k = sanitizeRarityAbbrev(rarityKey, 'C');
   const base = POWER_SCORE_L1[k] ?? POWER_SCORE_L1.C;
   const mult = statLevelMultiplier(level);
   return Math.round(base * mult);
@@ -265,7 +251,7 @@ function powerScoreAtLevel(rarityKey, level = 1) {
  * @returns {{ atk: number, def: number, spd: number, hp: number }}
  */
 function combatStatsAtLevel(rarityKey, level = 1) {
-  const k = normalizeRarityKey(rarityKey);
+  const k = sanitizeRarityAbbrev(rarityKey, 'C');
   const base = BASE_STATS_L1[k] ?? BASE_STATS_L1.C;
   const mult = statLevelMultiplier(level);
   return {
@@ -281,34 +267,31 @@ function combatStatsAtLevel(rarityKey, level = 1) {
  * Per [CardSystem.md], level, power, abilities, and traits are **not** baked into art — they
  * live in `card_data` / `user_cards` and are shown in Discord embeds.
  */
-function cardLayoutForRarityCatalog(norm) {
-  return cardLayoutForRarity(norm);
+function cardLayoutForRarityCatalog(abbrev) {
+  return cardLayoutForRarity(abbrev);
 }
 
-
-/** Game-tier keys not in `rarity` seed but used in batch; file stem = seed name for Super Super Rare */
-const AUX_RARITY_BASE_STEM = {
-  EP: 'super_super_rare',
-};
-
-const legacyPngByNorm = {
+const legacyPngByAbbrev = {
+  N: ['N.png', 'NORMAL.png'],
   C: ['C.png', 'COMMON.png', 'c.png'],
   UC: ['UC.png', 'UNCOMMON.png', 'uc.png'],
   R: ['R.png', 'RARE.png', 'r.png'],
-  EP: ['EP.png', 'EPIC.png', 'ep.png'],
+  U: ['U.png'],
+  SR: ['SR.png', 'SUPER_RARE.png'],
+  SSR: ['SSR.png'],
+  SUR: ['SUR.png'],
+  UR: ['UR.png', 'ultra_rare.png'],
   L: ['L.png', 'LEGENDARY.png', 'l.png'],
   M: ['M.png', 'MYTHIC.png', 'm.png', 'MYTHIC.PNG'],
 };
 
 /**
- * Picks a base card PNG. Prefer `tools/base_card/<name_slug>.png` where `name_slug` is the
- * DB `rarity.name` (Unicode word chars + spaces) lowercased with spaces → `_` — see `seeds/rarity.js`.
- * @param {string} [rawRarityKey] - batch rarity (abbreviation, e.g. UR, C, N, SSR) before normalize
+ * Picks a base card PNG. Prefer `tools/base_card/<name_slug>.png` (see [seeds/rarity.js]).
+ * @param {string} [rawRarityKey] - rarity abbreviation
  */
 function resolveBaseCardPath(repoRoot, rawRarityKey) {
   const baseDir = path.join(repoRoot, 'tools', 'base_card');
-  const a = String(rawRarityKey || 'C').toUpperCase();
-  const norm = normalizeRarityKey(a);
+  const a = sanitizeRarityAbbrev(rawRarityKey, 'C');
 
   const tryStem = (stem) => {
     if (!stem) return null;
@@ -319,18 +302,13 @@ function resolveBaseCardPath(repoRoot, rawRarityKey) {
     return null;
   };
 
-  const stems = [];
   const fromSeed = rarityBaseCardFileStem(a);
-  if (fromSeed) stems.push(fromSeed);
-  if (AUX_RARITY_BASE_STEM[a] != null) stems.push(AUX_RARITY_BASE_STEM[a]);
-  const byNormPath = RARITY_PATH_SLUG[norm];
-  if (byNormPath) stems.push(byNormPath);
-  for (const s of stems) {
-    const hit = tryStem(s);
+  if (fromSeed) {
+    const hit = tryStem(fromSeed);
     if (hit) return hit;
   }
 
-  const legacyNames = legacyPngByNorm[norm] || legacyPngByNorm.C;
+  const legacyNames = legacyPngByAbbrev[a] || legacyPngByAbbrev.C;
   for (const n of legacyNames) {
     const p = path.join(baseDir, n);
     if (fs.existsSync(p)) return p;
@@ -340,7 +318,7 @@ function resolveBaseCardPath(repoRoot, rawRarityKey) {
   const fallback = path.join(repoRoot, 'src', 'bot', 'tcg', 'base_card.png');
   if (fs.existsSync(fallback)) return fallback;
   throw new Error(
-    `No base card in tools/base_card (or src/bot/tcg/base_card.png) for rarity ${a} (norm ${norm})`,
+    `No base card in tools/base_card (or src/bot/tcg/base_card.png) for rarity ${a}`,
   );
 }
 
@@ -652,8 +630,7 @@ module.exports = {
   CARD,
   RARITY,
   RARITY_LAYOUT_OFFSET,
-  RARITY_PATH_SLUG,
-  normalizeRarityKey,
+  sanitizeRarityAbbrev,
   rarityPathSlugFromKey,
   statLevelMultiplier,
   readableTextOuterGlowColor,

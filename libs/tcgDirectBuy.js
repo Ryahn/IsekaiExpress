@@ -1,5 +1,5 @@
 const db = require('../database/db');
-const { normalizeRarityKey } = require('../src/bot/tcg/cardLayout');
+const { sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
 const { normalizeElementKey } = require('../src/bot/tcg/elements');
 const tcgEconomy = require('./tcgEconomy');
 const {
@@ -9,23 +9,40 @@ const {
 } = require('./tcgInventory');
 const tcgCollectionSets = require('./tcgCollectionSets');
 
-/** [CardSystem.md] Direct purchase (gold only). */
+/**
+ * Direct purchase (gold) — **Legendary** and **Mythic** are not sold here (drops / player trade only).
+ * @type {Record<string, number>}
+ */
 const DIRECT_BUY_GOLD_BY_RARITY = {
+  N: 100,
   C: 300,
   UC: 800,
   R: 2000,
-  EP: 5000,
-  L: 15000,
-  M: 40000,
+  U: 3200,
+  SR: 4200,
+  SSR: 5000,
+  SUR: 7200,
+  UR: 10000,
 };
+
+const DIRECT_BUY_DROPS_ONLY = Object.freeze(new Set(['L', 'M']));
+
+function isDirectBuyGoldPurchasable(abbrev) {
+  const a = String(abbrev || '').toUpperCase();
+  if (DIRECT_BUY_DROPS_ONLY.has(a)) return false;
+  return Object.prototype.hasOwnProperty.call(DIRECT_BUY_GOLD_BY_RARITY, a);
+}
 
 function nowUnix() {
   return Math.floor(Date.now() / 1000);
 }
 
 function directBuyGoldCost(rarityKey) {
-  const norm = normalizeRarityKey(rarityKey);
-  return DIRECT_BUY_GOLD_BY_RARITY[norm] ?? null;
+  const a = sanitizeRarityAbbrev(rarityKey, 'C');
+  if (!isDirectBuyGoldPurchasable(a)) {
+    return null;
+  }
+  return DIRECT_BUY_GOLD_BY_RARITY[a] ?? null;
 }
 
 /**
@@ -36,10 +53,19 @@ function directBuyGoldCost(rarityKey) {
  * @param {string|null|undefined} elementKeyOpt Canonical element id, or null/any to ignore
  */
 async function buyDirectCatalogCopy(client, buyerDiscordUser, targetDiscordUser, rarityKey, elementKeyOpt) {
-  const norm = normalizeRarityKey(rarityKey);
-  const cost = DIRECT_BUY_GOLD_BY_RARITY[norm];
+  const a = sanitizeRarityAbbrev(rarityKey, 'C');
+  if (DIRECT_BUY_DROPS_ONLY.has(a)) {
+    return {
+      ok: false,
+      error: '**Legendary** and **Mythic** are not sold for gold. Get them from drops, packs, or other players (trade / market).',
+    };
+  }
+  const cost = DIRECT_BUY_GOLD_BY_RARITY[a];
   if (cost == null) {
-    return { ok: false, error: 'Invalid rarity for direct purchase.' };
+    return {
+      ok: false,
+      error: 'Invalid rarity for direct purchase, or that tier is not available in the shop.',
+    };
   }
 
   await client.db.checkUser(buyerDiscordUser);
@@ -64,7 +90,7 @@ async function buyDirectCatalogCopy(client, buyerDiscordUser, targetDiscordUser,
       if (gold < cost) {
         result = {
           ok: false,
-          error: `Direct buy costs **${cost}**g for **${norm}** (you have **${gold}**g).`,
+          error: `Direct buy costs **${cost}**g for **${a}** (you have **${gold}**g).`,
         };
         throw new Error('ABORT');
       }
@@ -81,7 +107,7 @@ async function buyDirectCatalogCopy(client, buyerDiscordUser, targetDiscordUser,
       }
 
       let q = trx('card_data')
-        .where({ discord_id: targetDid, rarity: norm })
+        .where({ discord_id: targetDid, rarity: a })
         .whereNotNull('base_atk')
         .whereNotNull('base_def')
         .whereNotNull('base_spd')
@@ -95,8 +121,8 @@ async function buyDirectCatalogCopy(client, buyerDiscordUser, targetDiscordUser,
         result = {
           ok: false,
           error: elementFilter
-            ? `No **${norm}** catalog for that member with element **${elementFilter}**.`
-            : `No **${norm}** catalog for that member. Their cards may use a different **discord_id** on \`card_data\`.`,
+            ? `No **${a}** catalog for that member with element **${elementFilter}**.`
+            : `No **${a}** catalog for that member. Their cards may use a different **discord_id** on \`card_data\`.`,
         };
         throw new Error('ABORT');
       }
@@ -133,6 +159,8 @@ async function buyDirectCatalogCopy(client, buyerDiscordUser, targetDiscordUser,
 
 module.exports = {
   DIRECT_BUY_GOLD_BY_RARITY,
+  DIRECT_BUY_DROPS_ONLY,
+  isDirectBuyGoldPurchasable,
   directBuyGoldCost,
   buyDirectCatalogCopy,
 };

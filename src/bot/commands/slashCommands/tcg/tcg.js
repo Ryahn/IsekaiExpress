@@ -17,6 +17,7 @@ const db = require('../../../../../database/db');
 const { battlesRequiredForTier } = require('../../../../../libs/tcgPveConfig');
 const { DISPLAY_LABEL, ELEMENT_IDS } = require('../../../tcg/elements');
 const { statLevelMultiplier } = require('../../../tcg/cardLayout');
+const { RARITY_ORDER } = require('../../../tcg/rarityOrder');
 
 function formatDuration(sec) {
   const s = Math.ceil(sec);
@@ -242,7 +243,7 @@ module.exports = {
                 value: 'basic',
               },
               {
-                name: `Advanced — ${tcgPacks.ADVANCED_PACK_COST}g · 4× UC–EP`,
+                name: `Advanced — ${tcgPacks.ADVANCED_PACK_COST}g · 4× (N–M, DB weights)`,
                 value: 'advanced',
               },
               {
@@ -270,27 +271,26 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName('buy_card')
-        .setDescription('Buy one catalog copy for a member at a set rarity ([CardSystem.md] direct purchase)')
+        .setDescription(
+          'Buy one catalog copy for a member at a set rarity. Legendary and Mythic are not sold for gold (drops, packs, or players only).',
+        )
         .addUserOption((o) =>
           o
             .setName('member')
             .setDescription('Discord user whose card templates to buy (matches card_data.discord_id)')
             .setRequired(true),
         )
-        .addStringOption((o) =>
-          o
-            .setName('rarity')
-            .setDescription('Rarity tier to buy')
-            .setRequired(true)
-            .addChoices(
-              { name: `Common — ${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.C}g`, value: 'C' },
-              { name: `Uncommon — ${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.UC}g`, value: 'UC' },
-              { name: `Rare — ${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.R}g`, value: 'R' },
-              { name: `Epic — ${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.EP}g`, value: 'EP' },
-              { name: `Legendary — ${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.L}g`, value: 'L' },
-              { name: `Mythic — ${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.M}g`, value: 'M' },
-            ),
-        )
+        .addStringOption((o) => {
+          o.setName('rarity')
+            .setDescription('Rarity to buy (L/M are drop-only; not listed here)')
+            .setRequired(true);
+          for (const abbrev of RARITY_ORDER) {
+            const cost = tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY[abbrev];
+            if (cost == null) continue;
+            o.addChoices({ name: `${abbrev} — ${cost}g`, value: abbrev });
+          }
+          return o;
+        })
         .addStringOption((o) => {
           o
             .setName('element')
@@ -977,23 +977,23 @@ module.exports = {
             pityBlock = `\n\n_Pity streak:_ **${result.pityAfter}** Basic pack(s) with no Uncommon. **${need}** more like that, then the following pack guarantees one on the last card.`;
           }
         }
-        footer = `Odds: 70% C / 30% UC. Pity: after ${forceAt} consecutive Basic packs with no Uncommon in any pull, the next pack forces UC on pull 3.`;
+        footer = `Pulls: **N** / **C** / **UC** only, weighted from the rarity table. Pity: after ${forceAt} consecutive Basic packs with no Uncommon in any pull, the next pack forces UC on pull 3.`;
       } else if (result.packKind === 'advanced') {
         title = 'Advanced Pack';
         color = 0x9b59b6;
         const forceAt = tcgPacks.ADVANCED_PACK_PITY_FORCE_AT;
         if (result.pityTriggered) {
           pityBlock =
-            '\n\n**Pity:** Last card was a guaranteed Epic (after **9** Advanced packs in a row with no Epic or higher).';
+            '\n\n**Pity:** Last card was a guaranteed **SSR** (after **9** Advanced packs in a row with no **SSR+** in any pull).';
         } else if (result.pityAfter > 0) {
           if (result.pityAfter >= forceAt) {
-            pityBlock = `\n\n**Pity:** Your next Advanced Pack will guarantee an Epic on the last card (streak **${result.pityAfter}**).`;
+            pityBlock = `\n\n**Pity:** Your next Advanced Pack will guarantee **SSR** on the last card (streak **${result.pityAfter}**).`;
           } else {
             const need = forceAt - result.pityAfter;
-            pityBlock = `\n\n_Pity streak:_ **${result.pityAfter}** Advanced pack(s) with no Epic or higher. **${need}** more like that, then the following pack guarantees one on the last card.`;
+            pityBlock = `\n\n_Pity streak:_ **${result.pityAfter}** Advanced pack(s) with no **SSR+** in any pull. **${need}** more like that, then the following pack guarantees **SSR** on the last card.`;
           }
         }
-        footer = `Odds: 10% C / 45% UC / 30% R / 14% EP / 1% L. Pity: after ${forceAt} consecutive Advanced packs with no Epic+ in any pull, the next pack forces EP on pull 4.`;
+        footer = `Pulls: **N–M** (weights from the \`rarity\` table). Pity: after ${forceAt} consecutive Advanced packs with no **SSR+** in any pull, the next pack forces **SSR** on pull 4.`;
       } else if (result.packKind === 'premium') {
         title = 'Premium Pack';
         color = 0xe67e22;
@@ -1034,7 +1034,7 @@ module.exports = {
           }
         }
         if (parts.length) pityBlock = `\n\n${parts.join('\n')}`;
-        footer = `Odds: 5% UC / 35% R / 35% EP / 20% L / 5% M. Pity: Legendary after ${lF} consecutive packs with no L/M; Mythic after ${mF} with no M (Mythic pity wins on the last pull if both apply).`;
+        footer = `Pulls: **N–M** (weights from the \`rarity\` table). Pity: Legendary after ${lF} consecutive packs with no L/M; Mythic after ${mF} with no M (Mythic pity wins on the last pull if both apply).`;
       } else if (result.packKind === 'region') {
         title = `Region Pack · Home Turf ${result.regionId}`;
         color = 0x1abc9c;
@@ -1047,7 +1047,7 @@ module.exports = {
         if (result.bossTaggedPulls > 0) {
           pityBlock = `\n\n_Boss-tagged catalog cards:_ **${result.bossTaggedPulls}** (\`card_data.is_boss_card\`).`;
         }
-        footer = `Guaranteed **Rare+** if none in pulls 1–3 (pull 4 forces R–M). ~${pct}% per card to roll a boss-tagged template first. Flex odds match Advanced ([CardSystem.md] Boss Pack).`;
+        footer = `Guaranteed **Rare+** if none in pulls 1–3 (pull 4 forces **R–M** from the rarity table). ~${pct}% per card to try a boss-tagged template first, else weighted \`rarity\` pool like Advanced.`;
       }
 
       const embed = new EmbedBuilder()
@@ -1150,7 +1150,7 @@ module.exports = {
       const pB = bal.basicPackPity;
       let basicPityLine;
       if (pB <= 0) {
-        basicPityLine = '**Basic:** No streak (no consecutive Basic packs with only Commons).';
+        basicPityLine = '**Basic:** No streak (no consecutive Basic packs without an Uncommon in any pull).';
       } else if (pB >= bF) {
         basicPityLine = `**Basic:** Streak **${pB}** — next Basic Pack guarantees Uncommon on the last card.`;
       } else {
@@ -1162,12 +1162,12 @@ module.exports = {
       const pA = bal.advancedPackPity;
       let advancedPityLine;
       if (pA <= 0) {
-        advancedPityLine = '**Advanced:** No streak (no consecutive Advanced packs without Epic+).';
+        advancedPityLine = '**Advanced:** No streak (no consecutive Advanced packs without **SSR+** in any pull).';
       } else if (pA >= aF) {
-        advancedPityLine = `**Advanced:** Streak **${pA}** — next Advanced Pack guarantees Epic on the last card.`;
+        advancedPityLine = `**Advanced:** Streak **${pA}** — next Advanced Pack guarantees **SSR** on the last card.`;
       } else {
         const need = aF - pA;
-        advancedPityLine = `**Advanced:** Streak **${pA}** — **${need}** more Advanced pack(s) without Epic+, then the following pack guarantees one.`;
+        advancedPityLine = `**Advanced:** Streak **${pA}** — **${need}** more Advanced pack(s) without **SSR+**, then the following pack guarantees **SSR** on the last.`;
       }
 
       const lF = tcgPacks.PREMIUM_LEGENDARY_PITY_FORCE_AT;
@@ -1194,6 +1194,9 @@ module.exports = {
       }
 
       const pityBlock = [basicPityLine, advancedPityLine, premLLine, premMLine].join('\n');
+      const directBuyHelpLine = RARITY_ORDER.filter((a) => tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY[a] != null)
+        .map((a) => `**${a}** ${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY[a]}g`)
+        .join(' · ');
 
       const embed = new EmbedBuilder()
         .setTitle('TCG profile')
@@ -1232,12 +1235,12 @@ module.exports = {
           {
             name: 'Packs',
             value: [
-              `Basic **${tcgPacks.BASIC_PACK_COST}**g · 3× C/UC`,
-              `Advanced **${tcgPacks.ADVANCED_PACK_COST}**g · 4× UC–EP`,
-              `Premium **${tcgPacks.PREMIUM_PACK_COST}**g · 5× UC–M`,
+              `Basic **${tcgPacks.BASIC_PACK_COST}**g · 3× N/C/UC`,
+              `Advanced **${tcgPacks.ADVANCED_PACK_COST}**g · 4× N–M (rarity table)`,
+              `Premium **${tcgPacks.PREMIUM_PACK_COST}**g · 5× N–M (rarity table)`,
               `Boss **${tcgPacks.BOSS_PACK_COST}**g · 4× · 1× Rare+ · boss-tag chance`,
               `Region **${tcgPacks.REGION_PACK_COST}**g · 4× pool · \`region\` ${tcgPacks.REGION_ID_MIN}–${tcgPacks.REGION_ID_MAX}`,
-              `Direct **buy_card** — C **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.C}**g · UC **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.UC}**g · R **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.R}**g · EP **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.EP}**g · L **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.L}**g · M **${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY.M}**g`,
+              `Direct **buy_card** — ${directBuyHelpLine} · **L/M** not sold for gold`,
               `\`/tcg buy_pack\` · \`/tcg buy_card\` · \`/tcg shop\` · \`/tcg trade\``,
             ].join('\n'),
             inline: false,
