@@ -39,6 +39,7 @@ services:
 
   bot:
     image: f95bot-app:latest
+    pull_policy: never
     build: .
     container_name: f95bot-bot
     env_file: .env
@@ -56,6 +57,7 @@ services:
 
   web:
     image: f95bot-app:latest
+    pull_policy: never
     build: .
     container_name: f95bot-web
     env_file: .env
