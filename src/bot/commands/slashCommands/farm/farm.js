@@ -152,6 +152,20 @@ async function assertLockedFarmChannelForGameplay(interaction) {
 	return false;
 }
 
+async function farmRemindersCommand(interaction) {
+	const userId = interaction.user.id;
+	const guildId = interaction.guildId;
+	const on = interaction.options.getString('action', true) === 'on';
+	await farmManager.setHarvestRemindersEnabled(userId, guildId, on);
+	const prefix = await farmManager.getServerPrefix(guildId);
+	await interaction.editReply({
+		content: on
+			? `Harvest-ready pings are **on**. The bot can @mention you in a channel (or DM you) when a crop matures. Then use \`${prefix}harvest\`.`
+			: 'Harvest-ready pings are **off**. Turn them on anytime: `/farm reminders` and choose on.',
+		ephemeral: true,
+	});
+}
+
 async function farmPrefixCommand(interaction) {
 	const guildId = interaction.guildId;
 	const newPrefix = interaction.options.getString('prefix');
@@ -240,6 +254,21 @@ module.exports = {
 						.setMinLength(1)
 						.setMaxLength(3),
 				),
+		)
+		.addSubcommand((subcommand) =>
+			subcommand
+				.setName('reminders')
+				.setDescription('Turn harvest-ready @mentions (or DMs) on or off')
+				.addStringOption((option) =>
+					option
+						.setName('action')
+						.setDescription('on = ping when crop is ready; off = no automatic ping')
+						.setRequired(true)
+						.addChoices(
+							{ name: 'On', value: 'on' },
+							{ name: 'Off', value: 'off' },
+						),
+				),
 		),
 
 	async execute(client, interaction) {
@@ -250,6 +279,7 @@ module.exports = {
 			});
 			return;
 		}
+		await farmManager.setLastFarmGuildId(interaction.user.id, interaction.guildId);
 		const subcommandGroup = interaction.options.getSubcommandGroup(false);
 		if (subcommandGroup === 'server') {
 			const sub = interaction.options.getSubcommand();
@@ -266,7 +296,7 @@ module.exports = {
 			return;
 		}
 		const subcommand = interaction.options.getSubcommand();
-		const gameplaySubcommands = new Set(['enable', 'disable', 'help', 'prefix']);
+		const gameplaySubcommands = new Set(['enable', 'disable', 'help', 'prefix', 'reminders']);
 		if (gameplaySubcommands.has(subcommand) && !(await assertLockedFarmChannelForGameplay(interaction))) {
 			return;
 		}
@@ -282,6 +312,9 @@ module.exports = {
 			break;
 		case 'prefix':
 			await farmPrefixCommand(interaction);
+			break;
+		case 'reminders':
+			await farmRemindersCommand(interaction);
 			break;
 		default:
 			await interaction.editReply({

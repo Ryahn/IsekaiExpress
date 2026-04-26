@@ -180,6 +180,7 @@
               <li><strong>You</strong>: <code>/farm enable</code> or <code>disable</code> — required before prefix commands work.</li>
               <li><strong>Channel lock</strong>: staff may restrict farm play to one channel (or threads under it) with <code>/farm server lock</code>.</li>
               <li><strong>Prefix</strong>: change with <code>/farm prefix</code> (1–3 characters). Slash help: <code>/farm help</code>.</li>
+              <li><strong>Harvest pings</strong>: <code>/farm reminders</code> — turn on or off automatic @mentions (or DMs) when a crop is ready to harvest.</li>
             </ul>
             <div class="callout callout--warn">
               <strong>Message commands need the Message Content intent</strong> on the bot application, or prefix lines won’t be read in servers.
@@ -200,13 +201,14 @@
                 <tbody>
                   <tr><td><code>{p}login</code> / <code>{p}daily</code></td><td>Daily bonus <strong>$10,000</strong> (once per calendar day, <strong>UTC+7</strong>).</td></tr>
                   <tr><td><code>{p}status</code> / <code>{p}stats</code> / <code>{p}farm</code> [user]</td><td>Your farm (or another user).</td></tr>
-                  <tr><td><code>{p}grow</code> / <code>{p}plant</code> &lt;crop&gt;</td><td>Plant one crop across <strong>all</strong> land slots; cost = buy price × slots.</td></tr>
-                  <tr><td><code>{p}harvest</code> / <code>{p}reap</code></td><td>Harvest when ready. <strong>10% yield loss per hour</strong> overdue after maturity.</td></tr>
+                  <tr><td><code>{p}grow</code> / <code>{p}plant</code> &lt;crop&gt;</td><td>Plant one crop on <strong>all</strong> land slots. Uses <strong>inventory</strong> of that crop first (1 unit = 1 slot), then <strong>cash</strong> at today’s buy price for the rest. You do <strong>not</strong> need to <code>buy</code> first.</td></tr>
+                  <tr><td><code>{p}harvest</code> / <code>{p}reap</code></td><td>Harvest when ready. <strong>10% yield loss per hour</strong> overdue after maturity. (Optional bot ping when ready — <code>/farm reminders</code>.)</td></tr>
                   <tr><td><code>{p}sell</code> …</td><td>Sell from inventory (per crop or <code>all</code>).</td></tr>
-                  <tr><td><code>{p}buy</code> / <code>{p}purchase</code> …</td><td>Buy seeds at current period buy price.</td></tr>
+                  <tr><td><code>{p}buy</code> / <code>{p}purchase</code> …</td><td>Optional: add units to inventory at the period buy price (not required to plant). <code>all</code> spends as much cash as it can.</td></tr>
                   <tr><td><code>{p}expand</code></td><td>Buy +1 land slot (cap <strong>100</strong>).</td></tr>
                   <tr><td><code>{p}crop list</code> / <code>{p}crop</code> … / <code>{p}info</code></td><td>Crop list and crop info.</td></tr>
                   <tr><td><code>{p}help</code> / <code>{p}h</code></td><td>In-Discord multi-page help.</td></tr>
+                  <tr><td><code>/farm reminders</code> action: on | off</td><td>Turn harvest-ready <strong>@mentions</strong> (in your last-played server) or <strong>DM</strong> fallback on or off.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -218,7 +220,7 @@
               <li><strong>Starting cash</strong>: $5,000 on first profile.</li>
               <li><strong>Price periods</strong>: Market updates every <strong>6 hours</strong>, keyed to <strong>UTC+7</strong> (same anchor as daily login).</li>
               <li><strong>Sell price</strong>: Per unit, roughly <strong>$1–$10</strong> per crop per period (seeded pseudo-random for that crop + period).</li>
-              <li><strong>Buy price</strong>: Sell price plus <strong>$1–$3</strong> markup for that crop + period — you pay more than you’d get selling back immediately.</li>
+              <li><strong>Buy price</strong>: Sell price plus <strong>$1–$3</strong> markup for that crop + period — you pay more than you’d get selling back immediately. That same per-slot value applies when you <code>plant</code> and pay with cash, or you can use units already in inventory (from harvests or the <code>buy</code> command) to cover some or all land slots for free in cash terms.</li>
             </ul>
             <p class="text-body-secondary mb-0">Because prices move, “best crop” shifts over time — check <code>{p}crop list</code> / info in-game for current numbers.</p>
           </section>

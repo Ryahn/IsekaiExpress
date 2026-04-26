@@ -1,5 +1,6 @@
 const knex = require('../../../../database/db').query;
 const { getDailyBuyPrice, getDailySellPrice } = require('./cropManager');
+const logger = require('../../../../libs/logger');
 
 function defaultFarmState() {
 	return {
@@ -10,6 +11,9 @@ function defaultFarmState() {
 		currentCrop: null,
 		plantedAt: null,
 		lastLogin: null,
+		maturityPinged: false,
+		lastFarmGuildId: null,
+		harvestRemindersEnabled: true,
 	};
 }
 
@@ -43,6 +47,18 @@ function parseJson(val, fallback) {
 	}
 }
 
+function rowMaturityPinged(val) {
+	if (val == null) return false;
+	if (val === 0 || val === false) return false;
+	return true;
+}
+
+function rowHarvestRemindersEnabled(val) {
+	if (val == null) return true;
+	if (val === 0 || val === false) return false;
+	return true;
+}
+
 function rowToUserFarm(row) {
 	return {
 		money: Number(row.money),
@@ -52,7 +68,43 @@ function rowToUserFarm(row) {
 		currentCrop: row.current_crop ? parseJson(row.current_crop, null) : null,
 		plantedAt: row.planted_at ? new Date(row.planted_at).toISOString() : null,
 		lastLogin: row.last_login ? new Date(row.last_login).toISOString() : null,
+		maturityPinged: rowMaturityPinged(row.maturity_pinged),
+		lastFarmGuildId: row.last_farm_guild_id ? String(row.last_farm_guild_id) : null,
+		harvestRemindersEnabled: rowHarvestRemindersEnabled(row.harvest_reminders_enabled),
 	};
+}
+
+/**
+ * @param {object} userFarm
+ * @param {{ name: string }} crop
+ * @returns {{ buyPrice: number, landSlots: number, fromInv: number, cashSlots: number, cashCost: number }}
+ */
+function getPlantingPlan(userFarm, crop) {
+	const buyPrice = getDailyBuyPrice(crop.name);
+	const needSlots = userFarm.landSlots;
+	const available = userFarm.inventory[crop.name] || 0;
+	const fromInv = Math.min(available, needSlots);
+	const cashSlots = needSlots - fromInv;
+	const cashCost = buyPrice * cashSlots;
+	return { buyPrice, landSlots: needSlots, fromInv, cashSlots, cashCost };
+}
+
+/**
+ * Same timing math as getCropStatus, without a DB round trip.
+ * @param {ReturnType<typeof rowToUserFarm>} userFarm
+ */
+function cropTimeStatusFromFarm(userFarm) {
+	if (!userFarm.currentCrop || !userFarm.plantedAt) {
+		return { ready: false, timeLeft: 0, overdue: 0 };
+	}
+	const plantedAt = new Date(userFarm.plantedAt);
+	const now = new Date();
+	const elapsed = now.getTime() - plantedAt.getTime();
+	const growthTime = userFarm.currentCrop.growthTime;
+	if (elapsed >= growthTime) {
+		return { ready: true, timeLeft: 0, overdue: elapsed - growthTime };
+	}
+	return { ready: false, timeLeft: growthTime - elapsed, overdue: 0 };
 }
 
 /**
@@ -164,7 +216,7 @@ class FarmManager {
 		let row = await knex('farm_profiles').where({ discord_user_id: uid }).first();
 		if (!row) {
 			const d = defaultFarmState();
-			await knex('farm_profiles').insert({
+			const insert = {
 				discord_user_id: uid,
 				money: d.money,
 				experience: d.experience,
@@ -173,7 +225,14 @@ class FarmManager {
 				current_crop: null,
 				planted_at: null,
 				last_login: null,
-			});
+			};
+			const hasMaturity = await knex.schema.hasColumn('farm_profiles', 'maturity_pinged');
+			if (hasMaturity) {
+				insert.maturity_pinged = d.maturityPinged ? 1 : 0;
+				insert.last_farm_guild_id = d.lastFarmGuildId;
+				insert.harvest_reminders_enabled = d.harvestRemindersEnabled ? 1 : 0;
+			}
+			await knex('farm_profiles').insert(insert);
 			row = await knex('farm_profiles').where({ discord_user_id: uid }).first();
 		}
 		return rowToUserFarm(row);
@@ -195,6 +254,16 @@ class FarmManager {
 		}
 		if ('lastLogin' in updates) {
 			data.last_login = updates.lastLogin ? new Date(updates.lastLogin) : null;
+		}
+		if ('maturityPinged' in updates) {
+			data.maturity_pinged = updates.maturityPinged ? 1 : 0;
+		}
+		if ('lastFarmGuildId' in updates) {
+			const v = updates.lastFarmGuildId;
+			data.last_farm_guild_id = v == null || v === '' ? null : String(v);
+		}
+		if ('harvestRemindersEnabled' in updates) {
+			data.harvest_reminders_enabled = updates.harvestRemindersEnabled ? 1 : 0;
 		}
 		await knex('farm_profiles').where({ discord_user_id: uid }).update(data);
 	}
@@ -276,18 +345,192 @@ class FarmManager {
 		return { ready: false, timeLeft: growthTime - elapsed, overdue: 0 };
 	}
 
+	/**
+	 * @param {string} userId
+	 * @param {string} guildId
+	 * @param {object} crop
+	 * @returns {Promise<{ success: true, fromInventory: number, cashPaid: number } | { success: false }>}
+	 */
 	async plantCrop(userId, guildId, crop) {
 		const userFarm = await this.getUserFarm(userId, guildId);
-		if (userFarm.currentCrop) return false;
-		const buyPrice = getDailyBuyPrice(crop.name);
-		const totalCost = buyPrice * userFarm.landSlots;
-		if (userFarm.money < totalCost) return false;
+		if (userFarm.currentCrop) {
+			return { success: false };
+		}
+		const plan = getPlantingPlan(userFarm, crop);
+		if (userFarm.money < plan.cashCost) {
+			return { success: false };
+		}
+		const inventory = { ...userFarm.inventory };
+		if (plan.fromInv > 0) {
+			const next = (inventory[crop.name] || 0) - plan.fromInv;
+			if (next <= 0) {
+				delete inventory[crop.name];
+			}
+			else {
+				inventory[crop.name] = next;
+			}
+		}
+		const nextMoney = userFarm.money - plan.cashCost;
 		await this.updateUserFarm(userId, guildId, {
-			money: userFarm.money - totalCost,
+			money: nextMoney,
+			inventory,
 			currentCrop: crop,
 			plantedAt: new Date().toISOString(),
+			maturityPinged: false,
 		});
-		return true;
+		return { success: true, fromInventory: plan.fromInv, cashPaid: plan.cashCost };
+	}
+
+	/**
+	 * @param {string} userId
+	 * @param {string} guildId
+	 */
+	async setLastFarmGuildId(userId, guildId) {
+		const uid = String(userId);
+		const gid = String(guildId);
+		await this.getUserFarm(userId, guildId);
+		const has = await knex.schema.hasColumn('farm_profiles', 'last_farm_guild_id');
+		if (!has) {
+			return;
+		}
+		await knex('farm_profiles').where({ discord_user_id: uid }).update({ last_farm_guild_id: gid });
+	}
+
+	/**
+	 * @param {string} userId
+	 * @param {string} guildId
+	 * @param {boolean} enabled
+	 */
+	async setHarvestRemindersEnabled(userId, guildId, enabled) {
+		await this.updateUserFarm(userId, guildId, { harvestRemindersEnabled: enabled });
+	}
+
+	/**
+	 * @param {import('discord.js').Client} client
+	 */
+	async runHarvestMaturityPings(client) {
+		const hasMaturity = await knex.schema.hasColumn('farm_profiles', 'maturity_pinged');
+		if (!hasMaturity) {
+			return;
+		}
+		const rows = await knex('farm_profiles')
+			.whereNotNull('current_crop')
+			.whereNotNull('planted_at')
+			.where('maturity_pinged', 0)
+			.where('harvest_reminders_enabled', 1);
+
+		for (const row of rows) {
+			const userId = String(row.discord_user_id);
+			const userFarm = rowToUserFarm(row);
+			if (!userFarm.harvestRemindersEnabled) {
+				continue;
+			}
+			const t = cropTimeStatusFromFarm(userFarm);
+			if (!t.ready) {
+				continue;
+			}
+			const crop = userFarm.currentCrop;
+			if (!crop) {
+				continue;
+			}
+			const displayName = crop.displayName || crop.name;
+			const guildIdStr = userFarm.lastFarmGuildId;
+			const prefix = guildIdStr
+				? await this.getServerPrefix(guildIdStr)
+				: 'h';
+
+			const sendDm = async () => {
+				const u = await client.users.fetch(userId).catch(() => null);
+				if (!u) {
+					return false;
+				}
+				const text = `**${displayName}** is ready to harvest! Use your server farm prefix, e.g. \`${prefix}harvest\` (run \`/farm help\` in a server to see the exact prefix).`;
+				try {
+					await u.send({ content: text });
+					return true;
+				}
+				catch (err) {
+					logger.error(`[FARM-REMIND] DM failed for ${userId}:`, err);
+					return false;
+				}
+			};
+
+			const markPinged = async () => {
+				await knex('farm_profiles').where({ discord_user_id: userId }).update({ maturity_pinged: 1 });
+			};
+
+			if (!guildIdStr) {
+				if (await sendDm()) {
+					await markPinged();
+				}
+				continue;
+			}
+
+			const guild =
+				client.guilds.cache.get(guildIdStr)
+				|| (await client.guilds.fetch(guildIdStr).catch(() => null));
+			if (!guild) {
+				if (await sendDm()) {
+					await markPinged();
+				}
+				continue;
+			}
+
+			const canGuild =
+				(await this.isGuildMinigameEnabled(guildIdStr))
+				&& (await this.isFarmingEnabled(userId, guildIdStr));
+			if (!canGuild) {
+				if (await sendDm()) {
+					await markPinged();
+				}
+				continue;
+			}
+
+			const settingsRow = await this._ensureFarmGuildRow(guildIdStr);
+			const farmChannelId = settingsRow.farm_channel_id
+				? String(settingsRow.farm_channel_id)
+				: null;
+			let channel = null;
+			if (farmChannelId) {
+				const ch = await guild.channels.fetch(farmChannelId).catch(() => null);
+				if (ch && ch.isTextBased() && 'send' in ch) {
+					channel = ch;
+				}
+			}
+			if (!channel) {
+				if (guild.systemChannel && guild.systemChannel.isTextBased()) {
+					channel = guild.systemChannel;
+				}
+			}
+			if (!channel) {
+				for (const ch of guild.channels.cache.values()) {
+					if (ch.isTextBased() && 'send' in ch && ch.viewable) {
+						channel = ch;
+						break;
+					}
+				}
+			}
+
+			const p = await this.getServerPrefix(guildIdStr);
+			const messageContent = `<@${userId}> **${displayName}** is ready to harvest! Use \`${p}harvest\` (overdue harvests lose yield / hour).`;
+			if (channel) {
+				try {
+					await channel.send({
+						content: messageContent,
+						allowedMentions: { users: [userId] },
+					});
+					await markPinged();
+					continue;
+				}
+				catch (err) {
+					logger.error(`[FARM-REMIND] Channel send failed for ${userId} in ${guildIdStr}:`, err);
+				}
+			}
+
+			if (await sendDm()) {
+				await markPinged();
+			}
+		}
 	}
 
 	async harvestCrop(userId, guildId) {
@@ -354,4 +597,4 @@ class FarmManager {
 
 const farmManager = new FarmManager();
 
-module.exports = { farmManager, FarmManager };
+module.exports = { farmManager, FarmManager, getPlantingPlan };

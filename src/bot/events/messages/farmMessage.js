@@ -50,6 +50,8 @@ async function handleFarmMessage(message) {
 		return true;
 	}
 
+	await farmManager.setLastFarmGuildId(userId, guildId);
+
 	try {
 		switch (command) {
 		case 'help':
@@ -100,17 +102,17 @@ async function handleFarmMessage(message) {
 			await handleFarmExpand(message);
 			return true;
 
-		// case 'role':
-		// 	if (args[0]?.toLowerCase() === 'list') {
-		// 		await handleRoleList(message);
-		// 	}
-		// 	else if (args[0]?.toLowerCase() === 'buy') {
-		// 		await handleRoleBuy(message, args.slice(1));
-		// 	}
-		// 	else {
-		// 		await handleRoleList(message);
-		// 	}
-		// 	return true;
+			// case 'role':
+			// 	if (args[0]?.toLowerCase() === 'list') {
+			// 		await handleRoleList(message);
+			// 	}
+			// 	else if (args[0]?.toLowerCase() === 'buy') {
+			// 		await handleRoleBuy(message, args.slice(1));
+			// 	}
+			// 	else {
+			// 		await handleRoleList(message);
+			// 	}
+			// 	return true;
 
 		case 'info':
 			await handleFarmInfo(message, args);

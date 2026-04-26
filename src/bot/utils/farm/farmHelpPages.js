@@ -37,6 +37,7 @@ async function buildFarmHelpPages(guildId) {
 				name: 'Slash: you',
 				value:
 					'• `/farm enable` / `/farm disable` — opt in or out of prefix farm commands\n'
+					+ '• `/farm reminders` — turn **harvest-ready** @mentions (or DMs) on or off\n'
 					+ '• `/farm help` — this guide (multi-page)\n'
 					+ `• \`${p}help\` or \`${p}h\` — same help via prefix`,
 				inline: false,
@@ -66,12 +67,16 @@ async function buildFarmHelpPages(guildId) {
 			},
 			{
 				name: `🌱 \`${p}grow\` / \`${p}plant\` <crop>`,
-				value: 'Plant the crop on all land slots.',
+				value:
+					'Plant on **all** land slots. Uses **inventory** of that crop first (one unit per slot), '
+					+ 'then **cash** at today’s buy price for any remaining slots. You do **not** need to `buy` first.',
 				inline: false,
 			},
 			{
 				name: `🌾 \`${p}harvest\` / \`${p}reap\``,
-				value: 'Harvest ready crops. **10%** yield loss per hour overdue after maturity.',
+				value:
+					'Harvest ready crops. **10%** yield loss per hour overdue after maturity. '
+					+ 'If reminders are on, the bot may @mention you (or DM) when a crop matures.',
 				inline: false,
 			},
 		)
@@ -88,7 +93,9 @@ async function buildFarmHelpPages(guildId) {
 			},
 			{
 				name: `🛒 \`${p}buy\` / \`${p}purchase\` <crop> [amount|all]`,
-				value: 'Buy at today\'s market price. `all` spends as much of your money as possible.',
+				value:
+					'Optional: add units to inventory at today’s buy price (stockpiling / trading). '
+					+ '**Not required** to plant — `grow` can pay cash directly. `all` spends as much as possible.',
 				inline: false,
 			},
 			{
