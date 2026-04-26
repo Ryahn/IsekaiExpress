@@ -38,6 +38,9 @@ module.exports = class ReadyEvent extends BaseEvent {
             for (const file of files) {
                 const filePath = path.join(dir, file);
                 if (fs.statSync(filePath).isDirectory()) {
+                    if (file === 'handlers') {
+                        continue;
+                    }
                     commandFiles = commandFiles.concat(getCommandFiles(filePath));
                 } else if (file.endsWith('.js')) {
                     commandFiles.push(filePath);
@@ -76,6 +79,9 @@ module.exports = class ReadyEvent extends BaseEvent {
         for (const file of commandFiles) {
             const command = require(file);
             const commandData = typeof command.data === 'function' ? await command.data(client) : command.data;
+            if (!commandData || typeof commandData.toJSON !== 'function') {
+                continue;
+            }
 
             commands.push(commandData.toJSON());
             commandInfo.push({
