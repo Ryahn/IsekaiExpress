@@ -103,6 +103,8 @@ module.exports = {
     userId: str('FEMBOY_USER_ID', '9455')
   },
 
+  fluxpointApiKey: str('FLUXPOINT_API_KEY', ''),
+
   currencyApiKey: str('CURRENCY_API_KEY', ''),
   youtubeApiKey: str('YOUTUBE_API_KEY', ''),
 

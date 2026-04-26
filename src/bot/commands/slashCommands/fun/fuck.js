@@ -2,6 +2,10 @@ const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
 const fetch = require('node-fetch');
 const path = require('path');
+const config = require('../../../../../config');
+
+/** Fluxpoint `GET /nsfw/gif/{imageType}` — one category picked at random per request. */
+const NSFW_GIF_IMAGE_TYPES = ['anal', 'bdsm', 'cum', 'futa', 'hentai', 'neko', 'pussy'];
 
 function channelIsNsfw(channel) {
     if (!channel) return false;
@@ -42,28 +46,41 @@ module.exports = {
             }
 
             if (channelIsNsfw(channel)) {
-                const response = await client.rateLimitHandler.executeWithRateLimit('eckigerluca-api', async () => {
-                    return await fetch('https://eckigerluca.com/api/fuck');
+                if (!config.fluxpointApiKey) {
+                    return interaction.editReply({
+                        content: 'This command needs `FLUXPOINT_API_KEY` in the environment.',
+                        ephemeral: true,
+                    });
+                }
+
+                const imageType =
+                    NSFW_GIF_IMAGE_TYPES[Math.floor(Math.random() * NSFW_GIF_IMAGE_TYPES.length)];
+                const apiUrl = `https://api.fluxpoint.dev/nsfw/gif/${imageType}`;
+
+                const response = await client.rateLimitHandler.executeWithRateLimit('fluxpoint-nsfw-gif', async () => {
+                    return await fetch(apiUrl, {
+                        headers: { Authorization: config.fluxpointApiKey },
+                    });
                 });
                 if (!response.ok) {
                     const snippet = (await response.text()).slice(0, 200);
-                    throw new Error(`eckigerluca API ${response.status} ${response.statusText}: ${snippet}`);
+                    throw new Error(`Fluxpoint API ${response.status} ${response.statusText}: ${snippet}`);
                 }
                 const raw = await response.text();
                 let data;
                 try {
                     data = JSON.parse(raw);
                 } catch {
-                    throw new Error(`eckigerluca API returned non-JSON (length ${raw.length})`);
+                    throw new Error(`Fluxpoint API returned non-JSON (length ${raw.length})`);
                 }
-                if (typeof data?.image !== 'string' || !data.image) {
-                    throw new Error('eckigerluca API response missing image URL');
+                if (typeof data?.file !== 'string' || !data.file) {
+                    throw new Error('Fluxpoint API response missing file URL');
                 }
 
                 const embed = new EmbedBuilder()
                     .setDescription(`${interaction.user} bangs the shit out of ${user}`)
                     .setColor(`#${getRandomColor()}`)
-                    .setImage(data.image);
+                    .setImage(data.file);
                 await interaction.editReply({ embeds: [embed] });
             } else {
                 await interaction.editReply('This command can only be used in NSFW channels!');
