@@ -91,22 +91,34 @@ async function handleFarmBuy(message, args) {
 		return;
 	}
 
-	const newInventory = { ...userFarm.inventory };
-	newInventory[crop.name] = (newInventory[crop.name] || 0) + buyQuantity;
-
-	await farmManager.updateUserFarm(userId, guildId, {
-		money: userFarm.money - totalCost,
-		inventory: newInventory,
-	});
+	const purchase = await farmManager.purchaseShopSeeds(userId, guildId, crop, buyQuantity);
+	if (!purchase.ok) {
+		if (purchase.reason === 'funds') {
+			const embed = new EmbedBuilder()
+				.setColor(0xff0000)
+				.setTitle('❌ Insufficient Funds')
+				.setDescription('Your balance changed — try again with a smaller amount.')
+				.setTimestamp();
+			await message.reply({ embeds: [embed] });
+			return;
+		}
+		const embed = new EmbedBuilder()
+			.setColor(0xff0000)
+			.setTitle('❌ Error')
+			.setDescription('Could not complete purchase. Please try again.')
+			.setTimestamp();
+		await message.reply({ embeds: [embed] });
+		return;
+	}
 
 	const embed = new EmbedBuilder()
 		.setColor(0x00ff00)
 		.setTitle(`✅ Purchased ${crop.displayName}!`)
 		.addFields(
-			{ name: '📦 Quantity', value: `${buyQuantity} units`, inline: true },
-			{ name: '💰 Unit Price', value: `$${dailyPrice}`, inline: true },
-			{ name: '💵 Total Cost', value: `$${totalCost.toLocaleString()}`, inline: true },
-			{ name: '💰 Remaining Balance', value: `$${(userFarm.money - totalCost).toLocaleString()}`, inline: false },
+			{ name: '📦 Quantity', value: `${purchase.buyQuantity} units`, inline: true },
+			{ name: '💰 Unit Price', value: `$${purchase.dailyPrice}`, inline: true },
+			{ name: '💵 Total Cost', value: `$${purchase.totalCost.toLocaleString()}`, inline: true },
+			{ name: '💰 Remaining Balance', value: `$${purchase.remainingMoney.toLocaleString()}`, inline: false },
 		)
 		.setFooter({ text: 'Today\'s market price' })
 		.setTimestamp();

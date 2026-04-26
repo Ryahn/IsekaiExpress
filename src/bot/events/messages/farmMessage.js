@@ -9,6 +9,7 @@ const { handleFarmSell } = require('../../commands/chatCommands/farm/sell');
 const { handleFarmExpand } = require('../../commands/chatCommands/farm/expand');
 const { handleCropList } = require('../../commands/chatCommands/farm/cropList');
 const { handleFarmBuy } = require('../../commands/chatCommands/farm/buy');
+const { handleFarmXp } = require('../../commands/chatCommands/farm/farmXp');
 
 /**
  * Prefix-based farm minigame (separate from guild cmdPrefix).
@@ -100,6 +101,10 @@ async function handleFarmMessage(message) {
 
 		case 'expand':
 			await handleFarmExpand(message);
+			return true;
+
+		case 'xp':
+			await handleFarmXp(message, args);
 			return true;
 
 			// case 'role':

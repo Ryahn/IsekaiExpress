@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en-US" dir="ltr" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Global farming minigame statistics and leaderboards for IsekaiExpress.">
+  <title>Farm stats · IsekaiExpress</title>
+  <link rel="shortcut icon" type="image/x-icon" href="/public/assets/img/favicons/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link href="/public/assets/css/theme.min.css" rel="stylesheet">
+  <link href="/public/assets/css/custom.css" rel="stylesheet">
+  <style>
+    :root {
+      --farm-bg: #0c0f12;
+      --farm-surface: #141a21;
+      --farm-border: rgba(120, 200, 150, 0.12);
+      --farm-accent: #6ecf8e;
+      --farm-accent-dim: #4a9d63;
+      --farm-muted: #8b9aab;
+    }
+    .farm-stats {
+      font-family: "DM Sans", system-ui, sans-serif;
+      background: var(--farm-bg);
+      color: #e6edf3;
+      min-height: 100vh;
+    }
+    .farm-stats__hero {
+      background: linear-gradient(165deg, var(--farm-surface) 0%, var(--farm-bg) 55%);
+      border-bottom: 1px solid var(--farm-border);
+      padding: 2.5rem 0 2rem;
+    }
+    .farm-stats__hero h1 {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.5rem;
+      color: #f0f4f8;
+    }
+    .farm-stats__hero p.lead {
+      color: var(--farm-muted);
+      max-width: 44rem;
+      margin: 0;
+      font-size: 1.05rem;
+    }
+    .farm-stats__badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--farm-accent);
+      border: 1px solid var(--farm-border);
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      margin-bottom: 0.75rem;
+    }
+    .stat-card {
+      background: var(--farm-surface);
+      border: 1px solid var(--farm-border);
+      border-radius: 0.5rem;
+      padding: 1.1rem 1.2rem;
+      height: 100%;
+    }
+    .stat-card__label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--farm-muted);
+      margin-bottom: 0.35rem;
+    }
+    .stat-card__value {
+      font-size: 1.45rem;
+      font-weight: 600;
+      color: #f0f4f8;
+      font-variant-numeric: tabular-nums;
+    }
+    .farm-stats h2 {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 1.65rem;
+      font-weight: 400;
+      margin: 2.5rem 0 1rem;
+      color: #f0f4f8;
+    }
+    .farm-stats table {
+      width: 100%;
+      font-size: 0.875rem;
+      border-collapse: collapse;
+    }
+    .farm-stats table th,
+    .farm-stats table td {
+      padding: 0.55rem 0.65rem;
+      text-align: left;
+      border-bottom: 1px solid var(--farm-border);
+    }
+    .farm-stats table th {
+      color: var(--farm-muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .farm-stats table td.num {
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .farm-stats .callout {
+      background: var(--farm-surface);
+      border: 1px solid var(--farm-border);
+      border-radius: 0.5rem;
+      padding: 1rem 1.15rem;
+      margin: 1.5rem 0 0;
+      color: var(--farm-muted);
+      font-size: 0.9rem;
+    }
+    .farm-stats footer {
+      border-top: 1px solid var(--farm-border);
+      padding: 2rem 0;
+      margin-top: 3rem;
+      color: var(--farm-muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body class="farm-stats">
+  <header class="farm-stats__hero">
+    <div class="container">
+      <span class="farm-stats__badge">Community</span>
+      <h1>Farm statistics</h1>
+      <p class="lead">Economy-wide totals from the Discord farming minigame, plus top farmers by balance and farm XP. <a href="{{ publicBaseUrl }}/docs/farm" class="link-success">Player guide</a></p>
+      <p class="lead mt-2 mb-0"><small class="text-body-secondary">Canonical: <a href="{{ publicBaseUrl }}/stats/farm" class="link-success">{{ publicBaseUrl }}/stats/farm</a></small></p>
+    </div>
+  </header>
+
+  <div class="container py-4">
+    <p class="text-body-secondary mb-3">Farmers with a profile: <strong class="text-body">{{ farmerCountLabel }}</strong></p>
+
+    <div class="row g-3">
+      <div class="col-sm-6 col-lg-4">
+        <div class="stat-card">
+          <div class="stat-card__label">Crop units harvested</div>
+          <div class="stat-card__value">{{ globalStats.totalHarvest }}</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-4">
+        <div class="stat-card">
+          <div class="stat-card__label">Plant actions</div>
+          <div class="stat-card__value">{{ globalStats.totalPlant }}</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-4">
+        <div class="stat-card">
+          <div class="stat-card__label">Land expansions</div>
+          <div class="stat-card__value">{{ globalStats.landExpansions }}</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-4">
+        <div class="stat-card">
+          <div class="stat-card__label">Shop seed units bought</div>
+          <div class="stat-card__value">{{ globalStats.shopBought }}</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-4">
+        <div class="stat-card">
+          <div class="stat-card__label">Seed units bought while planting</div>
+          <div class="stat-card__value">{{ globalStats.plantBought }}</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-4">
+        <div class="stat-card">
+          <div class="stat-card__label">Crop units sold</div>
+          <div class="stat-card__value">{{ globalStats.totalSold }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      Harvest, plant count, and land expansions include history backfilled from farm XP logs where possible.
+      Shop purchases, seeds bought at plant time, and crop units sold are counted from when this tracking went live — older activity is not included in those three figures.
+    </div>
+
+    <h2>Top farmers by balance</h2>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Farmer</th>
+            <th class="num">Balance</th>
+            <th class="num">Farm XP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in topMoney %}
+          <tr>
+            <td>{{ row.rank }}</td>
+            <td>{{ row.displayName }}</td>
+            <td class="num">${{ row.moneyLabel }}</td>
+            <td class="num">{{ row.farmXpLabel }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Top farmers by farm XP</h2>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Farmer</th>
+            <th class="num">Farm XP</th>
+            <th class="num">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in topFarmXp %}
+          <tr>
+            <td>{{ row.rank }}</td>
+            <td>{{ row.displayName }}</td>
+            <td class="num">{{ row.farmXpLabel }}</td>
+            <td class="num">${{ row.moneyLabel }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <footer>
+      <div class="container">
+        <p class="mb-0">&copy; {{ docYear }} · Names shown when the bot has a matching web login record; otherwise a short anonymous label is used.</p>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

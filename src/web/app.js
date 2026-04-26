@@ -81,7 +81,8 @@ app.use((req, res, next) => {
     req.path.startsWith('/public') ||
     req.path === '/auth/login' ||
     req.path === '/auth/discord/callback' ||
-    req.path === '/docs/farm'
+    req.path === '/docs/farm' ||
+    req.path.startsWith('/stats/')
   ) {
     return next();
   }
@@ -116,6 +117,85 @@ app.get('/docs/farm', (req, res) => {
     publicBaseUrl: config.url,
     docYear: new Date().getFullYear(),
   });
+});
+
+function farmerDisplayName(username, discordUserId) {
+  if (username && String(username).trim()) {
+    return String(username).trim();
+  }
+  const id = String(discordUserId || '');
+  const tail = id.length >= 4 ? id.slice(-4) : id;
+  return tail ? `Farmer ·${tail}` : 'Farmer';
+}
+
+app.get('/stats/farm', async (req, res, next) => {
+  const db = require('../../database/db').query;
+  try {
+    const TOP = 10;
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+    let globalStats = {
+      total_harvest_units: 0,
+      total_plant_actions: 0,
+      total_shop_seed_units_bought: 0,
+      total_seed_units_bought_while_planting: 0,
+      total_crop_units_sold: 0,
+      total_land_expansions: 0,
+    };
+    if (await db.schema.hasTable('farm_global_stats')) {
+      const row = await db('farm_global_stats').where({ id: 1 }).first();
+      if (row) {
+        globalStats = { ...globalStats, ...row };
+      }
+    }
+    const countRow = await db('farm_profiles').count('* as c').first();
+    const farmerCount = Number(countRow ? Object.values(countRow)[0] : 0);
+
+    const topMoneyRows = await db('farm_profiles as fp')
+      .leftJoin('users as u', 'u.discord_id', 'fp.discord_user_id')
+      .select('fp.discord_user_id', 'fp.money', 'fp.farm_xp', 'u.username')
+      .orderBy('fp.money', 'desc')
+      .orderBy('fp.discord_user_id', 'asc')
+      .limit(TOP);
+
+    const topXpRows = await db('farm_profiles as fp')
+      .leftJoin('users as u', 'u.discord_id', 'fp.discord_user_id')
+      .select('fp.discord_user_id', 'fp.money', 'fp.farm_xp', 'u.username')
+      .orderByRaw('COALESCE(fp.farm_xp, 0) DESC')
+      .orderBy('fp.discord_user_id', 'asc')
+      .limit(TOP);
+
+    const topMoney = topMoneyRows.map((r, i) => ({
+      rank: i + 1,
+      displayName: farmerDisplayName(r.username, r.discord_user_id),
+      moneyLabel: fmt(r.money),
+      farmXpLabel: fmt(r.farm_xp != null ? r.farm_xp : 0),
+    }));
+    const topFarmXp = topXpRows.map((r, i) => ({
+      rank: i + 1,
+      displayName: farmerDisplayName(r.username, r.discord_user_id),
+      moneyLabel: fmt(r.money),
+      farmXpLabel: fmt(r.farm_xp != null ? r.farm_xp : 0),
+    }));
+
+    res.render('farmStats', {
+      publicBaseUrl: config.url,
+      docYear: new Date().getFullYear(),
+      farmerCountLabel: fmt(farmerCount),
+      globalStats: {
+        totalHarvest: fmt(globalStats.total_harvest_units),
+        totalPlant: fmt(globalStats.total_plant_actions),
+        shopBought: fmt(globalStats.total_shop_seed_units_bought),
+        plantBought: fmt(globalStats.total_seed_units_bought_while_planting),
+        totalSold: fmt(globalStats.total_crop_units_sold),
+        landExpansions: fmt(globalStats.total_land_expansions),
+      },
+      topMoney,
+      topFarmXp,
+    });
+  } catch (err) {
+    logger.error('Farm stats page failed', err);
+    next(err);
+  }
 });
 
 const indexRouter = require("./routes/routerIndex");

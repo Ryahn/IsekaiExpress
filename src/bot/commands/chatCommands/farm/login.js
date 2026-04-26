@@ -22,12 +22,21 @@ async function handleFarmLogin(message) {
 		return;
 	}
 
-	await farmManager.processLogin(userId, guildId);
+	const claimed = await farmManager.processLogin(userId, guildId);
+	if (!claimed) {
+		const embed = new EmbedBuilder()
+			.setColor(0xff9900)
+			.setTitle('⏰ Already Logged In Today')
+			.setDescription('Someone may have just claimed, or something went wrong. Try again in a moment.')
+			.setTimestamp();
+		await message.reply({ embeds: [embed] });
+		return;
+	}
 
 	const embed = new EmbedBuilder()
 		.setColor(0x00ff00)
 		.setTitle('🎉 Login Successful!')
-		.setDescription('You received **$10,000**!')
+		.setDescription('You received **$10,000** and **+50 Farm XP**!')
 		.setFooter({ text: 'Come back tomorrow for more rewards' })
 		.setTimestamp();
 	await message.reply({ embeds: [embed] });

@@ -35,21 +35,28 @@ async function handleFarmExpand(message) {
 		return;
 	}
 
-	await farmManager.updateUserFarm(userId, guildId, {
-		landSlots: userFarm.landSlots + 1,
-		money: userFarm.money - price,
-	});
+	const purchase = await farmManager.purchaseLandSlot(userId, guildId);
+	if (!purchase.ok) {
+		const embed = new EmbedBuilder()
+			.setColor(0xff0000)
+			.setTitle('❌ Error')
+			.setDescription('Could not expand right now. Refresh status and try again.')
+			.setTimestamp();
+		await message.reply({ embeds: [embed] });
+		return;
+	}
 
-	const newSlotCount = userFarm.landSlots + 1;
+	const newSlotCount = purchase.newSlots;
 	const nextPrice = newSlotCount < 100 ? calculateSlotPrice(newSlotCount) : 0;
 
 	const embed = new EmbedBuilder()
 		.setColor(0x00ff00)
 		.setTitle('✅ Farm Expanded!')
+		.setDescription('**+100 Farm XP**')
 		.addFields(
 			{ name: '🏗️ Current Land Slots', value: `${newSlotCount}/100`, inline: true },
-			{ name: '💰 Cost', value: `$${price.toLocaleString()}`, inline: true },
-			{ name: '💵 Remaining Balance', value: `$${(userFarm.money - price).toLocaleString()}`, inline: true },
+			{ name: '💰 Cost', value: `$${purchase.price.toLocaleString()}`, inline: true },
+			{ name: '💵 Remaining Balance', value: `$${purchase.remainingMoney.toLocaleString()}`, inline: true },
 		);
 
 	if (newSlotCount < 100) {

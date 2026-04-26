@@ -1,11 +1,13 @@
 const knex = require('../../../../database/db').query;
-const { getDailyBuyPrice, getDailySellPrice } = require('./cropManager');
+const { getDailyBuyPrice, getDailySellPrice, calculateSlotPrice } = require('./cropManager');
 const logger = require('../../../../libs/logger');
+const { utc7CalendarDateKey, nextUtc7MidnightAfter } = require('./farmUtc7');
 
 function defaultFarmState() {
 	return {
 		money: 5000,
 		experience: 0,
+		farmXp: 0,
 		landSlots: 10,
 		inventory: {},
 		currentCrop: null,
@@ -59,10 +61,30 @@ function rowHarvestRemindersEnabled(val) {
 	return true;
 }
 
+function cropStatusFromPlanted(userFarm) {
+	if (!userFarm.currentCrop || !userFarm.plantedAt) {
+		return { ready: false, timeLeft: 0, overdue: 0 };
+	}
+	const plantedAt = new Date(userFarm.plantedAt);
+	const now = new Date();
+	const elapsed = now.getTime() - plantedAt.getTime();
+	const growthTime = userFarm.currentCrop.growthTime;
+	if (elapsed >= growthTime) {
+		return { ready: true, timeLeft: 0, overdue: elapsed - growthTime };
+	}
+	return { ready: false, timeLeft: growthTime - elapsed, overdue: 0 };
+}
+
 function rowToUserFarm(row) {
+	const todayKey = utc7CalendarDateKey(new Date());
+	const rawConverted = row.farm_xp_converted_today != null ? Number(row.farm_xp_converted_today) : 0;
+	const storedKey = row.farm_xp_conversion_day_key != null ? String(row.farm_xp_conversion_day_key) : null;
+	const farmXpConvertedToday = storedKey === todayKey ? rawConverted : 0;
 	return {
 		money: Number(row.money),
 		experience: row.experience,
+		farmXp: row.farm_xp != null ? Number(row.farm_xp) : 0,
+		farmXpConvertedToday,
 		landSlots: row.land_slots,
 		inventory: parseJson(row.inventory, {}),
 		currentCrop: row.current_crop ? parseJson(row.current_crop, null) : null,
@@ -226,6 +248,12 @@ class FarmManager {
 				planted_at: null,
 				last_login: null,
 			};
+			const hasFarmXp = await knex.schema.hasColumn('farm_profiles', 'farm_xp');
+			if (hasFarmXp) {
+				insert.farm_xp = 0;
+				insert.farm_xp_converted_today = 0;
+				insert.farm_xp_conversion_day_key = null;
+			}
 			const hasMaturity = await knex.schema.hasColumn('farm_profiles', 'maturity_pinged');
 			if (hasMaturity) {
 				insert.maturity_pinged = d.maturityPinged ? 1 : 0;
@@ -244,6 +272,12 @@ class FarmManager {
 		const data = {};
 		if ('money' in updates) data.money = updates.money;
 		if ('experience' in updates) data.experience = updates.experience;
+		if ('farmXp' in updates) data.farm_xp = updates.farmXp;
+		if ('farmXpConvertedToday' in updates) data.farm_xp_converted_today = updates.farmXpConvertedToday;
+		if ('farmXpConversionDayKey' in updates) {
+			const k = updates.farmXpConversionDayKey;
+			data.farm_xp_conversion_day_key = k == null || k === '' ? null : String(k);
+		}
 		if ('landSlots' in updates) data.land_slots = updates.landSlots;
 		if ('inventory' in updates) data.inventory = serializeMysqlJson(updates.inventory);
 		if ('currentCrop' in updates) {
@@ -296,29 +330,143 @@ class FarmManager {
 		if (!userFarm.lastLogin) {
 			return { canLogin: true, nextLogin: null };
 		}
-		const lastLogin = new Date(userFarm.lastLogin);
-		const now = new Date();
-		const utc7Offset = 7 * 60 * 60 * 1000;
-		const lastLoginUTC7 = new Date(lastLogin.getTime() + utc7Offset);
-		const nowUTC7 = new Date(now.getTime() + utc7Offset);
-		const lastLoginDay = new Date(lastLoginUTC7.getFullYear(), lastLoginUTC7.getMonth(), lastLoginUTC7.getDate());
-		const todayUTC7 = new Date(nowUTC7.getFullYear(), nowUTC7.getMonth(), nowUTC7.getDate());
-		const nextLogin = new Date(lastLoginDay.getTime() + 24 * 60 * 60 * 1000 - utc7Offset);
-		if (todayUTC7.getTime() > lastLoginDay.getTime()) {
+		const lastKey = utc7CalendarDateKey(new Date(userFarm.lastLogin));
+		const todayKey = utc7CalendarDateKey(new Date());
+		if (lastKey !== todayKey) {
 			return { canLogin: true, nextLogin: null };
 		}
+		const nextLogin = nextUtc7MidnightAfter(new Date());
 		return { canLogin: false, nextLogin };
 	}
 
 	async processLogin(userId, guildId) {
-		const { canLogin } = await this.canLogin(userId, guildId);
-		if (!canLogin) return false;
-		const userFarm = await this.getUserFarm(userId, guildId);
-		await this.updateUserFarm(userId, guildId, {
-			money: userFarm.money + 10000,
-			lastLogin: new Date().toISOString(),
+		void guildId;
+		const uid = String(userId);
+		const hasLog = await knex.schema.hasTable('farm_xp_log');
+		let claimed = false;
+		await knex.transaction(async (trx) => {
+			const row = await trx('farm_profiles').where({ discord_user_id: uid }).forUpdate().first();
+			if (!row) {
+				return;
+			}
+			if (row.last_login) {
+				const lastKey = utc7CalendarDateKey(new Date(row.last_login));
+				const todayKey = utc7CalendarDateKey(new Date());
+				if (lastKey === todayKey) {
+					return;
+				}
+			}
+			const farmXp = row.farm_xp != null ? Number(row.farm_xp) : 0;
+			await trx('farm_profiles').where({ discord_user_id: uid }).update({
+				money: Number(row.money) + 10000,
+				last_login: trx.fn.now(),
+				farm_xp: farmXp + 50,
+			});
+			if (hasLog) {
+				await trx('farm_xp_log').insert({
+					discord_user_id: uid,
+					event_type: 'earn',
+					amount: 50,
+					source: 'login',
+					gold_gained: null,
+				});
+			}
+			claimed = true;
 		});
-		return true;
+		return claimed;
+	}
+
+	/**
+	 * @param {import('knex').Knex.Transaction} trx
+	 * @param {{
+	 *   harvestUnits?: number,
+	 *   plantActions?: number,
+	 *   shopSeedUnits?: number,
+	 *   plantBuyUnits?: number,
+	 *   soldUnits?: number,
+	 *   landExpansions?: number,
+	 * }} deltas
+	 */
+	async _bumpFarmGlobalStats(trx, deltas) {
+		const has = await trx.schema.hasTable('farm_global_stats');
+		if (!has) {
+			return;
+		}
+		const harvestUnits = deltas.harvestUnits ?? 0;
+		const plantActions = deltas.plantActions ?? 0;
+		const shopSeedUnits = deltas.shopSeedUnits ?? 0;
+		const plantBuyUnits = deltas.plantBuyUnits ?? 0;
+		const soldUnits = deltas.soldUnits ?? 0;
+		const landExpansions = deltas.landExpansions ?? 0;
+		if (
+			harvestUnits === 0 && plantActions === 0 && shopSeedUnits === 0
+			&& plantBuyUnits === 0 && soldUnits === 0 && landExpansions === 0
+		) {
+			return;
+		}
+		await trx('farm_global_stats')
+			.where({ id: 1 })
+			.update({
+				total_harvest_units: trx.raw('total_harvest_units + ?', [harvestUnits]),
+				total_plant_actions: trx.raw('total_plant_actions + ?', [plantActions]),
+				total_shop_seed_units_bought: trx.raw('total_shop_seed_units_bought + ?', [shopSeedUnits]),
+				total_seed_units_bought_while_planting: trx.raw('total_seed_units_bought_while_planting + ?', [plantBuyUnits]),
+				total_crop_units_sold: trx.raw('total_crop_units_sold + ?', [soldUnits]),
+				total_land_expansions: trx.raw('total_land_expansions + ?', [landExpansions]),
+				updated_at: trx.fn.now(),
+			});
+	}
+
+	/**
+	 * Buy one land slot with cash; awards +100 Farm XP on success (atomic).
+	 * @returns {Promise<{ ok: true, newSlots: number, remainingMoney: number, price: number } | { ok: false, reason: string }>}
+	 */
+	async purchaseLandSlot(userId, guildId) {
+		void guildId;
+		const uid = String(userId);
+		const hasLog = await knex.schema.hasTable('farm_xp_log');
+		let result = { ok: false, reason: 'unknown' };
+		await knex.transaction(async (trx) => {
+			const row = await trx('farm_profiles').where({ discord_user_id: uid }).forUpdate().first();
+			if (!row) {
+				result = { ok: false, reason: 'no_profile' };
+				return;
+			}
+			const slots = Number(row.land_slots);
+			const money = Number(row.money);
+			if (slots >= 100) {
+				result = { ok: false, reason: 'max' };
+				return;
+			}
+			const price = calculateSlotPrice(slots);
+			if (money < price) {
+				result = { ok: false, reason: 'funds' };
+				return;
+			}
+			const farmXp = row.farm_xp != null ? Number(row.farm_xp) : 0;
+			await trx('farm_profiles').where({ discord_user_id: uid }).update({
+				land_slots: slots + 1,
+				money: money - price,
+				farm_xp: farmXp + 100,
+			});
+			if (hasLog) {
+				await trx('farm_xp_log').insert({
+					discord_user_id: uid,
+					event_type: 'earn',
+					amount: 100,
+					source: 'expand',
+					gold_gained: null,
+				});
+			}
+			await this._bumpFarmGlobalStats(trx, { landExpansions: 1 });
+			result = {
+				ok: true,
+				newSlots: slots + 1,
+				remainingMoney: money - price,
+				price,
+			};
+		});
+		return result;
 	}
 
 	calculateYieldPenalty(overdueMs) {
@@ -330,19 +478,7 @@ class FarmManager {
 
 	async getCropStatus(userId, guildId) {
 		const userFarm = await this.getUserFarm(userId, guildId);
-		if (!userFarm.currentCrop || !userFarm.plantedAt) {
-			return { ready: false, timeLeft: 0, overdue: 0 };
-		}
-		const plantedAt = new Date(userFarm.plantedAt);
-		const now = new Date();
-		const elapsed = now.getTime() - plantedAt.getTime();
-		const crop = userFarm.currentCrop;
-		const growthTime = crop.growthTime;
-		if (elapsed >= growthTime) {
-			const overdue = elapsed - growthTime;
-			return { ready: true, timeLeft: 0, overdue };
-		}
-		return { ready: false, timeLeft: growthTime - elapsed, overdue: 0 };
+		return cropStatusFromPlanted(userFarm);
 	}
 
 	/**
@@ -352,33 +488,58 @@ class FarmManager {
 	 * @returns {Promise<{ success: true, fromInventory: number, cashPaid: number } | { success: false }>}
 	 */
 	async plantCrop(userId, guildId, crop) {
-		const userFarm = await this.getUserFarm(userId, guildId);
-		if (userFarm.currentCrop) {
-			return { success: false };
-		}
-		const plan = getPlantingPlan(userFarm, crop);
-		if (userFarm.money < plan.cashCost) {
-			return { success: false };
-		}
-		const inventory = { ...userFarm.inventory };
-		if (plan.fromInv > 0) {
-			const next = (inventory[crop.name] || 0) - plan.fromInv;
-			if (next <= 0) {
-				delete inventory[crop.name];
+		const uid = String(userId);
+		const hasLog = await knex.schema.hasTable('farm_xp_log');
+		let out = { success: false };
+		await knex.transaction(async (trx) => {
+			const row = await trx('farm_profiles').where({ discord_user_id: uid }).forUpdate().first();
+			if (!row) {
+				return;
 			}
-			else {
-				inventory[crop.name] = next;
+			const userFarm = rowToUserFarm(row);
+			if (userFarm.currentCrop) {
+				return;
 			}
-		}
-		const nextMoney = userFarm.money - plan.cashCost;
-		await this.updateUserFarm(userId, guildId, {
-			money: nextMoney,
-			inventory,
-			currentCrop: crop,
-			plantedAt: new Date().toISOString(),
-			maturityPinged: false,
+			const plan = getPlantingPlan(userFarm, crop);
+			if (userFarm.money < plan.cashCost) {
+				return;
+			}
+			const inventory = { ...userFarm.inventory };
+			if (plan.fromInv > 0) {
+				const next = (inventory[crop.name] || 0) - plan.fromInv;
+				if (next <= 0) {
+					delete inventory[crop.name];
+				}
+				else {
+					inventory[crop.name] = next;
+				}
+			}
+			const nextMoney = userFarm.money - plan.cashCost;
+			const farmXp = userFarm.farmXp + 5;
+			await trx('farm_profiles').where({ discord_user_id: uid }).update({
+				money: nextMoney,
+				inventory: serializeMysqlJson(inventory),
+				current_crop: serializeMysqlJson(crop),
+				planted_at: trx.fn.now(),
+				maturity_pinged: 0,
+				farm_xp: farmXp,
+			});
+			if (hasLog) {
+				await trx('farm_xp_log').insert({
+					discord_user_id: uid,
+					event_type: 'earn',
+					amount: 5,
+					source: 'plant',
+					gold_gained: null,
+				});
+			}
+			await this._bumpFarmGlobalStats(trx, {
+				plantActions: 1,
+				plantBuyUnits: plan.cashSlots,
+			});
+			out = { success: true, fromInventory: plan.fromInv, cashPaid: plan.cashCost };
 		});
-		return { success: true, fromInventory: plan.fromInv, cashPaid: plan.cashCost };
+		return out;
 	}
 
 	/**
@@ -534,67 +695,207 @@ class FarmManager {
 	}
 
 	async harvestCrop(userId, guildId) {
-		const userFarm = await this.getUserFarm(userId, guildId);
-		const cropStatus = await this.getCropStatus(userId, guildId);
-		if (!cropStatus.ready || !userFarm.currentCrop) return null;
-		const crop = userFarm.currentCrop;
-		const penalty = this.calculateYieldPenalty(cropStatus.overdue);
-		const baseYield = crop.yield * userFarm.landSlots;
-		const actualYield = Math.floor(baseYield * penalty);
-		const expGained = Math.floor(actualYield / 10);
-		const inventory = { ...userFarm.inventory };
-		inventory[crop.name] = (inventory[crop.name] || 0) + actualYield;
-		await this.updateUserFarm(userId, guildId, {
-			inventory,
-			experience: userFarm.experience + expGained,
-			currentCrop: null,
-			plantedAt: null,
+		void guildId;
+		const uid = String(userId);
+		const hasLog = await knex.schema.hasTable('farm_xp_log');
+		let result = null;
+		await knex.transaction(async (trx) => {
+			const row = await trx('farm_profiles').where({ discord_user_id: uid }).forUpdate().first();
+			if (!row) {
+				return;
+			}
+			const userFarm = rowToUserFarm(row);
+			const cropStatus = cropStatusFromPlanted(userFarm);
+			if (!cropStatus.ready || !userFarm.currentCrop) {
+				return;
+			}
+			const crop = userFarm.currentCrop;
+			const penalty = this.calculateYieldPenalty(cropStatus.overdue);
+			const baseYield = crop.yield * userFarm.landSlots;
+			const actualYield = Math.floor(baseYield * penalty);
+			const farmXpGained = actualYield;
+			const inventory = { ...userFarm.inventory };
+			inventory[crop.name] = (inventory[crop.name] || 0) + actualYield;
+			const newFarmXp = userFarm.farmXp + farmXpGained;
+			await trx('farm_profiles').where({ discord_user_id: uid }).update({
+				inventory: serializeMysqlJson(inventory),
+				farm_xp: newFarmXp,
+				current_crop: null,
+				planted_at: null,
+			});
+			if (hasLog) {
+				await trx('farm_xp_log').insert({
+					discord_user_id: uid,
+					event_type: 'earn',
+					amount: farmXpGained,
+					source: 'harvest',
+					gold_gained: null,
+				});
+			}
+			await this._bumpFarmGlobalStats(trx, { harvestUnits: actualYield });
+			result = { crop, yield: actualYield, penalty, farmXpGained };
 		});
-		return { crop, yield: actualYield, penalty, experience: expGained };
+		return result;
+	}
+
+	/**
+	 * Buy seed units from the shop (`buy` / `purchase` command). Atomic with global stats.
+	 * @param {string} userId
+	 * @param {string} guildId
+	 * @param {{ name: string }} crop — internal crop key from getCrop()
+	 * @param {number} buyQuantity — positive integer
+	 * @returns {Promise<{ ok: true, buyQuantity: number, totalCost: number, dailyPrice: number, remainingMoney: number } | { ok: false, reason: 'no_profile' | 'funds' | 'invalid_qty' }>}
+	 */
+	async purchaseShopSeeds(userId, guildId, crop, buyQuantity) {
+		void guildId;
+		const uid = String(userId);
+		if (!crop || typeof crop.name !== 'string') {
+			return { ok: false, reason: 'invalid_qty' };
+		}
+		const qty = Math.floor(Number(buyQuantity));
+		if (!Number.isFinite(qty) || qty <= 0) {
+			return { ok: false, reason: 'invalid_qty' };
+		}
+		const buyPrice = getDailyBuyPrice(crop.name);
+		const totalCost = buyPrice * qty;
+		/** @type {{ ok: true, buyQuantity: number, totalCost: number, dailyPrice: number, remainingMoney: number } | { ok: false, reason: 'no_profile' | 'funds' | 'invalid_qty' }} */
+		let out = { ok: false, reason: 'invalid_qty' };
+		await knex.transaction(async (trx) => {
+			const row = await trx('farm_profiles').where({ discord_user_id: uid }).forUpdate().first();
+			if (!row) {
+				out = { ok: false, reason: 'no_profile' };
+				return;
+			}
+			const userFarm = rowToUserFarm(row);
+			if (userFarm.money < totalCost) {
+				out = { ok: false, reason: 'funds' };
+				return;
+			}
+			const inventory = { ...userFarm.inventory };
+			inventory[crop.name] = (inventory[crop.name] || 0) + qty;
+			await trx('farm_profiles').where({ discord_user_id: uid }).update({
+				money: userFarm.money - totalCost,
+				inventory: serializeMysqlJson(inventory),
+			});
+			await this._bumpFarmGlobalStats(trx, { shopSeedUnits: qty });
+			out = {
+				ok: true,
+				buyQuantity: qty,
+				totalCost,
+				dailyPrice: buyPrice,
+				remainingMoney: userFarm.money - totalCost,
+			};
+		});
+		return out;
 	}
 
 	async sellCrop(userId, guildId, cropName, amount = 'all') {
-		const userFarm = await this.getUserFarm(userId, guildId);
-		const inventory = { ...userFarm.inventory };
-		if (cropName.toLowerCase() === 'all') {
-			let totalPrice = 0;
-			let totalAmount = 0;
-			for (const [name, qty] of Object.entries(inventory)) {
-				if (qty > 0) {
-					const dailyPrice = getDailySellPrice(name);
-					totalPrice += qty * dailyPrice;
-					totalAmount += qty;
-				}
+		const uid = String(userId);
+		const hasLog = await knex.schema.hasTable('farm_xp_log');
+		let result = null;
+		await knex.transaction(async (trx) => {
+			const row = await trx('farm_profiles').where({ discord_user_id: uid }).forUpdate().first();
+			if (!row) {
+				return;
 			}
-			if (totalAmount === 0) return null;
-			await this.updateUserFarm(userId, guildId, {
+			const userFarm = rowToUserFarm(row);
+			const inventory = { ...userFarm.inventory };
+			if (cropName.toLowerCase() === 'all') {
+				let totalPrice = 0;
+				let totalAmount = 0;
+				for (const [name, qty] of Object.entries(inventory)) {
+					if (qty > 0) {
+						const dailyPrice = getDailySellPrice(name);
+						totalPrice += qty * dailyPrice;
+						totalAmount += qty;
+					}
+				}
+				if (totalAmount === 0) {
+					return;
+				}
+				const newFarmXp = userFarm.farmXp + 10;
+				await trx('farm_profiles').where({ discord_user_id: uid }).update({
+					money: userFarm.money + totalPrice,
+					inventory: serializeMysqlJson({}),
+					farm_xp: newFarmXp,
+				});
+				if (hasLog) {
+					await trx('farm_xp_log').insert({
+						discord_user_id: uid,
+						event_type: 'earn',
+						amount: 10,
+						source: 'sell',
+						gold_gained: null,
+					});
+				}
+				await this._bumpFarmGlobalStats(trx, { soldUnits: totalAmount });
+				result = { amount: totalAmount, totalPrice, cropName: 'all' };
+				return;
+			}
+			const availableAmount = inventory[cropName] || 0;
+			if (availableAmount === 0) {
+				return;
+			}
+			let sellAmount;
+			if (amount === 'all') {
+				sellAmount = availableAmount;
+			}
+			else {
+				sellAmount = parseInt(String(amount), 10);
+				if (Number.isNaN(sellAmount) || sellAmount <= 0) {
+					return;
+				}
+				sellAmount = Math.min(sellAmount, availableAmount);
+			}
+			const dailyPrice = getDailySellPrice(cropName);
+			const totalPrice = sellAmount * dailyPrice;
+			inventory[cropName] = availableAmount - sellAmount;
+			const newFarmXp = userFarm.farmXp + 10;
+			await trx('farm_profiles').where({ discord_user_id: uid }).update({
 				money: userFarm.money + totalPrice,
-				inventory: {},
+				inventory: serializeMysqlJson(inventory),
+				farm_xp: newFarmXp,
 			});
-			return { amount: totalAmount, totalPrice, cropName: 'all' };
-		}
-		const availableAmount = inventory[cropName] || 0;
-		if (availableAmount === 0) return null;
-		let sellAmount;
-		if (amount === 'all') {
-			sellAmount = availableAmount;
-		}
-		else {
-			sellAmount = parseInt(String(amount), 10);
-			if (Number.isNaN(sellAmount) || sellAmount <= 0) return null;
-			sellAmount = Math.min(sellAmount, availableAmount);
-		}
-		const dailyPrice = getDailySellPrice(cropName);
-		const totalPrice = sellAmount * dailyPrice;
-		inventory[cropName] = availableAmount - sellAmount;
-		await this.updateUserFarm(userId, guildId, {
-			money: userFarm.money + totalPrice,
-			inventory,
+			if (hasLog) {
+				await trx('farm_xp_log').insert({
+					discord_user_id: uid,
+					event_type: 'earn',
+					amount: 10,
+					source: 'sell',
+					gold_gained: null,
+				});
+			}
+			await this._bumpFarmGlobalStats(trx, { soldUnits: sellAmount });
+			result = { amount: sellAmount, totalPrice, cropName };
 		});
-		return { amount: sellAmount, totalPrice, cropName };
+		return result;
+	}
+
+	/**
+	 * @param {string} userId
+	 * @returns {Promise<Array<{ id: string, eventType: string, amount: number, source: string, goldGained: number | null, createdAt: Date }>>}
+	 */
+	async getFarmXpLogEntries(userId, limit = 10) {
+		const uid = String(userId);
+		const hasLog = await knex.schema.hasTable('farm_xp_log');
+		if (!hasLog) {
+			return [];
+		}
+		const rows = await knex('farm_xp_log')
+			.where({ discord_user_id: uid })
+			.orderBy('id', 'desc')
+			.limit(limit);
+		return rows.map((r) => ({
+			id: String(r.id),
+			eventType: r.event_type,
+			amount: Number(r.amount),
+			source: r.source,
+			goldGained: r.gold_gained != null ? Number(r.gold_gained) : null,
+			createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+		}));
 	}
 }
 
 const farmManager = new FarmManager();
 
-module.exports = { farmManager, FarmManager, getPlantingPlan };
+module.exports = { farmManager, FarmManager, getPlantingPlan, utc7CalendarDateKey };

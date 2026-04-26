@@ -116,6 +116,11 @@ module.exports = {
    * - "random" / "auto": per card, random valid region for that **element** (see
    *   `pickRandomHomeRegionForElement` in `libs/tcgPveConfig.js` vs PvE `elementPoolForEncounter`)
    */
+  farm: {
+    /** Max Farm XP convertible to TCG gold per UTC+7 calendar day (see farm login reset). */
+    xpDailyConvertCap: int('FARM_XP_DAILY_CONVERT_CAP', 500),
+  },
+
   tcg: {
     catalogRegionMode: (() => {
       const v = str('TCG_CATALOG_DEFAULT_REGION', '').trim().toLowerCase();

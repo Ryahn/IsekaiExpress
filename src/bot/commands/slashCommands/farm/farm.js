@@ -1,6 +1,8 @@
-const { SlashCommandBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, ChannelType, EmbedBuilder } = require('discord.js');
 const path = require('path');
+const config = require('../../../../../config');
 const { farmManager } = require('../../../utils/farm/farmManager');
+const { convertFarmXpToGold, FARM_XP_PER_GOLD } = require('../../../utils/farm/farmXpConvert');
 const {
 	buildFarmHelpPages,
 	attachFarmHelpPagination,
@@ -166,6 +168,93 @@ async function farmRemindersCommand(interaction) {
 	});
 }
 
+function formatFarmXpLogLine(e) {
+	const t = e.createdAt.toISOString().replace('T', ' ').slice(0, 19);
+	if (e.eventType === 'convert' && e.goldGained != null) {
+		return `\`${t}\` · spent **${e.amount}** XP → **+${e.goldGained}**g`;
+	}
+	return `\`${t}\` · +**${e.amount}** XP · _${e.source}_`;
+}
+
+async function farmXpShowSlash(interaction) {
+	const userId = interaction.user.id;
+	const guildId = interaction.guildId;
+	const dailyCap = config.farm?.xpDailyConvertCap ?? 500;
+	const prefix = await farmManager.getServerPrefix(guildId);
+	const userFarm = await farmManager.getUserFarm(userId, guildId);
+	const remaining = Math.max(0, dailyCap - userFarm.farmXpConvertedToday);
+	const goldEq = Math.floor(userFarm.farmXp / FARM_XP_PER_GOLD);
+	const embed = new EmbedBuilder()
+		.setColor(0x57f287)
+		.setTitle('🌾 Farm XP')
+		.addFields(
+			{ name: 'Balance', value: `**${userFarm.farmXp.toLocaleString()}** XP`, inline: true },
+			{ name: '≈ Full gold value', value: `**${goldEq}**g · _50 XP = 1g_`, inline: true },
+			{ name: 'Converted today (UTC+7)', value: `**${userFarm.farmXpConvertedToday}** / **${dailyCap}** XP`, inline: true },
+			{ name: 'Under cap today', value: `**${remaining}** XP left`, inline: true },
+		)
+		.setFooter({ text: `Prefix: ${prefix}xp · ${prefix}xp convert · ${prefix}xp history` })
+		.setTimestamp();
+	await interaction.editReply({ embeds: [embed] });
+}
+
+async function farmXpHistorySlash(interaction) {
+	const rows = await farmManager.getFarmXpLogEntries(interaction.user.id, 10);
+	if (!rows.length) {
+		await interaction.editReply({
+			embeds: [
+				new EmbedBuilder()
+					.setColor(0x808080)
+					.setTitle('Farm XP log')
+					.setDescription('No entries yet.'),
+			],
+		});
+		return;
+	}
+	const body = rows.map(formatFarmXpLogLine).join('\n');
+	await interaction.editReply({
+		embeds: [
+			new EmbedBuilder()
+				.setColor(0x57f287)
+				.setTitle('Farm XP · last 10')
+				.setDescription(body.slice(0, 3900)),
+		],
+	});
+}
+
+async function farmXpConvertSlash(interaction) {
+	const amountOpt = interaction.options.getInteger('amount');
+	const mode = amountOpt == null ? 'all' : 'amount';
+	const res = await convertFarmXpToGold(interaction.client, interaction.user, {
+		mode,
+		amount: amountOpt ?? undefined,
+	});
+	if (!res.ok) {
+		await interaction.editReply({
+			embeds: [
+				new EmbedBuilder()
+					.setColor(0xed4245)
+					.setTitle('Cannot convert')
+					.setDescription(res.error),
+			],
+		});
+		return;
+	}
+	await interaction.editReply({
+		embeds: [
+			new EmbedBuilder()
+				.setColor(0x57f287)
+				.setTitle('Converted Farm XP')
+				.setDescription(
+					`Spent **${res.xpSpent}** Farm XP → **+${res.goldGained}** TCG gold\n`
+					+ `Farm XP: **${res.newFarmXp.toLocaleString()}** · Gold: **${res.newGold.toLocaleString()}**\n`
+					+ `Today (UTC+7): **${res.convertedToday}** / **${res.dailyCap}** XP converted · **${res.remainingCapAfter}** XP left under cap`,
+				)
+				.setTimestamp(),
+		],
+	});
+}
+
 async function farmPrefixCommand(interaction) {
 	const guildId = interaction.guildId;
 	const newPrefix = interaction.options.getString('prefix');
@@ -269,6 +358,33 @@ module.exports = {
 							{ name: 'Off', value: 'off' },
 						),
 				),
+		)
+		.addSubcommandGroup((group) =>
+			group
+				.setName('xp')
+				.setDescription('Farm XP — balance, history, convert to TCG gold')
+				.addSubcommand((sub) =>
+					sub
+						.setName('show')
+						.setDescription('Farm XP balance and daily conversion cap (UTC+7)'),
+				)
+				.addSubcommand((sub) =>
+					sub
+						.setName('history')
+						.setDescription('Last 10 Farm XP earn / convert events'),
+				)
+				.addSubcommand((sub) =>
+					sub
+						.setName('convert')
+						.setDescription('Convert Farm XP to TCG gold (omit amount = max allowed today)')
+						.addIntegerOption((opt) =>
+							opt
+								.setName('amount')
+								.setDescription('Farm XP to spend (min 50). Leave empty to convert all allowed today.')
+								.setRequired(false)
+								.setMinValue(50),
+						),
+				),
 		),
 
 	async execute(client, interaction) {
@@ -292,6 +408,25 @@ module.exports = {
 					content: 'Unknown farm server subcommand.',
 					ephemeral: true,
 				});
+			}
+			return;
+		}
+		if (subcommandGroup === 'xp') {
+			if (!(await assertLockedFarmChannelForGameplay(interaction))) {
+				return;
+			}
+			const xsub = interaction.options.getSubcommand();
+			if (xsub === 'show') {
+				await farmXpShowSlash(interaction);
+			}
+			else if (xsub === 'history') {
+				await farmXpHistorySlash(interaction);
+			}
+			else if (xsub === 'convert') {
+				await farmXpConvertSlash(interaction);
+			}
+			else {
+				await interaction.editReply({ content: 'Unknown /farm xp subcommand.', ephemeral: true });
 			}
 			return;
 		}

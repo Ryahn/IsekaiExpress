@@ -16,7 +16,8 @@ const BUTTON_NEXT = 'farmhelp_next';
  */
 async function buildFarmHelpPages(guildId) {
 	const p = await farmManager.getServerPrefix(guildId);
-	const total = 4;
+	const dailyCap = config.farm?.xpDailyConvertCap ?? 500;
+	const total = 5;
 
 	const page1 = new EmbedBuilder()
 		.setColor(HELP_COLOR)
@@ -38,6 +39,7 @@ async function buildFarmHelpPages(guildId) {
 				value:
 					'• `/farm enable` / `/farm disable` — opt in or out of prefix farm commands\n'
 					+ '• `/farm reminders` — turn **harvest-ready** @mentions (or DMs) on or off\n'
+					+ '• `/farm xp` — Farm XP balance, `/farm xp history`, `/farm xp convert`\n'
 					+ '• `/farm help` — this guide (multi-page)\n'
 					+ `• \`${p}help\` or \`${p}h\` — same help via prefix`,
 				inline: false,
@@ -57,7 +59,7 @@ async function buildFarmHelpPages(guildId) {
 		.addFields(
 			{
 				name: `💰 \`${p}login\` / \`${p}daily\``,
-				value: 'Receive $10,000 daily (resets at 00:00 UTC+7).',
+				value: 'Receive **$10,000** and **+50 Farm XP** daily (resets at 00:00 UTC+7).',
 				inline: false,
 			},
 			{
@@ -75,7 +77,8 @@ async function buildFarmHelpPages(guildId) {
 			{
 				name: `🌾 \`${p}harvest\` / \`${p}reap\``,
 				value:
-					'Harvest ready crops. **10%** yield loss per hour overdue after maturity. '
+					'Harvest ready crops. **+1 Farm XP per unit** harvested (after overdue penalty). '
+					+ '**10%** yield loss per hour overdue after maturity. '
 					+ 'If reminders are on, the bot may @mention you (or DM) when a crop matures.',
 				inline: false,
 			},
@@ -84,11 +87,43 @@ async function buildFarmHelpPages(guildId) {
 
 	const page3 = new EmbedBuilder()
 		.setColor(HELP_COLOR)
-		.setTitle(`🌾 Market & land (3/${total})`)
+		.setTitle(`🌾 Farm XP & TCG gold (3/${total})`)
+		.setDescription(
+			'**Farm XP** is separate from Discord/TCG level XP. Earn it from farming, then convert to **TCG gold**.',
+		)
+		.addFields(
+			{
+				name: `📈 \`${p}xp\`  ·  \`/farm xp show\``,
+				value: `Balance, today’s conversion (**${dailyCap}** XP/day cap, UTC+7), and gold equivalent (50 XP = 1g).`,
+				inline: false,
+			},
+			{
+				name: `🔁 \`${p}xp convert\` / \`/farm xp convert\``,
+				value: 'Spend Farm XP for TCG gold. **`convert all`** uses the lesser of your balance and today’s cap left. '
+					+ '**`convert <n>`** needs at least 50 XP and cannot exceed the daily cap.',
+				inline: false,
+			},
+			{
+				name: `📜 \`${p}xp history\`  ·  \`/farm xp history\``,
+				value: 'Last **10** earn (harvest, sell, login, expand, plant) and convert events.',
+				inline: false,
+			},
+			{
+				name: 'Earn rates (summary)',
+				value:
+					'• Harvest: **+1 XP** per unit · Sell: **+10** per sell · Login: **+50** · Expand: **+100** · Plant: **+5**',
+				inline: false,
+			},
+		)
+		.setTimestamp();
+
+	const page4 = new EmbedBuilder()
+		.setColor(HELP_COLOR)
+		.setTitle(`🌾 Market & land (4/${total})`)
 		.addFields(
 			{
 				name: `💵 \`${p}sell\` <crop|all> <amount|all>`,
-				value: 'Sell from inventory. Use `all` to sell everything of a crop (or as specified).',
+				value: 'Sell from inventory. **+10 Farm XP** per sell command. Use `all` to sell everything of a crop (or as specified).',
 				inline: false,
 			},
 			{
@@ -100,15 +135,15 @@ async function buildFarmHelpPages(guildId) {
 			},
 			{
 				name: `🏗️ \`${p}expand\``,
-				value: 'Buy more land (max **100** slots).',
+				value: 'Buy more land (max **100** slots). **+100 Farm XP** per slot.',
 				inline: false,
 			},
 		)
 		.setTimestamp();
 
-	const page4 = new EmbedBuilder()
+	const page5 = new EmbedBuilder()
 		.setColor(HELP_COLOR)
-		.setTitle(`🌾 Crops, info & role shop (4/${total})`)
+		.setTitle(`🌾 Crops, info & role shop (5/${total})`)
 		.addFields(
 			{
 				name: `📋 \`${p}crop\` [list] [sort]  ·  \`${p}crop\` <name>`,
@@ -129,7 +164,7 @@ async function buildFarmHelpPages(guildId) {
 		)
 		.setTimestamp();
 
-	return [page1, page2, page3, page4];
+	return [page1, page2, page3, page4, page5];
 }
 
 /**

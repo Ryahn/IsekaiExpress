@@ -42,7 +42,7 @@ async function handleFarmHarvest(message) {
 		return;
 	}
 
-	const { crop, yield: actualYield, penalty, experience } = result;
+	const { crop, yield: actualYield, penalty, farmXpGained } = result;
 	const penaltyPercent = Math.round((1 - penalty) * 100);
 	const dailyPrice = getDailySellPrice(crop.name);
 	const cropValue = actualYield * dailyPrice;
@@ -53,7 +53,7 @@ async function handleFarmHarvest(message) {
 		.addFields(
 			{ name: '🌾 Crop', value: crop.displayName, inline: true },
 			{ name: '📦 Harvested', value: `${actualYield} units`, inline: true },
-			{ name: '⭐ Experience', value: `+${experience} EXP`, inline: true },
+			{ name: '🌟 Farm XP', value: `+${farmXpGained}`, inline: true },
 			{ name: '💵 Value', value: `$${cropValue.toLocaleString()}`, inline: true },
 			{ name: '💰 Today\'s Price', value: `$${dailyPrice}/unit`, inline: true },
 			{ name: '\u200b', value: '\u200b', inline: true },

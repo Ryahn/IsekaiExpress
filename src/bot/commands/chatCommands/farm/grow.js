@@ -104,7 +104,7 @@ async function handleFarmGrow(message, args) {
 			{ name: '💰 Sell (per unit today)', value: `$${sellPrice}/unit`, inline: true },
 			{ name: '\u200b', value: '\u200b', inline: true },
 		)
-		.setFooter({ text: '⚠️ 10% yield loss per hour overdue!' })
+		.setFooter({ text: '+5 Farm XP · ⚠️ 10% yield loss per hour overdue!' })
 		.setTimestamp();
 	await message.reply({ embeds: [embed] });
 }

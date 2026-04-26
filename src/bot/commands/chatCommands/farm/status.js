@@ -101,8 +101,8 @@ async function handleFarmStatus(message, args) {
 				inline: true,
 			},
 			{
-				name: '⭐ Experience',
-				value: `**${userFarm.experience}**`,
+				name: '🌟 Farm XP',
+				value: `**${userFarm.farmXp.toLocaleString()}**`,
 				inline: true,
 			},
 			{
