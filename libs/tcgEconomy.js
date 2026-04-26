@@ -1,5 +1,5 @@
 const db = require('../database/db');
-const xpSystem = require('./xpSystem');
+const { calculateLevel } = require('./utils');
 
 /** XP cost per 1 gold ([CardSystem.md] — one-way conversion). */
 const XP_PER_GOLD_UNIT = 50;
@@ -52,13 +52,13 @@ async function applyXpDeltaWithClient(q, discordUserId, deltaXp) {
     await q('user_xp').insert({
       user_id: discordUserId,
       xp: xp0,
-      level: xpSystem.calculateLevel(xp0),
+      level: calculateLevel(xp0),
       message_count: 0,
     });
     return;
   }
   const newXp = Math.max(0, Number(row.xp) + deltaXp);
-  const newLevel = xpSystem.calculateLevel(newXp);
+  const newLevel = calculateLevel(newXp);
   await q('user_xp').where({ user_id: discordUserId }).update({
     xp: newXp,
     level: newLevel,
@@ -190,7 +190,7 @@ async function convertXpToGold(client, discordUser, xpAmount) {
     }
     const walletRow = await trx('user_wallets').where({ user_id: internalId }).forUpdate().first();
     const newXp = Number(xpRow.xp) - xpAmount;
-    const newLevel = xpSystem.calculateLevel(newXp);
+    const newLevel = calculateLevel(newXp);
     const ts = nowUnix();
     await trx('user_xp').where({ user_id: discordUserId }).update({
       xp: newXp,
