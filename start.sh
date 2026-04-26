@@ -7,8 +7,10 @@ cd "$(dirname "$0")"
 
 if [ -f .env ]; then
   set -a
+  set +u
   # shellcheck source=/dev/null
   . ./.env
+  set -u
   set +a
 fi
 
