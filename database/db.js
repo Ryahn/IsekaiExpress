@@ -433,5 +433,106 @@ const self = module.exports = {
       .where({ channel_id: channelId, month_day: currentDate })
       .increment('total', 1);
   },
-  
+
+  incrementGuildUserMessageCount: async (guildId, userId) => {
+    await db.raw(
+      'INSERT INTO user_guild_message_counts (guild_id, user_id, message_count) VALUES (?, ?, 1) ' +
+        'ON DUPLICATE KEY UPDATE message_count = message_count + 1',
+      [guildId, userId],
+    );
+  },
+
+  getGuildUserMessageCount: async (guildId, userId) => {
+    const row = await db('user_guild_message_counts')
+      .where({ guild_id: guildId, user_id: userId })
+      .first();
+    return row ? Number(row.message_count) || 0 : 0;
+  },
+
+  hasImageReviewApproval: async (guildId, userId) => {
+    const row = await db('image_review_approvals')
+      .where({ guild_id: guildId, user_id: userId })
+      .first();
+    return Boolean(row);
+  },
+
+  upsertImageReviewApproval: async (guildId, userId, approvedBy) => {
+    const exists = await db('image_review_approvals')
+      .where({ guild_id: guildId, user_id: userId })
+      .first();
+    if (exists) {
+      await db('image_review_approvals')
+        .where({ guild_id: guildId, user_id: userId })
+        .update({ approved_by: approvedBy, approved_at: db.fn.now() });
+    } else {
+      await db('image_review_approvals').insert({
+        guild_id: guildId,
+        user_id: userId,
+        approved_by: approvedBy,
+        approved_at: db.fn.now(),
+      });
+    }
+  },
+
+  deleteImageReviewApproval: async (guildId, userId) => {
+    await db('image_review_approvals').where({ guild_id: guildId, user_id: userId }).delete();
+  },
+
+  getPendingInviteById: async (id) => {
+    return db('pending_invites').where({ id }).first();
+  },
+
+  insertPendingInvite: async (row) => {
+    const res = await db('pending_invites').insert(row);
+    const id = Array.isArray(res) ? res[0] : res;
+    if (id != null) return Number(id);
+    const r = await db.raw('SELECT LAST_INSERT_ID() AS id');
+    const row0 = r && r[0];
+    return Number((Array.isArray(row0) ? row0[0] : row0)?.id);
+  },
+
+  updatePendingInviteQueueMessage: async (id, queueMessageId) => {
+    await db('pending_invites').where({ id }).update({ queue_message_id: queueMessageId });
+  },
+
+  /**
+   * @returns {Promise<number>} affected rows
+   */
+  claimPendingInviteStatus: async (id, status, reviewedBy) => {
+    const r = await db('pending_invites')
+      .where({ id, status: 'pending' })
+      .update({ status, reviewed_by: reviewedBy });
+    return r;
+  },
+
+  expireStalePendingInvites: async (days = 7) => {
+    return db('pending_invites')
+      .where('status', 'pending')
+      .andWhereRaw('created_at < DATE_SUB(NOW(), INTERVAL ? DAY)', [days])
+      .update({ status: 'expired' });
+  },
+
+  insertPendingImageReview: async (row) => {
+    const res = await db('pending_image_reviews').insert(row);
+    const id = Array.isArray(res) ? res[0] : res;
+    if (id != null) return Number(id);
+    const r = await db.raw('SELECT LAST_INSERT_ID() AS id');
+    const row0 = r && r[0];
+    return Number((Array.isArray(row0) ? row0[0] : row0)?.id);
+  },
+
+  updatePendingImageReviewQueueMessage: async (id, queueMessageId) => {
+    await db('pending_image_reviews').where({ id }).update({ queue_message_id: queueMessageId });
+  },
+
+  getPendingImageReviewById: async (id) => {
+    return db('pending_image_reviews').where({ id }).first();
+  },
+
+  claimPendingImageReviewStatus: async (id, status, reviewedBy) => {
+    return db('pending_image_reviews')
+      .where({ id, status: 'pending' })
+      .update({ status, reviewed_by: reviewedBy });
+  },
+
 };

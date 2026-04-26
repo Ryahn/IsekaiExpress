@@ -124,11 +124,13 @@
   </style>
 </head>
 <body class="farm-stats">
+  {% set farmSubnavActive = 'stats' %}
+  {% include "farmSubnav.njk" %}
   <header class="farm-stats__hero">
     <div class="container">
       <span class="farm-stats__badge">Community</span>
       <h1>Farm statistics</h1>
-      <p class="lead">Economy-wide totals from the Discord farming minigame, plus top farmers by balance and farm XP. <a href="{{ publicBaseUrl }}/docs/farm" class="link-success">Player guide</a></p>
+      <p class="lead">Economy-wide totals from the Discord farming minigame, plus top farmers by balance and farm XP.</p>
       <p class="lead mt-2 mb-0"><small class="text-body-secondary">Canonical: <a href="{{ publicBaseUrl }}/stats/farm" class="link-success">{{ publicBaseUrl }}/stats/farm</a></small></p>
     </div>
   </header>

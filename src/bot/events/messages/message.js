@@ -9,6 +9,8 @@ const { checkMessageGlobalCommandLock } = require('../../middleware/globalComman
 const { checkCommandCooldown, setCooldown } = require('../../middleware/commandMiddleware');
 const { executeWithRateLimit } = require('../../middleware/apiMiddleware');
 const { handleFarmMessage } = require('./farmMessage');
+const { processMemberMessageInvites } = require('../../../../libs/invitePolicy');
+const { processImageReview } = require('../../../../libs/imageReview');
 
 function parseCommandContent(content, message) {
     const randomPattern = /\{random:(.*?)\}/g;
@@ -34,6 +36,24 @@ module.exports = class MessageEvent extends BaseEvent {
         try {
             await xpSystem(client, message);
             await afkSystem(client, message);
+
+            try {
+                await client.db.incrementGuildUserMessageCount(message.guild.id, message.author.id);
+            } catch (e) {
+                client.logger.error('incrementGuildUserMessageCount:', e);
+            }
+
+            const staffRoleId = client.config.roles.staff;
+            try {
+                await processMemberMessageInvites(client, message, staffRoleId);
+            } catch (e) {
+                client.logger.error('invitePolicy:', e);
+            }
+            try {
+                await processImageReview(client, message, staffRoleId);
+            } catch (e) {
+                client.logger.error('imageReview:', e);
+            }
 
             /************************************
              * PREFIX + CUSTOM / BUILT-IN COMMANDS

@@ -1,24 +1,35 @@
 const fs = require('fs');
 const path = require('path');
+const { rarityBaseCardFileStem } = require('../../../seeds/rarity');
 
 const CARD = {
   width: 1024,
   height: 1536,
-  // Portrait: original design 855×900, reduced 30% (70% scale), centered in the same frame
-  portrait: { x: 213, y: 280, w: 599, h: 630 },
+  // tools/base_card template: frame pixels (Barlow / PixArts layout)
+  portrait: { x: 176, y: 252, w: 669, h: 623 },
+  // Not drawn on catalog PNGs; reserved for possible overlays / docs
   level: {
     cx: 120, cy: 110, r: 65, fontSize: 64, align: 'center', baseline: 'middle',
   },
   power: {
     cx: 845, cy: 105, w: 250, h: 100, fontSize: 56, align: 'center', baseline: 'middle',
   },
+  // Title row (top-left 174,938 — 671×81); star row is centered on (name.cx, name.cy − offset)
   name: {
-    cx: 512, cy: 1145, fontSize: 72, maxWidth: 860, align: 'center', baseline: 'middle',
+    cx: 509, cy: 978, fontSize: 56, maxWidth: 671, align: 'center', baseline: 'middle',
   },
-  classPill: {
-    cx: 512, cy: 1245, w: 240, h: 58, radius: 12, bgColor: 'transparent', fontSize: 28, letterSpacing: 4,
+  rarityStarRow: {
+    offsetAboveNameCenter: 20,
+    size: 15,
+    gap: 4,
   },
-  elementIcon: { cx: 125, cy: 1395, r: 70 },
+  // Class / flavor: description panel (top-left 137,1099 — 747×229)
+  description: {
+    x: 137, y: 1099, w: 747, h: 229, cx: 510, cy: 1213,
+    fontSize: 32, lineHeight: 40, maxWidth: 700,
+  },
+  // Element gem (top-left 456,1372 — 110×110)
+  elementIcon: { cx: 511, cy: 1427, r: 55 },
   abilityIcon: { cx: 830, cy: 1215, r: 70 },
 };
 
@@ -26,18 +37,17 @@ const CARD = {
  * Per-rarity layout nudges from CARD defaults. All keys optional per tier.
  * - Top-level **number** — same nudge (px) for `name` and `class` only; portrait/level/power unchanged.
  * - **object**:
- *   - `name` / `class` — vertical shift for title and class pill (px), or one number for both (legacy).
+ *   - `name` / `class` — vertical shift for title and description (class) text (px), or one number for both (legacy).
  *   - `level` / `power` / `element` / `ability` — number = Δcy, or `{ cx, cy }` for left/right and up/down (px).
  *   - `portrait` — avatar clip: `{ x, y, w, h }` as **deltas** from CARD.portrait.
  */
 const RARITY_LAYOUT_OFFSET = {
-  C: { name: 45, class: 50},
-  // UC: { name: 20, class: 20 },
-  UC: { name: 45, class: 50, level: { cx: 5, cy: 10 }, power: { cx: 5, cy: 5 }, element: { cx: 10, cy: -10 } },
-  R: 40,
-  EP: { name: 45, class: 50, level: { cx: -10, cy: 10 }, power: { cx: 5, cy: 5 } },
-  L: 50,
-  M: 80,
+  C: 0,
+  UC: 0,
+  R: 0,
+  EP: 0,
+  L: 0,
+  M: 0,
 };
 
 function expandNameClassOffset(entry) {
@@ -119,7 +129,7 @@ function expandRarityLayoutEntry(entry) {
 }
 
 /**
- * Merged layout for one tier: portrait, level, power, name, class, element/ability corners — includes CARD + offsets.
+ * Merged layout for one tier: portrait, level, power, name, description, element/ability — includes CARD + offsets.
  */
 function cardLayoutForRarity(norm) {
   const o = expandRarityLayoutEntry(RARITY_LAYOUT_OFFSET[norm]);
@@ -141,7 +151,7 @@ function cardLayoutForRarity(norm) {
       cy: CARD.power.cy + o.power.cy,
     },
     name: { ...CARD.name, cy: CARD.name.cy + o.name },
-    classPill: { ...CARD.classPill, cy: CARD.classPill.cy + o.class },
+    description: { ...CARD.description, cy: CARD.description.cy + o.class },
     elementIcon: {
       ...CARD.elementIcon,
       cx: CARD.elementIcon.cx + o.element.cx,
@@ -157,7 +167,7 @@ function cardLayoutForRarity(norm) {
 
 function nameAndClassLayout(norm) {
   const L = cardLayoutForRarity(norm);
-  return { name: L.name, classPill: L.classPill };
+  return { name: L.name, description: L.description };
 }
 
 /**
@@ -276,7 +286,12 @@ function cardLayoutForRarityCatalog(norm) {
 }
 
 
-const baseNamesByRarity = {
+/** Game-tier keys not in `rarity` seed but used in batch; file stem = seed name for Super Super Rare */
+const AUX_RARITY_BASE_STEM = {
+  EP: 'super_super_rare',
+};
+
+const legacyPngByNorm = {
   C: ['C.png', 'COMMON.png', 'c.png'],
   UC: ['UC.png', 'UNCOMMON.png', 'uc.png'],
   R: ['R.png', 'RARE.png', 'r.png'],
@@ -285,10 +300,38 @@ const baseNamesByRarity = {
   M: ['M.png', 'MYTHIC.png', 'm.png', 'MYTHIC.PNG'],
 };
 
-function resolveBaseCardPath(repoRoot, norm) {
+/**
+ * Picks a base card PNG. Prefer `tools/base_card/<name_slug>.png` where `name_slug` is the
+ * DB `rarity.name` (Unicode word chars + spaces) lowercased with spaces → `_` — see `seeds/rarity.js`.
+ * @param {string} [rawRarityKey] - batch rarity (abbreviation, e.g. UR, C, N, SSR) before normalize
+ */
+function resolveBaseCardPath(repoRoot, rawRarityKey) {
   const baseDir = path.join(repoRoot, 'tools', 'base_card');
-  const names = baseNamesByRarity[norm] || baseNamesByRarity.C;
-  for (const n of names) {
+  const a = String(rawRarityKey || 'C').toUpperCase();
+  const norm = normalizeRarityKey(a);
+
+  const tryStem = (stem) => {
+    if (!stem) return null;
+    for (const ext of ['png', 'PNG']) {
+      const p = path.join(baseDir, `${stem}.${ext}`);
+      if (fs.existsSync(p)) return p;
+    }
+    return null;
+  };
+
+  const stems = [];
+  const fromSeed = rarityBaseCardFileStem(a);
+  if (fromSeed) stems.push(fromSeed);
+  if (AUX_RARITY_BASE_STEM[a] != null) stems.push(AUX_RARITY_BASE_STEM[a]);
+  const byNormPath = RARITY_PATH_SLUG[norm];
+  if (byNormPath) stems.push(byNormPath);
+  for (const s of stems) {
+    const hit = tryStem(s);
+    if (hit) return hit;
+  }
+
+  const legacyNames = legacyPngByNorm[norm] || legacyPngByNorm.C;
+  for (const n of legacyNames) {
     const p = path.join(baseDir, n);
     if (fs.existsSync(p)) return p;
   }
@@ -297,7 +340,7 @@ function resolveBaseCardPath(repoRoot, norm) {
   const fallback = path.join(repoRoot, 'src', 'bot', 'tcg', 'base_card.png');
   if (fs.existsSync(fallback)) return fallback;
   throw new Error(
-    `No base card in tools/base_card (or src/bot/tcg/base_card.png) for rarity ${norm}`,
+    `No base card in tools/base_card (or src/bot/tcg/base_card.png) for rarity ${a} (norm ${norm})`,
   );
 }
 
@@ -461,6 +504,137 @@ function drawCornerIconScaled(ctx, image, { cx, cy, r }) {
   ctx.restore();
 }
 
+/**
+ * Horizontally centered row of star PNGs. Center (cx, cy) is the center of the whole row.
+ * @param {object} ctx
+ * @param {{ width: number, height: number }} image
+ */
+function drawRarityStarRow(
+  ctx,
+  image,
+  { cx, cy, count, size = CARD.rarityStarRow.size, gap = CARD.rarityStarRow.gap },
+) {
+  const n = Math.min(Math.max(0, Math.floor(Number(count) || 0)), 30);
+  if (n < 1 || !image?.width) return;
+  const w = size;
+  const h = size;
+  const total = n * w + (n - 1) * gap;
+  let x = cx - total / 2;
+  const y = cy - h / 2;
+  const sw = image.width;
+  const sh = image.height;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+  for (let i = 0; i < n; i += 1) {
+    ctx.drawImage(image, 0, 0, sw, sh, x, y, w, h);
+    x += w + gap;
+  }
+  ctx.restore();
+}
+
+function splitOversizeWord(ctx, word, maxW) {
+  if (ctx.measureText(word).width <= maxW) return [word];
+  const parts = [];
+  let acc = '';
+  for (const ch of word) {
+    const t2 = acc + ch;
+    if (t2 && ctx.measureText(t2).width > maxW) {
+      if (acc) {
+        parts.push(acc);
+        acc = ch;
+      } else {
+        parts.push(ch);
+        acc = '';
+      }
+    } else {
+      acc = t2;
+    }
+  }
+  if (acc) parts.push(acc);
+  return parts;
+}
+
+function wrapTextToLines(ctx, upperText, maxW) {
+  const words = upperText.split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const w0 of words) {
+    const wordPieces = splitOversizeWord(ctx, w0, maxW);
+    for (const w of wordPieces) {
+      const test = line ? `${line} ${w}` : w;
+      if (ctx.measureText(test).width <= maxW) {
+        line = test;
+      } else {
+        if (line) lines.push(line);
+        line = w;
+      }
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/**
+ * Word-wrapped, vertically centered text in the description box (class / flavor on catalog art).
+ * Shrinks type if the block would exceed the box height.
+ */
+function drawGlowingTextWrappedInBox(ctx, text, d, {
+  fontForSize = (px) => `${px}px ui-sans-serif, system-ui, sans-serif`,
+  fillColor,
+  outerColor,
+  minFontSize = 18,
+} = {}) {
+  const raw = String(text || '').trim();
+  if (!raw) return;
+
+  const upper = raw.toUpperCase();
+  const maxLines = Math.max(1, Math.floor(d.h / d.lineHeight));
+  const maxW = d.maxWidth;
+  let fontSize = d.fontSize;
+
+  const buildLines = (size) => {
+    const fontStr = fontForSize(size);
+    ctx.save();
+    ctx.font = fontStr;
+    const lines = wrapTextToLines(ctx, upper, maxW);
+    ctx.restore();
+    return { font: fontStr, lines };
+  };
+
+  let { font, lines } = buildLines(fontSize);
+  const lh = d.lineHeight;
+  while (lines.length > maxLines && fontSize > minFontSize) {
+    fontSize -= 2;
+    ({ font, lines } = buildLines(fontSize));
+  }
+  if (lines.length > maxLines) {
+    lines = lines.slice(0, maxLines);
+    const last = lines[maxLines - 1];
+    let ell = last;
+    ctx.save();
+    ctx.font = font;
+    while (ell.length > 1 && ctx.measureText(`${ell}…`).width > maxW) {
+      ell = ell.slice(0, -1);
+    }
+    ctx.restore();
+    lines[maxLines - 1] = `${ell}…`;
+  }
+
+  const n = lines.length;
+  const startCy = d.cy - ((n - 1) * lh) / 2;
+  for (let i = 0; i < n; i += 1) {
+    const cy = startCy + i * lh;
+    drawGlowingTextCentered(ctx, lines[i], d.cx, cy, {
+      font,
+      fillColor,
+      outerColor,
+      maxWidth: maxW,
+      minFontSize,
+    });
+  }
+}
+
 function drawSubtleCardGradient(ctx) {
   ctx.save();
   const g = ctx.createLinearGradient(0, 0, CARD.width, CARD.height);
@@ -497,6 +671,8 @@ module.exports = {
   drawGlowingTextCentered,
   drawGlowingTextLeft,
   drawClassPillText,
+  drawGlowingTextWrappedInBox,
   drawCornerIconScaled,
+  drawRarityStarRow,
   drawSubtleCardGradient,
 };

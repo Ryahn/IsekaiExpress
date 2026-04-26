@@ -150,31 +150,49 @@ app.get('/stats/farm', async (req, res, next) => {
     const countRow = await db('farm_profiles').count('* as c').first();
     const farmerCount = Number(countRow ? Object.values(countRow)[0] : 0);
 
+    const hasFarmXpCol = await db.schema.hasColumn('farm_profiles', 'farm_xp');
+    const farmXpValSql = hasFarmXpCol
+      ? db.raw('COALESCE(fp.farm_xp, 0) as farm_xp_val')
+      : db.raw('(COALESCE(fp.experience, 0) * 10) as farm_xp_val');
+
     const topMoneyRows = await db('farm_profiles as fp')
       .leftJoin('users as u', 'u.discord_id', 'fp.discord_user_id')
-      .select('fp.discord_user_id', 'fp.money', 'fp.farm_xp', 'u.username')
+      .select('fp.discord_user_id', 'fp.money', 'u.username')
+      .select(farmXpValSql)
       .orderBy('fp.money', 'desc')
       .orderBy('fp.discord_user_id', 'asc')
       .limit(TOP);
 
-    const topXpRows = await db('farm_profiles as fp')
+    const topXpQ = db('farm_profiles as fp')
       .leftJoin('users as u', 'u.discord_id', 'fp.discord_user_id')
-      .select('fp.discord_user_id', 'fp.money', 'fp.farm_xp', 'u.username')
-      .orderByRaw('COALESCE(fp.farm_xp, 0) DESC')
+      .select('fp.discord_user_id', 'fp.money', 'u.username')
+      .select(farmXpValSql);
+    if (hasFarmXpCol) {
+      topXpQ.orderByRaw('COALESCE(fp.farm_xp, 0) DESC');
+    }
+    else {
+      topXpQ.orderByRaw('(COALESCE(fp.experience, 0) * 10) DESC');
+    }
+    const topXpRows = await topXpQ
       .orderBy('fp.discord_user_id', 'asc')
       .limit(TOP);
+
+    const farmXpFromRow = (r) => {
+      const v = r.farm_xp_val;
+      return v != null ? Number(v) : 0;
+    };
 
     const topMoney = topMoneyRows.map((r, i) => ({
       rank: i + 1,
       displayName: farmerDisplayName(r.username, r.discord_user_id),
       moneyLabel: fmt(r.money),
-      farmXpLabel: fmt(r.farm_xp != null ? r.farm_xp : 0),
+      farmXpLabel: fmt(farmXpFromRow(r)),
     }));
     const topFarmXp = topXpRows.map((r, i) => ({
       rank: i + 1,
       displayName: farmerDisplayName(r.username, r.discord_user_id),
       moneyLabel: fmt(r.money),
-      farmXpLabel: fmt(r.farm_xp != null ? r.farm_xp : 0),
+      farmXpLabel: fmt(farmXpFromRow(r)),
     }));
 
     res.render('farmStats', {

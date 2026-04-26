@@ -1,3 +1,4 @@
+// Fresh install / empty DB only: creates .env from .env.example if missing, then migrate + seeds. Skip if .env exists unless you intend to (re)seed an empty database.
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');

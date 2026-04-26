@@ -18,10 +18,12 @@ const {
   BASE_STATS_L1,
   POWER_SCORE_L1,
   drawGlowingTextCentered,
-  drawClassPillText,
+  drawGlowingTextWrappedInBox,
   drawCornerIconScaled,
+  drawRarityStarRow,
   drawSubtleCardGradient,
 } = require('./src/bot/tcg/cardLayout.js');
+const { rarityStarCount } = require('./seeds/rarity');
 const {
   normalizeElementKey,
   resolveElementIconPath,
@@ -29,20 +31,20 @@ const {
 const { pickRandomHomeRegionForElement } = require('./libs/tcgPveConfig');
 
 const repoRoot = __dirname;
-const ORBITRON_WOFF2 = path.join(repoRoot, 'tools', 'fonts', 'Orbitron-Bold.woff2');
-const FONT_family = 'Orbitron';
+const BarlowCondensed = path.join(repoRoot, 'tools', 'fonts', 'BarlowCondensed-Regular.ttf');
+const FONT_family = 'BarlowCondensed';
 try {
-  if (fs.existsSync(ORBITRON_WOFF2)) {
-    GlobalFonts.registerFromPath(ORBITRON_WOFF2, FONT_family);
+  if (fs.existsSync(BarlowCondensed)) {
+    GlobalFonts.registerFromPath(BarlowCondensed, FONT_family);
   } else {
-    logger.warn('Orbitron not found at tools/fonts/Orbitron-Bold.woff2; using system sans');
+    logger.warn('BarlowCondensed not found at tools/fonts/BarlowCondensed-Regular.ttf; using system sans');
   }
 } catch (e) {
   logger.warn(`Font register failed: ${e.message}`);
 }
 
 function font(sizePx, weight = 'bold') {
-  if (fs.existsSync(ORBITRON_WOFF2)) {
+  if (fs.existsSync(BarlowCondensed)) {
     return `${weight} ${sizePx}px ${FONT_family}`;
   }
   return `${weight} ${sizePx}px ui-sans-serif, system-ui, sans-serif`;
@@ -100,7 +102,7 @@ async function generateCard(
   const canvas = createCanvas(CARD.width, CARD.height);
   const ctx = canvas.getContext('2d');
 
-  const basePath = resolveBaseCardPath(repoRoot, norm);
+  const basePath = resolveBaseCardPath(repoRoot, rawRarity);
   const baseImage = await loadImage(basePath);
   ctx.drawImage(baseImage, 0, 0, CARD.width, CARD.height);
 
@@ -119,7 +121,26 @@ async function generateCard(
   drawCornerIconScaled(ctx, icon, layout.elementIcon);
 
   const n = layout.name;
-  const cp = layout.classPill;
+  const desc = layout.description;
+  const displayStarCount = rarityStarCount(rawRarity) ?? rSpec.starCount;
+  const starPath = path.join(repoRoot, 'tools', 'star.png');
+  if (displayStarCount > 0) {
+    if (fs.existsSync(starPath)) {
+      const starImage = await loadImage(starPath);
+      const rs = CARD.rarityStarRow;
+      const starRowCy = n.cy - rs.offsetAboveNameCenter;
+      drawRarityStarRow(ctx, starImage, {
+        cx: n.cx,
+        cy: starRowCy,
+        count: displayStarCount,
+        size: rs.size,
+        gap: rs.gap,
+      });
+    } else {
+      logger.warn('Rarity stars skipped: missing tools/star.png');
+    }
+  }
+
   const nameOuter = readableTextOuterGlowColor(rSpec.rarityColor);
   const nameUpper = String(characterName).toUpperCase();
   drawGlowingTextCentered(ctx, nameUpper, n.cx, n.cy, {
@@ -131,11 +152,11 @@ async function generateCard(
   });
 
   const classOuter = readableTextOuterGlowColor(rSpec.rarityColor);
-  drawClassPillText(ctx, className, cp, {
-    font: font(cp.fontSize, 'normal'),
+  drawGlowingTextWrappedInBox(ctx, className, desc, {
+    fontForSize: (px) => font(px, 'normal'),
     fillColor: '#AAAAAA',
     outerColor: classOuter,
-    letterSpacing: 4,
+    minFontSize: 20,
   });
 
   drawSubtleCardGradient(ctx);
@@ -172,7 +193,7 @@ async function generateCard(
   const card = {
     discord_id: discordId,
     uuid,
-    stars: rSpec.starCount,
+    stars: displayStarCount,
     name: characterName,
     rarity: norm,
     class: className,

@@ -16,4 +16,4 @@ USER="${MYSQL_USER:-f95bot}"
 CONTAINER="${MYSQL_DOCKER_NAME:-f95bot-mysql}"
 docker exec "$CONTAINER" mysql -uroot -p"$ROOT" -e \
   "CREATE DATABASE IF NOT EXISTS \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON \`$DB\`.* TO '$USER'@'%'; FLUSH PRIVILEGES;"
-echo "Database '$DB' is ready. Run migrations if needed: docker compose --profile migrate run --rm migrate"
+echo "Database '$DB' is ready. Run migrations if needed: sh scripts/docker-migrate.sh"

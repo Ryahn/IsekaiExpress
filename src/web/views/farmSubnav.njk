@@ -1,0 +1,6 @@
+<nav class="farm-subnav" aria-label="Farm pages">
+  <div class="container d-flex flex-wrap align-items-center gap-3 py-2">
+    <a href="{{ publicBaseUrl }}/docs/farm" class="farm-subnav__link{% if farmSubnavActive == 'docs' %} farm-subnav__link--active{% endif %}"{% if farmSubnavActive == 'docs' %} aria-current="page"{% endif %}>Player guide</a>
+    <a href="{{ publicBaseUrl }}/stats/farm" class="farm-subnav__link{% if farmSubnavActive == 'stats' %} farm-subnav__link--active{% endif %}"{% if farmSubnavActive == 'stats' %} aria-current="page"{% endif %}>Statistics</a>
+  </div>
+</nav>

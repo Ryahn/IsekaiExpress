@@ -86,7 +86,7 @@ docker-compose up -d mysql redis
 wait_for_mysql
 
 echo "Running database migrations (knex migrate:latest)..."
-docker-compose --profile migrate run --rm migrate sh -c "npx knex migrate:latest"
+sh scripts/docker-migrate.sh
 
 if [ "$PROFILE" = "web" ] || [ "$PROFILE" = "both" ]; then
   if ! docker network inspect traefik-network >/dev/null 2>&1; then

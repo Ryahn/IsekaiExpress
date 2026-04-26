@@ -9,6 +9,7 @@
 # Stops the compose stack, removes the mysql_data volume, starts mysql, waits, imports, runs
 # pending knex migrations (so app_state and newer schema exist), then starts the full stack.
 # Redis volume is not removed. Seeds are not run (avoids duplicating seed data on top of the dump).
+# For an empty DB without a dump, use sh scripts/docker-migrate.sh then sh scripts/docker-seed-first-init.sh once.
 set -e
 cd "$(dirname "$0")/.."
 DUMP="${1:-./f95bot.sql}"
@@ -81,7 +82,7 @@ echo "Importing $DUMP into database $DB ..."
 docker exec -e MYSQL_PWD -i "$CONTAINER" mysql -uroot -h 127.0.0.1 "$DB" < "$DUMP"
 
 echo "Applying pending database migrations (e.g. app_state for custom commands cache)..."
-docker compose --profile migrate run --rm migrate sh -c "sleep 5 && npx knex migrate:latest"
+sh scripts/docker-migrate.sh
 
 echo "Done. Starting remaining services..."
 docker compose up -d

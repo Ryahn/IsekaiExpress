@@ -6,6 +6,12 @@ const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
 const crypto = require('crypto');
 const { parseWhitelistJson } = require('../../middleware/globalCommandLock');
+const {
+    MOD_COMMAND_LOGICAL_KEYS,
+    OBSOLETE_MODERATION_COMMAND_NAMES,
+} = require('../../../../libs/modSlashKey');
+
+const MODERATION_SLASH_CHANNEL_ID = '370603031361749004';
 
 module.exports = class ReadyEvent extends BaseEvent {
     constructor() {
@@ -43,6 +49,30 @@ module.exports = class ReadyEvent extends BaseEvent {
 
         const commandFiles = getCommandFiles(slashCommands);
 
+        try {
+            await client.db.query
+                .table('command_settings')
+                .whereIn('name', OBSOLETE_MODERATION_COMMAND_NAMES)
+                .delete();
+        } catch (e) {
+            client.logger.error('command_settings obsolete cleanup:', e);
+        }
+
+        try {
+            await client.db.expireStalePendingInvites(7);
+        } catch (e) {
+            client.logger.error('expireStalePendingInvites:', e);
+        }
+
+        if (client.pendingInvitesCleanupInterval) clearInterval(client.pendingInvitesCleanupInterval);
+        client.pendingInvitesCleanupInterval = setInterval(async () => {
+            try {
+                await client.db.expireStalePendingInvites(7);
+            } catch (err) {
+                client.logger.error('expireStalePendingInvites interval:', err);
+            }
+        }, 24 * 60 * 60 * 1000);
+
         for (const file of commandFiles) {
             const command = require(file);
             const commandData = typeof command.data === 'function' ? await command.data(client) : command.data;
@@ -55,14 +85,27 @@ module.exports = class ReadyEvent extends BaseEvent {
             client.slashCommands.set(commandData.name, command);
             const hash = crypto.createHash('md5').update(commandData.name).digest('hex');
 
-            if (command.category === 'moderation') {
-                await client.db.createCommandSettings(commandData.name, hash, command.category, '370603031361749004');
+            if (commandData.name === 'mod') {
+                /* Per-subcommand rows seeded after this loop (MOD_COMMAND_LOGICAL_KEYS). */
+            } else if (command.category === 'moderation') {
+                await client.db.createCommandSettings(commandData.name, hash, command.category, MODERATION_SLASH_CHANNEL_ID);
             } else if (commandData.name === 'level' || commandData.name === 'import_rank') {
                 await client.db.createCommandSettings(commandData.name, hash, command.category);
             } else {
                 await client.db.createCommandSettings(commandData.name, hash, command.category, 'all');
             }
             fs.writeFileSync('slashCommands.json', JSON.stringify(commandInfo, null, 2));
+        }
+
+        for (const logicalKey of MOD_COMMAND_LOGICAL_KEYS) {
+            const modHash = crypto.createHash('md5').update(logicalKey).digest('hex');
+            const displayName = logicalKey.replace(/:/g, ' ');
+            await client.db.createCommandSettings(
+                displayName,
+                modHash,
+                'moderation',
+                MODERATION_SLASH_CHANNEL_ID,
+            );
         }
 
         // try {

@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { modSlashLogicalKey } = require('../../../libs/modSlashKey');
 
 /**
  * Per-command `command_settings` channel check (moved from individual slash files).
@@ -7,8 +8,9 @@ const crypto = require('crypto');
 async function assertSlashCommandChannel(client, interaction) {
   if (!interaction.isChatInputCommand() || !interaction.inGuild()) return true;
 
-  const commandName = interaction.commandName;
-  const hash = crypto.createHash('md5').update(commandName).digest('hex');
+  const logical =
+    interaction.commandName === 'mod' ? modSlashLogicalKey(interaction) : interaction.commandName;
+  const hash = crypto.createHash('md5').update(logical).digest('hex');
   const allowedChannel = await client.db.getAllowedChannel(hash);
   if (!allowedChannel) return true;
 

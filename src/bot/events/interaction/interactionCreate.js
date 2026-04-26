@@ -3,6 +3,8 @@ const { checkCommandCooldown, setCooldown } = require('../../middleware/commandM
 const { executeWithRateLimit } = require('../../middleware/apiMiddleware');
 const { checkInteractionGlobalCommandLock } = require('../../middleware/globalCommandLock');
 const { assertSlashCommandChannel } = require('../../middleware/slashCommandChannel');
+const { modSlashLogicalKey } = require('../../../../libs/modSlashKey');
+const { handleModerationButton } = require('../../../../libs/moderationButtons');
 
 module.exports = class InteractionEvent extends BaseEvent {
     constructor() {
@@ -10,10 +12,23 @@ module.exports = class InteractionEvent extends BaseEvent {
     }
     
     async run(client, interaction) {
+        if (interaction.isButton()) {
+            try {
+                const handled = await handleModerationButton(client, interaction);
+                if (handled) return;
+            } catch (e) {
+                client.logger.error('Button interaction error:', e);
+            }
+            return;
+        }
+
         if (!interaction.isChatInputCommand()) return;
 
         const command = client.slashCommands.get(interaction.commandName);
         if (!command) return;
+
+        const cooldownKey =
+            interaction.commandName === 'mod' ? modSlashLogicalKey(interaction) : interaction.commandName;
 
         try {
             // Acknowledge within 3s before DB/member fetches, rate-limited execute, or slow handlers.
@@ -33,7 +48,7 @@ module.exports = class InteractionEvent extends BaseEvent {
             }
 
             // Check cooldown
-            const cooldownCheck = checkCommandCooldown(client, interaction.user.id, interaction.commandName);
+            const cooldownCheck = checkCommandCooldown(client, interaction.user.id, cooldownKey);
             
             if (cooldownCheck.onCooldown) {
                 return interaction.editReply({
@@ -48,7 +63,7 @@ module.exports = class InteractionEvent extends BaseEvent {
             });
             
             // Set cooldown after successful execution
-            setCooldown(client, interaction.user.id, interaction.commandName);
+            setCooldown(client, interaction.user.id, cooldownKey);
         } catch (err) {
             const errText =
                 err instanceof Error

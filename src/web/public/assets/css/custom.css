@@ -859,3 +859,22 @@ body.voidstation-theme .search-input:focus {
 .search-box .add-button {
   flex-shrink: 0;
 }
+
+/* Farm docs + farm stats (pages set --farm-* on :root) */
+.farm-subnav {
+  background: rgba(20, 26, 33, 0.92);
+  border-bottom: 1px solid var(--farm-border, rgba(120, 200, 150, 0.12));
+  font-size: 0.9rem;
+}
+.farm-subnav__link {
+  color: var(--farm-muted, #8b9aab);
+  text-decoration: none;
+  padding: 0.15rem 0;
+  border-bottom: 2px solid transparent;
+}
+.farm-subnav__link:hover { color: var(--farm-accent, #6ecf8e); }
+.farm-subnav__link--active {
+  color: var(--farm-accent, #6ecf8e);
+  font-weight: 600;
+  border-bottom-color: var(--farm-accent-dim, #4a9d63);
+}
