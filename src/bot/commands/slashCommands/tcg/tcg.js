@@ -272,7 +272,7 @@ module.exports = {
       sub
         .setName('buy_card')
         .setDescription(
-          'Buy one catalog copy for a member at a set rarity. Legendary and Mythic are not sold for gold (drops, packs, or players only).',
+          'Buy one catalog copy for a member at a rarity (Legendary/Mythic not sold for gold).',
         )
         .addUserOption((o) =>
           o

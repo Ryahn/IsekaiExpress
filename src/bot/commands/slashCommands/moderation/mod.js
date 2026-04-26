@@ -160,7 +160,10 @@ async function buildModData(client) {
       .setName('bans')
       .setDescription('Bans')
       .addSubcommand((s) =>
-        s.setName('list').setDescription('List bans').addIntegerOption((o) => o.setName('page').setMinValue(1)),
+        s
+          .setName('list')
+          .setDescription('List bans')
+          .addIntegerOption((o) => o.setName('page').setDescription('Page number').setMinValue(1)),
       )
       .addSubcommand((s) =>
         s
@@ -179,11 +182,12 @@ async function buildModData(client) {
         s
           .setName('apply')
           .setDescription('Apply a cage')
-          .addUserOption((o) => o.setName('user').setRequired(true))
+          .addUserOption((o) => o.setName('user').setDescription('User').setRequired(true))
           .addStringOption((o) => o.setName('reason').setDescription('Reason').setRequired(true))
           .addStringOption((o) =>
             o
               .setName('cage_type')
+              .setDescription('Cage role type')
               .setRequired(true)
               .addChoices(
                 { name: 'Cage-OnTopic', value: '672595882562158592' },
@@ -199,7 +203,7 @@ async function buildModData(client) {
         s
           .setName('remove')
           .setDescription('Remove cage')
-          .addUserOption((o) => o.setName('user').setRequired(true)),
+          .addUserOption((o) => o.setName('user').setDescription('User').setRequired(true)),
       )
       .addSubcommand((s) => s.setName('list').setDescription('List caged users')),
   );
@@ -230,6 +234,7 @@ async function buildModData(client) {
           .addStringOption((o) =>
             o
               .setName('option')
+              .setDescription('XP adjustment action')
               .setRequired(true)
               .addChoices(
                 { name: 'Add XP', value: 'add_xp' },
@@ -246,8 +251,8 @@ async function buildModData(client) {
         s
           .setName('import_rank')
           .setDescription('OCR import rank from image URL')
-          .addStringOption((o) => o.setName('url').setRequired(true))
-          .addUserOption((o) => o.setName('target').setRequired(true)),
+          .addStringOption((o) => o.setName('url').setDescription('Image URL').setRequired(true))
+          .addUserOption((o) => o.setName('target').setDescription('User').setRequired(true)),
       ),
   );
 
@@ -262,6 +267,7 @@ async function buildModData(client) {
           .addStringOption((o) =>
             o
               .setName('option')
+              .setDescription('Server system to toggle')
               .setRequired(true)
               .addChoices(
                 { name: 'Enable XP System', value: 'xp_system' },
@@ -277,15 +283,17 @@ async function buildModData(client) {
         s
           .setName('channel_settings')
           .setDescription('Paginated command_settings list')
-          .addIntegerOption((o) => o.setName('page').setMinValue(1)),
+          .addIntegerOption((o) => o.setName('page').setDescription('Page number').setMinValue(1)),
       )
       .addSubcommand((s) =>
         s
           .setName('channel_stats')
           .setDescription('Channel statistics')
-          .addStringOption((o) => o.setName('date'))
-          .addIntegerOption((o) => o.setName('month').setMinValue(1).setMaxValue(12))
-          .addIntegerOption((o) => o.setName('year')),
+          .addStringOption((o) => o.setName('date').setDescription('Single date (YYYY-MM-DD or similar)'))
+          .addIntegerOption((o) =>
+            o.setName('month').setDescription('Month (1–12), use with year').setMinValue(1).setMaxValue(12),
+          )
+          .addIntegerOption((o) => o.setName('year').setDescription('Year (e.g. 2026), use with month')),
       )
       .addSubcommand((s) =>
         s
@@ -306,7 +314,14 @@ async function buildModData(client) {
                 ChannelType.GuildMedia,
               ),
           )
-          .addStringOption((o) => o.setName('new_name').setRequired(true).setMinLength(1).setMaxLength(100)),
+          .addStringOption((o) =>
+            o
+              .setName('new_name')
+              .setDescription('Name for the new channel')
+              .setRequired(true)
+              .setMinLength(1)
+              .setMaxLength(100),
+          ),
       )
       .addSubcommand((sub) => {
         sub
