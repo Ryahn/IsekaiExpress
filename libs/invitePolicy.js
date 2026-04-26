@@ -39,6 +39,22 @@ function extractInviteCodes(content) {
   return [...out];
 }
 
+/**
+ * Single invite code from user paste (full URL, discordapp.com, discord.gg, or raw code).
+ * Lowercased for storage / API.
+ */
+function parseInviteCodeFromUserInput(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  const fromRegex = extractInviteCodes(trimmed);
+  if (fromRegex.length) {
+    return fromRegex[0].toLowerCase();
+  }
+  const lower = trimmed.toLowerCase();
+  const last = lower.split('/').filter(Boolean).pop() || lower;
+  return last.split('?')[0].split('#')[0].replace(/[^a-z0-9-]/g, '') || '';
+}
+
 function inviteQueueChannelId(configRow) {
   return configRow.invite_queue_channel_id || configRow.modLogId || null;
 }
@@ -317,6 +333,7 @@ async function processMemberMessageInvites(client, message, staffRoleId) {
 
 module.exports = {
   extractInviteCodes,
+  parseInviteCodeFromUserInput,
   processMemberMessageInvites,
   enforceBlacklist,
   resolveInvite,

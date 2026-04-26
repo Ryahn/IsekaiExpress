@@ -1,6 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../../../../utils/guildPrivileges');
-const { resolveInvite } = require('../../../../../../libs/invitePolicy');
+const { resolveInvite, parseInviteCodeFromUserInput } = require('../../../../../../libs/invitePolicy');
 
 async function assertStaff(interaction, client) {
   if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
@@ -14,8 +14,13 @@ async function blacklistAddGuildExecute(client, interaction) {
   if (!(await assertStaff(interaction, client))) return;
   const inviteStr = interaction.options.getString('invite', true);
   const reason = interaction.options.getString('reason') || null;
-  const codes = inviteStr.match(/(?:discord\.(?:gg|com\/invite)\/|dsc\.gg\/)([a-zA-Z0-9-]+)/i);
-  const code = codes ? codes[1] : inviteStr.trim().split('/').pop();
+  const code = parseInviteCodeFromUserInput(inviteStr);
+  if (!code) {
+    return interaction.editReply({
+      content: 'Could not parse an invite code from that input. Paste a discord.gg / discord.com/invite / discordapp.com link or the code alone.',
+      ephemeral: true,
+    });
+  }
   const resolved = await resolveInvite(client, code);
   if (!resolved.guildId) {
     return interaction.editReply({
@@ -34,7 +39,14 @@ async function blacklistAddGuildExecute(client, interaction) {
 
 async function blacklistAddInviteExecute(client, interaction) {
   if (!(await assertStaff(interaction, client))) return;
-  const code = interaction.options.getString('code', true).toLowerCase().trim();
+  const raw = interaction.options.getString('code', true);
+  const code = parseInviteCodeFromUserInput(raw);
+  if (!code) {
+    return interaction.editReply({
+      content: 'Could not parse an invite code from that input. Paste a discord.gg / discord.com/invite / discordapp.com link or the code alone.',
+      ephemeral: true,
+    });
+  }
   const reason = interaction.options.getString('reason') || null;
   const resolved = await resolveInvite(client, code);
   await client.db.sql(
@@ -43,7 +55,18 @@ async function blacklistAddInviteExecute(client, interaction) {
      ON DUPLICATE KEY UPDATE resolved_guild_id = VALUES(resolved_guild_id), reason = VALUES(reason), added_by = VALUES(added_by)`,
     [code, resolved.guildId, reason, interaction.user.id],
   );
-  await interaction.editReply(`Blacklisted invite code \`${code}\`.`);
+  if (resolved.guildId) {
+    await client.db.sql(
+      `INSERT INTO blacklisted_guilds (guild_id, guild_name, reason, added_by)
+       VALUES (?,?,?,?)
+       ON DUPLICATE KEY UPDATE guild_name = VALUES(guild_name), reason = VALUES(reason), added_by = VALUES(added_by)`,
+      [resolved.guildId, resolved.guildName, reason, interaction.user.id],
+    );
+  }
+  const resolveNote = resolved.guildId
+    ? ` Resolved guild **${resolved.guildName || resolved.guildId}** (\`${resolved.guildId}\`) — also added to guild blacklist.`
+    : ' Discord could not resolve a guild for this code (expired/invalid) — still blocked by code.';
+  await interaction.editReply(`Blacklisted invite code \`${code}\`.${resolveNote}`);
 }
 
 async function blacklistRemoveExecute(client, interaction) {
@@ -83,8 +106,13 @@ async function blacklistListExecute(client, interaction) {
 async function blacklistCheckExecute(client, interaction) {
   if (!(await assertStaff(interaction, client))) return;
   const inviteStr = interaction.options.getString('invite', true);
-  const codes = inviteStr.match(/(?:discord\.(?:gg|com\/invite)\/|dsc\.gg\/)([a-zA-Z0-9-]+)/i);
-  const code = codes ? codes[1] : inviteStr.trim().split('/').pop();
+  const code = parseInviteCodeFromUserInput(inviteStr);
+  if (!code) {
+    return interaction.editReply({
+      content: 'Could not parse an invite code from that input.',
+      ephemeral: true,
+    });
+  }
   const resolved = await resolveInvite(client, code);
   const hitCode = await client.db.query('blacklisted_invites').where({ code: code.toLowerCase() }).first();
   let hitGuild = null;
