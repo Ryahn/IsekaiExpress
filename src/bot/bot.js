@@ -4,6 +4,7 @@ const schedule = require('node-schedule');
 const config = require('../../config');
 const { farmManager } = require('./utils/farm/farmManager');
 const db = require('../../database/db');
+const { syncPhishGgServers } = require('../../libs/phishGgSync');
 const { timestamp } = require('../../libs/utils');
 const logger = require('../../libs/logger');
 const process = require('process');
@@ -178,6 +179,27 @@ const client = new BotClient({
 				logger.error('[FARM-REMIND] Error in harvest maturity job:', error);
 			}
 		});
+
+		if (config.phishGg && config.phishGg.dailySyncEnabled) {
+			const runPhishSync = async () => {
+				try {
+					const r = await syncPhishGgServers(db.query, { addedBy: null, dryRun: false });
+					logger.info(
+						`[PHISH-SYNC] api rows=${r.apiCount} guild upserts=${r.guildRows} invite upserts=${r.inviteRows}`,
+					);
+				}
+				catch (err) {
+					logger.error('[PHISH-SYNC] failed', err);
+				}
+			};
+			const ms = config.phishGg.dailySyncIntervalMs;
+			if (ms >= 60_000) {
+				setInterval(runPhishSync, ms);
+				setTimeout(runPhishSync, 90_000);
+			} else {
+				logger.warn('[PHISH-SYNC] PHISH_GG_DAILY_SYNC_MS is below 1 minute; ignored.');
+			}
+		}
 
 	});
 

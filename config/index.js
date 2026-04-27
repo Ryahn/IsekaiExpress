@@ -111,6 +111,13 @@ module.exports = {
   url: str('PUBLIC_BASE_URL', baseUrl),
   cardUrl: str('CARD_PUBLIC_URL', `${baseUrl}/public/cards`),
 
+  /** Daily sync of https://api.phish.gg/servers/all into blacklists (bot uses node-schedule). */
+  phishGg: {
+    dailySyncEnabled: bool('PHISH_GG_DAILY_SYNC', false),
+    /** Interval in ms (default 24h). */
+    dailySyncIntervalMs: int('PHISH_GG_DAILY_SYNC_MS', 24 * 60 * 60 * 1000),
+  },
+
   /**
    * Batch card generation — `card_data.tcg_region` (Home Turf 1–6 for Region packs / synergy):
    * - unset/invalid: no tag (null)

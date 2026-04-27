@@ -10,6 +10,7 @@ const { checkCommandCooldown, setCooldown } = require('../../middleware/commandM
 const { executeWithRateLimit } = require('../../middleware/apiMiddleware');
 const { handleFarmMessage } = require('./farmMessage');
 const { processMemberMessageInvites } = require('../../../../libs/invitePolicy');
+const { processMemberMessageScamLinks } = require('../../../../libs/scamLinkPolicy');
 const { processImageReview } = require('../../../../libs/imageReview');
 
 function parseCommandContent(content, message) {
@@ -48,6 +49,11 @@ module.exports = class MessageEvent extends BaseEvent {
                 await processMemberMessageInvites(client, message, staffRoleId);
             } catch (e) {
                 client.logger.error('invitePolicy:', e);
+            }
+            try {
+                await processMemberMessageScamLinks(client, message, staffRoleId);
+            } catch (e) {
+                client.logger.error('scamLinkPolicy:', e);
             }
             try {
                 await processImageReview(client, message, staffRoleId);
