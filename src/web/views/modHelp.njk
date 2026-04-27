@@ -1,0 +1,141 @@
+{% extends "layout.njk" %}
+
+{% block css %}
+<style>
+  .mod-doc__layout .mod-doc__toc {
+    position: sticky;
+    top: 1rem;
+    align-self: start;
+    font-size: 0.9rem;
+    max-height: calc(100vh - 6rem);
+    overflow: auto;
+  }
+  .mod-doc__layout .mod-doc__toc a {
+    color: var(--phoenix-400, #8b9aab);
+    text-decoration: none;
+    display: block;
+    padding: 0.3rem 0;
+    border-left: 2px solid transparent;
+    padding-left: 0.75rem;
+  }
+  .mod-doc__layout .mod-doc__toc a:hover {
+    color: var(--phoenix-link-hover, #a8c0ff);
+    border-left-color: rgba(100, 140, 255, 0.45);
+  }
+  .mod-doc__layout .mod-doc__toc .mod-doc__toc-sub {
+    padding-left: 0.5rem;
+    font-size: 0.8rem;
+    border-left: 0;
+    padding-top: 0.15rem;
+  }
+  .mod-doc__layout section {
+    margin-bottom: 2.5rem;
+    scroll-margin-top: 5rem;
+  }
+  .mod-doc__layout .mod-doc__sc {
+    scroll-margin-top: 5rem;
+  }
+  .mod-doc__layout h2 {
+    font-size: 1.4rem;
+    margin-bottom: 0.5rem;
+  }
+  .mod-doc__layout h3 {
+    font-size: 1.05rem;
+    margin: 1.5rem 0 0.5rem;
+  }
+  .mod-doc__layout h3 code {
+    font-size: 0.95em;
+  }
+  .mod-doc__layout table { font-size: 0.875rem; }
+  .mod-doc__layout .table-responsive { margin-top: 0.5rem; }
+  .mod-doc__callout {
+    border: 1px solid rgba(150, 180, 220, 0.2);
+    border-radius: 0.4rem;
+    padding: 0.85rem 1rem;
+    background: rgba(20, 28, 40, 0.6);
+  }
+  .mod-doc__meta { font-size: 0.8rem; color: var(--phoenix-500, #9ca3c7); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vs-page-header">
+  <h3 class="vs-page-title">/mod — moderation commands</h3>
+  <p class="vs-page-subtitle">Reference for the consolidated <code>/mod</code> slash command (Staff / Mod; full detail on the web). {{ inDiscordPermissionNote }}</p>
+  <p class="mod-doc__meta mb-0">Canonical URL: <a href="{{ publicBaseUrl }}/modhelp">{{ publicBaseUrl }}/modhelp</a> — in Discord use <code>/mod help docs</code> for the same link (ephemeral).</p>
+  </div>
+
+<div class="row g-4 mod-doc__layout">
+  <aside class="col-lg-3 d-none d-lg-block" aria-label="On this page">
+    <nav class="mod-doc__toc">
+      <strong class="d-block text-body-tertiary small mb-2">Contents</strong>
+      {% for g in modCommandGroups %}
+      <a href="#group-{{ g.id }}">{{ g.name }}</a>
+        {% for sub in g.subcommands %}
+        <a class="mod-doc__toc-sub" href="#sc-{{ g.id }}-{{ sub.name }}">/mod {{ sub.path }}</a>
+        {% endfor %}
+      {% endfor %}
+    </nav>
+  </aside>
+  <div class="col-lg-9">
+    <div class="mod-doc__callout mb-4">
+      <p class="mb-0">This page itself requires the control panel and Discord login; only <strong>Staff</strong> or <strong>Mod</strong> roles (as configured) can open it. Subcommand behavior in Discord is unchanged.</p>
+    </div>
+    <main>
+      {% for g in modCommandGroups %}
+      <section id="group-{{ g.id }}">
+        <h2 class="text-body-highlight">{{ g.name }}</h2>
+        <p class="text-body-secondary mb-0">{{ g.description }}</p>
+        {% for sub in g.subcommands %}
+        <div id="sc-{{ g.id }}-{{ sub.name }}" class="mod-doc__sc">
+          <h3><code>/mod {{ sub.path }}</code>{% if sub.staffGated %} <span class="badge bg-warning text-dark">Staff-gated in bot</span>{% endif %}</h3>
+          <p class="text-body-secondary mb-1">{{ sub.description }}</p>
+          {% if sub.details %}<p class="small text-body-tertiary mb-2">{{ sub.details }}</p>{% endif %}
+          {% if sub.options and sub.options|length %}
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-bordered align-middle">
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Type</th>
+                  <th>Required</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for o in sub.options %}
+                <tr>
+                  <td><code>{{ o.name }}</code></td>
+                  <td>{{ o.type }}</td>
+                  <td>{% if o.required %}Yes{% else %}No{% endif %}</td>
+                  <td>
+                    {{ o.description }}
+                    {% if o.choices and o.choices|length %}
+                    <details class="mt-1">
+                      <summary class="text-body-tertiary" style="cursor:pointer;">Choices ({{ o.choices|length }})</summary>
+                      <ul class="small mb-0 mt-1">
+                        {% for ch in o.choices %}
+                        <li><code>{{ ch.value }}</code> — {{ ch.name }}</li>
+                        {% endfor %}
+                      </ul>
+                    </details>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="small text-body-tertiary mb-0">No options.</p>
+          {% endif %}
+        </div>
+        {% if not loop.last %}<hr class="border-secondary opacity-25 my-4" />{% endif %}
+        {% endfor %}
+      </section>
+      {% if not loop.last %}<hr class="border-secondary my-5" />{% endif %}
+      {% endfor %}
+    </main>
+  </div>
+</div>
+{% endblock %}

@@ -40,6 +40,7 @@ const {
   reviewApproveUserExecute,
   reviewRevokeUserExecute,
 } = require('./handlers/modHandlersReview');
+const { helpDocsExecute } = require('./handlers/modHandlersHelp');
 
 async function buildModData(client) {
   await fetchAndChunkChoices(client);
@@ -47,6 +48,17 @@ async function buildModData(client) {
   const b = new SlashCommandBuilder()
     .setName('mod')
     .setDescription('Server moderation, invites, and review settings');
+
+  b.addSubcommandGroup((g) =>
+    g
+      .setName('help')
+      .setDescription('Web documentation and help')
+      .addSubcommand((s) =>
+        s
+          .setName('docs')
+          .setDescription('Open the full mod commands documentation on the web control panel'),
+      ),
+  );
 
   b.addSubcommandGroup((g) =>
     g
@@ -388,6 +400,7 @@ async function execute(client, interaction) {
     'global:lock_on': globalLockOnExecute,
     'global:lock_off': globalLockOffExecute,
     'global:whitelist': globalWhitelistExecute,
+    'help:docs': helpDocsExecute,
   };
 
   const key = `${group}:${sub}`;

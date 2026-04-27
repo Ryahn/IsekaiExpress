@@ -57,6 +57,7 @@ const MOD_COMMAND_LOGICAL_KEYS = [
   'mod:global:lock_on',
   'mod:global:lock_off',
   'mod:global:whitelist',
+  'mod:help:docs',
 ];
 
 const OBSOLETE_MODERATION_COMMAND_NAMES = [

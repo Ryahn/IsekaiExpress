@@ -62,6 +62,17 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use((req, res, next) => {
+  if (req.session && req.session.user) {
+    const roles = req.session.roles;
+    res.locals.showModCommandDocs = Array.isArray(roles) &&
+      (roles.includes(config.roles.staff) || roles.includes(config.roles.mod));
+  } else {
+    res.locals.showModCommandDocs = false;
+  }
+  next();
+});
+
+app.use((req, res, next) => {
   if (req.method !== 'GET') {
     const { method, originalUrl } = req;
     const userId = req.session && req.session.user ? req.session.user.id : 9007;
