@@ -88,7 +88,7 @@
         <p class="text-body-secondary mb-0">{{ g.description }}</p>
         {% for sub in g.subcommands %}
         <div id="sc-{{ g.id }}-{{ sub.name }}" class="mod-doc__sc">
-          <h3><code>/mod {{ sub.path }}</code>{% if sub.staffGated %} <span class="badge bg-warning text-dark">Staff-gated in bot</span>{% endif %}</h3>
+          <h3><code>/mod {{ sub.path }}</code>{% if sub.staffGated %} <span class="badge bg-warning">Staff-gated in bot</span>{% endif %}</h3>
           <p class="text-body-secondary mb-1">{{ sub.description }}</p>
           {% if sub.details %}<p class="small text-body-tertiary mb-2">{{ sub.details }}</p>{% endif %}
           {% if sub.options and sub.options|length %}
