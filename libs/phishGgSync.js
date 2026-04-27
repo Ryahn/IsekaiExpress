@@ -4,6 +4,25 @@ const { parseInviteCodeFromUserInput } = require('./invitePolicy');
 const PHISH_GG_SERVERS_URL = 'https://api.phish.gg/servers/all';
 const DEFAULT_TIMEOUT_MS = 120_000;
 
+const MAX_GUILD_ID_LEN = 20;
+
+/**
+ * API sometimes returns a bare snowflake, sometimes a discord.gg/… URL. DB column is varchar(20).
+ * @param {string} s
+ * @returns {string | null}
+ */
+function extractSnowflakeFromServerIdField(s) {
+  if (s == null || typeof s !== 'string') return null;
+  const t = s.trim();
+  if (/^\d{1,20}$/.test(t) && t.length <= MAX_GUILD_ID_LEN) {
+    return t;
+  }
+  const matches = t.match(/\d{10,20}/g);
+  if (!matches || !matches.length) return null;
+  const last = matches[matches.length - 1];
+  return last.length <= MAX_GUILD_ID_LEN ? last : null;
+}
+
 /**
  * @returns {Promise<Array<{ serverID: string, reason: string, invite?: string, key?: string }>>}
  */
@@ -32,32 +51,42 @@ async function applyPhishApiRows(knex, rows, { addedBy = null, dryRun = false } 
   let guildRows = 0;
   let inviteRows = 0;
   for (const row of rows) {
-    if (!row || !row.serverID) continue;
-    const sid = String(row.serverID).trim();
+    if (!row || row.serverID == null) continue;
     const reason = row.reason != null ? String(row.reason) : null;
+    const raw = String(row.serverID).trim();
+    const guildId = extractSnowflakeFromServerIdField(raw);
+
+    let code = '';
+    if (row.invite != null && String(row.invite).trim()) {
+      code = parseInviteCodeFromUserInput(String(row.invite).trim());
+    } else if (!/^\d{1,20}$/.test(raw.trim()) || /discord\.(gg|com)|https?:\/\//i.test(raw)) {
+      code = parseInviteCodeFromUserInput(raw);
+    }
+
     if (dryRun) {
-      guildRows++;
-      if (row.invite) inviteRows++;
+      if (guildId) guildRows++;
+      if (code) inviteRows++;
       continue;
     }
-    await knex.raw(
-      `INSERT INTO blacklisted_guilds (guild_id, guild_name, reason, added_by)
-       VALUES (?,?,?,?)
-       ON DUPLICATE KEY UPDATE guild_name = VALUES(guild_name), reason = VALUES(reason), added_by = VALUES(added_by)`,
-      [sid, null, reason, addedBy],
-    );
-    guildRows++;
-    if (row.invite) {
-      const code = parseInviteCodeFromUserInput(String(row.invite));
-      if (code) {
-        await knex.raw(
-          `INSERT INTO blacklisted_invites (code, resolved_guild_id, reason, added_by)
-           VALUES (?,?,?,?)
-           ON DUPLICATE KEY UPDATE resolved_guild_id = VALUES(resolved_guild_id), reason = VALUES(reason), added_by = VALUES(added_by)`,
-          [code, sid, reason, addedBy],
-        );
-        inviteRows++;
-      }
+
+    if (guildId) {
+      await knex.raw(
+        `INSERT INTO blacklisted_guilds (guild_id, guild_name, reason, added_by)
+         VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE guild_name = VALUES(guild_name), reason = VALUES(reason), added_by = VALUES(added_by)`,
+        [guildId, null, reason, addedBy],
+      );
+      guildRows++;
+    }
+    if (code) {
+      const resolved = guildId || null;
+      await knex.raw(
+        `INSERT INTO blacklisted_invites (code, resolved_guild_id, reason, added_by)
+         VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE resolved_guild_id = VALUES(resolved_guild_id), reason = VALUES(reason), added_by = VALUES(added_by)`,
+        [code, resolved, reason, addedBy],
+      );
+      inviteRows++;
     }
   }
   return { guildRows, inviteRows };
@@ -82,4 +111,5 @@ module.exports = {
   fetchPhishGgServersAll,
   applyPhishApiRows,
   syncPhishGgServers,
+  extractSnowflakeFromServerIdField,
 };
