@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
+const { normalizeBlacklistedLinkHost } = require('./blacklistedLinkHostNormalize');
 
 const URL_RE = /https?:\/\/[^\s<>"'`)]+/gi;
 const DEDUPE_MS = 5 * 60 * 1000;
@@ -47,10 +48,13 @@ function extractHttpUrls(content) {
  * @returns {string | null} matched list entry
  */
 function hostMatchesBlacklistedDomain(hostname, hosts) {
-  const h = String(hostname).toLowerCase();
+  const h = normalizeBlacklistedLinkHost(hostname);
+  if (!h) return null;
   for (const d of hosts) {
     if (!d) continue;
-    if (h === d || h.endsWith(`.${d}`)) return d;
+    const dn = normalizeBlacklistedLinkHost(d);
+    if (!dn) continue;
+    if (h === dn || h.endsWith(`.${dn}`)) return dn;
   }
   return null;
 }
@@ -65,7 +69,7 @@ async function getBlacklistedLinkHostsList(db) {
     return hostCache.hosts;
   }
   const rows = await db('blacklisted_link_domains').select('host');
-  const hosts = rows.map((r) => r.host);
+  const hosts = [...new Set(rows.map((r) => normalizeBlacklistedLinkHost(r.host)).filter(Boolean))];
   hostCache.t = now;
   hostCache.hosts = hosts;
   return hosts;

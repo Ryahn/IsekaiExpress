@@ -1,5 +1,6 @@
 const cheerio = require('cheerio');
 const { parseInviteCodeFromUserInput } = require('./invitePolicy');
+const { normalizeBlacklistedLinkHost } = require('./blacklistedLinkHostNormalize');
 
 const PHISH_INV = /:phishinvite:\s*(?:\*\*)?\s*Invite\s*(?:\*\*)?\s*:\s*(.+?)\s*$/i;
 const PHISH_ID = /:phishid:\s*(?:\*\*)?\s*Server ID\s*(?:\*\*)?\s*:\s*(\d{10,20})\s*$/i;
@@ -139,12 +140,7 @@ function parseDomainAddedMessages(text) {
  * @returns {string}
  */
 function normalizeHost(raw) {
-  const s = String(raw).trim().toLowerCase();
-  if (!s) return '';
-  let h = s.split('/')[0].split('?')[0];
-  h = h.replace(/:\d+$/, '');
-  if (h.startsWith('www.')) h = h.slice(4);
-  return h.replace(/\.$/, '');
+  return normalizeBlacklistedLinkHost(raw);
 }
 
 /**
