@@ -59,7 +59,18 @@ function inviteQueueChannelId(configRow) {
   return configRow.invite_queue_channel_id || configRow.modLogId || null;
 }
 
+/** Discord REST: 10006 = Unknown Invite (expired, revoked, invalid code, etc.) */
+const DISCORD_UNKNOWN_INVITE = 10006;
+
 async function resolveInvite(client, code) {
+  const failed = (unresolvable) => ({
+    ok: false,
+    guildId: null,
+    guildName: null,
+    channelId: null,
+    channelName: null,
+    unresolvable,
+  });
   try {
     const inv = await client.fetchInvite(code);
     return {
@@ -68,9 +79,17 @@ async function resolveInvite(client, code) {
       guildName: inv.guild?.name || null,
       channelId: inv.channel?.id || null,
       channelName: inv.channel?.name || null,
+      unresolvable: null,
     };
-  } catch {
-    return { ok: false, guildId: null, guildName: null, channelId: null, channelName: null };
+  } catch (e) {
+    const apiCode = e.code ?? e.rawError?.code;
+    if (apiCode === DISCORD_UNKNOWN_INVITE) {
+      return failed('unknown_invite');
+    }
+    if (apiCode != null) {
+      return failed(`api_${apiCode}`);
+    }
+    return failed('error');
   }
 }
 

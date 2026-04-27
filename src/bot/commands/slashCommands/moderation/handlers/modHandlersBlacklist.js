@@ -23,10 +23,13 @@ async function blacklistAddGuildExecute(client, interaction) {
   }
   const resolved = await resolveInvite(client, code);
   if (!resolved.guildId) {
-    return interaction.editReply({
-      content: 'Could not resolve invite to a guild id. Add by code with `/mod blacklist add-invite` instead.',
-      ephemeral: true,
-    });
+    const isGone =
+      resolved.unresolvable === 'unknown_invite' ||
+      String(resolved.unresolvable || '').startsWith('api_');
+    const body = isGone
+      ? 'Discord does not recognize this invite anymore (usually **expired**, **revoked**, or **max uses**). You can still block the **code** with `/mod blacklist add-invite` — that stores the code only; no server id until Discord can resolve it again.'
+      : 'Could not resolve this invite. Use `/mod blacklist add-invite` to block by code only.';
+    return interaction.editReply({ content: body, ephemeral: true });
   }
   await client.db.sql(
     `INSERT INTO blacklisted_guilds (guild_id, guild_name, reason, added_by)
@@ -65,7 +68,9 @@ async function blacklistAddInviteExecute(client, interaction) {
   }
   const resolveNote = resolved.guildId
     ? ` Resolved guild **${resolved.guildName || resolved.guildId}** (\`${resolved.guildId}\`) — also added to guild blacklist.`
-    : ' Discord could not resolve a guild for this code (expired/invalid) — still blocked by code.';
+    : resolved.unresolvable === 'unknown_invite'
+      ? ' Discord reports this invite as unknown (often expired/revoked) — **the code is still blacklisted**; no guild row until a working invite for that server exists.'
+      : ' Discord could not resolve a guild for this code — **the code is still blacklisted**.';
   await interaction.editReply(`Blacklisted invite code \`${code}\`.${resolveNote}`);
 }
 
@@ -119,10 +124,15 @@ async function blacklistCheckExecute(client, interaction) {
   if (resolved.guildId) {
     hitGuild = await client.db.query('blacklisted_guilds').where({ guild_id: resolved.guildId }).first();
   }
+  const resolvedLine = resolved.guildId
+    ? `${resolved.guildName} (\`${resolved.guildId}\`)`
+    : resolved.unresolvable === 'unknown_invite'
+      ? 'no (Discord: unknown invite — often expired/revoked)'
+      : 'no';
   await interaction.editReply({
     content: `Code \`${code}\`: ${hitCode ? '**BLACKLISTED (code)**' : 'not on code blacklist'} | Guild: ${
       hitGuild ? '**BLACKLISTED (guild)**' : 'not on guild blacklist'
-    } | Resolved: ${resolved.ok ? `${resolved.guildName} (\`${resolved.guildId}\`)` : 'no'}`,
+    } | Resolved: ${resolvedLine}`,
     ephemeral: true,
   });
 }
