@@ -12,6 +12,8 @@ const trialmodData = require('./src/bot/tcg/trialmod_data.json');
 
 const BATCH_SIZE = 5;
 
+const skipDb = process.argv.includes('--skip-db');
+
 /** 6 rarities × 10 elements per character in batch_worker */
 const CARDS_PER_CHARACTER = 60;
 /** Upper bound per card (load avatar + composite + optional DB); keep generous on slow disks/network */
@@ -20,8 +22,40 @@ const WORKER_TIMEOUT_MIN_MS = 3 * 60 * 1000;
 
 /**
  * Same shapes as `import_from_discord.js` (hero rows with `powerByRarity`, `rarity`, `class`, etc.).
- * When a user appears in more than one role list (e.g. mod + trialmod), the earlier source wins.
+ * When a user appears in more than one role list (e.g. mod + trialmod), the earlier source wins
+ * for the full row, except `description`: if the winning row has no blurb, the first non-empty
+ * `description` from a later file (same `discord_id`) is copied onto the primary row.
  */
+function hasUsableDescription(v) {
+  return v != null && String(v).trim().length > 0;
+}
+
+function isDescriptionPlaceholder(s) {
+  const t = String(s || '').trim();
+  if (!t.length) return true;
+  if (/^tbd$/i.test(t)) return true;
+  if (/^n\/?a$/i.test(t)) return true;
+  if (/^\.{3,}$/.test(t)) return true;
+  return false;
+}
+
+/**
+ * @param {Array<Array<Record<string, unknown>>>} sources
+ * @param {string} id
+ * @param {{ onlyNonPlaceholder?: boolean }} [opts]
+ */
+function firstDescriptionForId(sources, id, opts = {}) {
+  const { onlyNonPlaceholder = false } = opts;
+  for (const list of sources) {
+    const row = list.find((r) => r && String(r.discord_id) === id);
+    if (!row || !hasUsableDescription(row.description)) continue;
+    const t = String(row.description).trim();
+    if (onlyNonPlaceholder && isDescriptionPlaceholder(t)) continue;
+    return t;
+  }
+  return null;
+}
+
 function mergeByDiscordIdPriority(sources) {
   const seen = new Set();
   const out = [];
@@ -33,6 +67,19 @@ function mergeByDiscordIdPriority(sources) {
       seen.add(id);
       out.push(row);
     }
+  }
+  for (const primary of out) {
+    const id = String(primary.discord_id);
+    if (hasUsableDescription(primary.description) && !isDescriptionPlaceholder(primary.description)) {
+      continue;
+    }
+    if (!hasUsableDescription(primary.description)) {
+      const fromLater = firstDescriptionForId(sources, id);
+      if (fromLater) primary.description = fromLater;
+      continue;
+    }
+    const better = firstDescriptionForId(sources, id, { onlyNonPlaceholder: true });
+    if (better) primary.description = better;
   }
   return out;
 }
@@ -57,7 +104,7 @@ function workerTimeoutMs(batchLength) {
   );
 }
 
-function processBatch(data, batchIndex) {
+function processBatch(data, batchIndex, { skipDb: noDb = false } = {}) {
   return new Promise((resolve, reject) => {
     const batchFilePath = path.join(__dirname, `./batch_${batchIndex}.json`);
     if (fs.existsSync(batchFilePath)) {
@@ -70,7 +117,9 @@ function processBatch(data, batchIndex) {
       `Batch ${batchIndex} written to ${batchFilePath}. Spawning worker (timeout ${Math.round(timeoutMs / 1000)}s for ${data.length} character(s))...`,
     );
 
-    const worker = fork('./batch_worker.js', [batchFilePath]);
+    const workerArgs = [batchFilePath];
+    if (noDb) workerArgs.push('--skip-db');
+    const worker = fork('./batch_worker.js', workerArgs);
 
     const killTimer = setTimeout(() => {
       logger.warn(`Killing worker process for batch ${batchIndex} due to timeout (${timeoutMs}ms)...`);
@@ -113,12 +162,12 @@ function processBatch(data, batchIndex) {
   });
 }
 
-async function runBatches(data) {
+async function runBatches(data, { skipDb: noDb = false } = {}) {
   for (let i = 0; i < data.length; i += BATCH_SIZE) {
     const batch = data.slice(i, Math.min(i + BATCH_SIZE, data.length));
     const batchIndex = Math.floor(i / BATCH_SIZE) + 1;
     try {
-      await processBatch(batch, batchIndex);
+      await processBatch(batch, batchIndex, { skipDb: noDb });
     } catch (e) {
       logger.error(e.message || String(e));
     }
@@ -136,6 +185,6 @@ const counts = {
   merged: allCharacterData.length,
 };
 logger.startup(
-  `TCG batch: files staff=${counts.staff} mod=${counts.mod} trialmod=${counts.trialmod} uploader=${counts.uploader} retired=${counts.retired} respected=${counts.respected} → merged unique=${counts.merged}`,
+  `TCG batch: files staff=${counts.staff} mod=${counts.mod} trialmod=${counts.trialmod} uploader=${counts.uploader} retired=${counts.retired} respected=${counts.respected} → merged unique=${counts.merged}${skipDb ? ' (--skip-db: no database writes)' : ''}`,
 );
-runBatches(allCharacterData);
+runBatches(allCharacterData, { skipDb });

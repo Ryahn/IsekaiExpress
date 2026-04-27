@@ -1,7 +1,7 @@
 const db = require('../database/db');
 const { pickRandomAbilityKeyForRarity } = require('../src/bot/tcg/abilityPools');
-const { statLevelMultiplier, sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
-const { nextRarityInOrder } = require('../src/bot/tcg/rarityOrder');
+const { statLevelMultiplier } = require('../src/bot/tcg/cardLayout');
+const { nextRarityInOrder, sanitizeRarityAbbrev } = require('../src/bot/tcg/rarityOrder');
 const { DISPLAY_LABEL } = require('../src/bot/tcg/elements');
 const tcgEconomy = require('./tcgEconomy');
 const tcgCollectionSets = require('./tcgCollectionSets');

@@ -54,6 +54,16 @@ function generateUUID(characterName, rarityAbbrev, discordId, elementKey) {
   return uuidv5(`${characterName}|${rarityAbbrev}|${discordId}|${elementKey}`, NAMESPACE);
 }
 
+/** Same idea as `master.js` — do not reserve the lower band for TBD/empty placeholders. */
+function isDescriptionPlaceholderText(s) {
+  const t = String(s || '').trim();
+  if (!t.length) return true;
+  if (/^tbd$/i.test(t)) return true;
+  if (/^n\/?a$/i.test(t)) return true;
+  if (/^\.{3,}$/.test(t)) return true;
+  return false;
+}
+
 /**
  * @param {string} characterName
  * @param {string} rawRarity - batch key, may be legacy
@@ -63,7 +73,8 @@ function generateUUID(characterName, rarityAbbrev, discordId, elementKey) {
  * @param {string|number} discordId
  * @param {string} elementKey - canonical element id (tools/card_elements/{key}.png)
  * @param {string|null} [elementIconPath] - optional absolute path to element PNG
- * @param {{ skipDb?: boolean }} [options]
+ * @param {{ skipDb?: boolean, cardDescription?: string }} [options] — `cardDescription` is the JSON
+ *   per-user blurb (≤120 chars) shown below the class; maps from `description` in batch JSON.
  */
 async function generateCard(
   characterName,
@@ -118,10 +129,16 @@ async function generateCard(
   ctx.restore();
 
   const icon = await loadImage(iconPath);
-  drawCornerIconScaled(ctx, icon, layout.elementIcon);
 
   const n = layout.name;
   const desc = layout.description;
+  const flavorRaw =
+    options.cardDescription != null ? String(options.cardDescription).trim() : '';
+  const hasCardFlavor = flavorRaw.length > 0 && !isDescriptionPlaceholderText(flavorRaw);
+  const flavorClamped = hasCardFlavor
+    ? flavorRaw.slice(0, desc.flavor.maxChars)
+    : '';
+  const classBox = hasCardFlavor ? desc.classTight : desc.classFull;
   const displayStarCount = rarityStarCount(rawRarity) ?? rSpec.starCount;
   const starPath = path.join(repoRoot, 'tools', 'star.png');
   if (displayStarCount > 0) {
@@ -152,12 +169,28 @@ async function generateCard(
   });
 
   const classOuter = readableTextOuterGlowColor(rSpec.rarityColor);
-  drawGlowingTextWrappedInBox(ctx, className, desc, {
+  drawGlowingTextWrappedInBox(ctx, className, classBox, {
     fontForSize: (px) => font(px, 'normal'),
-    fillColor: '#AAAAAA',
+    fillColor: '#000000',
     outerColor: classOuter,
     minFontSize: 20,
   });
+
+  if (flavorClamped) {
+    const fl = desc.flavor;
+    const flavorOuter = readableTextOuterGlowColor(rSpec.rarityColor);
+    drawGlowingTextWrappedInBox(ctx, flavorClamped, fl, {
+      fontForSize: (px) => font(px, 'normal'),
+      fillColor: '#000000',
+      outerColor: flavorOuter,
+      minFontSize: 40,
+      uppercase: false,
+      maxChars: fl.maxChars,
+      textAnchor: 'blockLeft',
+    });
+  }
+
+  drawCornerIconScaled(ctx, icon, layout.elementIcon);
 
   drawSubtleCardGradient(ctx);
 
@@ -197,6 +230,7 @@ async function generateCard(
     name: characterName,
     rarity: abbrev,
     class: className,
+    description: hasCardFlavor ? flavorClamped : null,
     level: levelValue,
     power: powerValue,
     element: resolvedElementKey,

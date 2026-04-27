@@ -20,14 +20,33 @@ const CARD = {
     cx: 509, cy: 978, fontSize: 56, maxWidth: 671, align: 'center', baseline: 'middle',
   },
   rarityStarRow: {
-    offsetAboveNameCenter: 20,
-    size: 15,
+    offsetAboveNameCenter: -130,
+    size: 45,
     gap: 4,
   },
-  // Class / flavor: description panel (top-left 137,1099 — 747×229)
+  // Class + optional flavor blurb: panel 137,1099 — 747×229
   description: {
-    x: 137, y: 1099, w: 747, h: 229, cx: 510, cy: 1213,
-    fontSize: 32, lineHeight: 40, maxWidth: 700,
+    panel: { x: 137, y: 1099, w: 747, h: 229 },
+    /** No JSON `description` — class centered in the panel (legacy single block). */
+    classFull: {
+      cx: 510, cy: 1213, h: 220, fontSize: 45, lineHeight: 48, maxWidth: 700,
+    },
+    /** With flavor text — class in the upper band. */
+    classTight: {
+      cx: 510, cy: 1156, h: 102, fontSize: 45, lineHeight: 48, maxWidth: 700,
+    },
+    /** JSON `description` (≤120 chars), below class — same `fontSize` / `lineHeight` as
+     *  `classTight` (45/48) so the blurb matches COMMANDER. `h` must fit the wrapped
+     *  line count at that step (≈48px per line) or text will shrink. */
+    flavor: {
+      cx: 510,
+      cy: 1260,
+      h: 200,
+      fontSize: 60,
+      lineHeight: 48,
+      maxWidth: 640,
+      maxChars: 120,
+    },
   },
   // Element gem (top-left 456,1372 — 110×110)
   elementIcon: { cx: 511, cy: 1427, r: 55 },
@@ -148,7 +167,21 @@ function cardLayoutForRarity(abbrev) {
       cy: CARD.power.cy + o.power.cy,
     },
     name: { ...CARD.name, cy: CARD.name.cy + o.name },
-    description: { ...CARD.description, cy: CARD.description.cy + o.class },
+    description: {
+      ...CARD.description,
+      classFull: {
+        ...CARD.description.classFull,
+        cy: CARD.description.classFull.cy + o.class,
+      },
+      classTight: {
+        ...CARD.description.classTight,
+        cy: CARD.description.classTight.cy + o.class,
+      },
+      flavor: {
+        ...CARD.description.flavor,
+        cy: CARD.description.flavor.cy + o.class,
+      },
+    },
     elementIcon: {
       ...CARD.elementIcon,
       cx: CARD.elementIcon.cx + o.element.cx,
@@ -272,17 +305,17 @@ function cardLayoutForRarityCatalog(abbrev) {
 }
 
 const legacyPngByAbbrev = {
-  N: ['N.png', 'NORMAL.png'],
-  C: ['C.png', 'COMMON.png', 'c.png'],
-  UC: ['UC.png', 'UNCOMMON.png', 'uc.png'],
-  R: ['R.png', 'RARE.png', 'r.png'],
-  U: ['U.png'],
-  SR: ['SR.png', 'SUPER_RARE.png'],
-  SSR: ['SSR.png'],
-  SUR: ['SUR.png'],
+  N: ['N.png', 'normal.png'],
+  C: ['C.png', 'common.png', 'c.png'],
+  UC: ['UC.png', 'uncommon.png', 'uc.png'],
+  R: ['R.png', 'rare.png', 'r.png'],
+  U: ['U.png', 'ultimate.png'],
+  SR: ['SR.png', 'super_rare.png'],
+  SSR: ['SSR.png', 'super_super_rare.png'],
+  SUR: ['SUR.png', 'super_ultra_rare.png'],
   UR: ['UR.png', 'ultra_rare.png'],
-  L: ['L.png', 'LEGENDARY.png', 'l.png'],
-  M: ['M.png', 'MYTHIC.png', 'm.png', 'MYTHIC.PNG'],
+  L: ['L.png', 'legendary.png', 'l.png'],
+  M: ['M.png', 'mythic.png', 'm.png', 'mythic.png'],
 };
 
 /**
@@ -556,35 +589,53 @@ function wrapTextToLines(ctx, upperText, maxW) {
 /**
  * Word-wrapped, vertically centered text in the description box (class / flavor on catalog art).
  * Shrinks type if the block would exceed the box height.
+ * @param {{ uppercase?: boolean, maxChars?: number|null, textAnchor?: 'center' | 'blockLeft' }} [opts] —
+ *   `blockLeft` left-aligns each line within [cx − maxWidth/2, cx + maxWidth/2] so the visual center
+ *   of a line is not the horizontal anchor (avoids “empty” space glyph at the middle of a wide panel).
  */
 function drawGlowingTextWrappedInBox(ctx, text, d, {
   fontForSize = (px) => `${px}px ui-sans-serif, system-ui, sans-serif`,
   fillColor,
   outerColor,
   minFontSize = 18,
+  uppercase = true,
+  maxChars = null,
+  textAnchor = 'center',
 } = {}) {
-  const raw = String(text || '').trim();
+  let raw = String(text || '').trim();
+  if (maxChars != null && maxChars > 0 && raw.length > maxChars) {
+    raw = raw.slice(0, maxChars);
+  }
   if (!raw) return;
 
-  const upper = raw.toUpperCase();
-  const maxLines = Math.max(1, Math.floor(d.h / d.lineHeight));
+  const display = uppercase ? raw.toUpperCase() : raw;
   const maxW = d.maxWidth;
   let fontSize = d.fontSize;
+
+  /** Vertical step between baselines: prefer explicit `d.lineHeight` when it’s ≥ the font, else 1.2em so tall `fontSize` isn’t negated by a tiny fixed `lineHeight` (and `maxLines` is recomputed with the *current* font in the shrink loop). */
+  const lineStepFor = (size) => {
+    if (d.lineHeight >= size) return d.lineHeight;
+    return Math.max(d.lineHeight, size * 1.2);
+  };
+  const maxBoxLines = (size) => Math.max(1, Math.floor(d.h / lineStepFor(size)));
 
   const buildLines = (size) => {
     const fontStr = fontForSize(size);
     ctx.save();
     ctx.font = fontStr;
-    const lines = wrapTextToLines(ctx, upper, maxW);
+    const lines = wrapTextToLines(ctx, display, maxW);
     ctx.restore();
     return { font: fontStr, lines };
   };
 
   let { font, lines } = buildLines(fontSize);
-  const lh = d.lineHeight;
+  let lh = lineStepFor(fontSize);
+  let maxLines = maxBoxLines(fontSize);
   while (lines.length > maxLines && fontSize > minFontSize) {
-    fontSize -= 2;
+    fontSize -= 1;
     ({ font, lines } = buildLines(fontSize));
+    lh = lineStepFor(fontSize);
+    maxLines = maxBoxLines(fontSize);
   }
   if (lines.length > maxLines) {
     lines = lines.slice(0, maxLines);
@@ -601,15 +652,20 @@ function drawGlowingTextWrappedInBox(ctx, text, d, {
 
   const n = lines.length;
   const startCy = d.cy - ((n - 1) * lh) / 2;
+  const leftX = d.cx - d.maxWidth / 2;
   for (let i = 0; i < n; i += 1) {
     const cy = startCy + i * lh;
-    drawGlowingTextCentered(ctx, lines[i], d.cx, cy, {
-      font,
-      fillColor,
-      outerColor,
-      maxWidth: maxW,
-      minFontSize,
-    });
+    if (textAnchor === 'blockLeft') {
+      drawGlowingTextLeft(ctx, lines[i], leftX, cy, { font, fillColor, outerColor });
+    } else {
+      drawGlowingTextCentered(ctx, lines[i], d.cx, cy, {
+        font,
+        fillColor,
+        outerColor,
+        maxWidth: maxW,
+        minFontSize,
+      });
+    }
   }
 }
 

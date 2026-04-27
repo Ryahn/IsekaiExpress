@@ -7,8 +7,7 @@
  * Null Ward (holder’s consumable) are not opponent effects and are not passed through these opts.
  */
 const { elementAtkMultiplier, DISPLAY_LABEL } = require('../src/bot/tcg/elements');
-const { sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
-const { rarityRank } = require('../src/bot/tcg/rarityOrder');
+const { sanitizeRarityAbbrev, rarityRank } = require('../src/bot/tcg/rarityOrder');
 const { damageForHit } = require('./tcgCombatMath');
 const { pickRandomAbilityKeyForRarity, byTier } = require('../src/bot/tcg/abilityPools');
 

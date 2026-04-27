@@ -1,6 +1,5 @@
 const db = require('../database/db');
-const { sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
-const { rarityRank, RARITY_ORDER } = require('../src/bot/tcg/rarityOrder');
+const { sanitizeRarityAbbrev, rarityRank, RARITY_ORDER } = require('../src/bot/tcg/rarityOrder');
 const { rollRarity } = require('./tcgRarityRoll');
 const tcgEconomy = require('./tcgEconomy');
 const tcgCollectionSets = require('./tcgCollectionSets');
@@ -351,11 +350,11 @@ async function buyAdvancedPack(client, discordUser) {
 
       const pityBefore = Number(w.tcg_advanced_pack_pity) || 0;
       const mustPity = pityBefore >= ADVANCED_PACK_PITY_FORCE_AT;
-      let gotEpicPlus = false;
+      let gotSsrPlus = false;
       const pulls = [];
       for (let i = 0; i < ADVANCED_PACK_COUNT; i += 1) {
         const forceSsr =
-          mustPity && !gotEpicPlus && i === ADVANCED_PACK_COUNT - 1
+          mustPity && !gotSsrPlus && i === ADVANCED_PACK_COUNT - 1
             ? { forceRarity: PITY_FORCE_ADVANCED_ABBREV }
             : {};
         const template = await pickPackTemplateFromDbRarity(
@@ -377,10 +376,10 @@ async function buyAdvancedPack(client, discordUser) {
           throw new Error('PACK_ABORT');
         }
         pulls.push(g);
-        if (templateIsSsrOrHigher(template)) gotEpicPlus = true;
+        if (templateIsSsrOrHigher(template)) gotSsrPlus = true;
       }
 
-      const pityAfter = gotEpicPlus ? 0 : pityBefore + 1;
+      const pityAfter = gotSsrPlus ? 0 : pityBefore + 1;
       const ts = nowUnix();
       const newGold = gold - ADVANCED_PACK_COST;
       await trx('user_wallets').where({ user_id: internalId }).update({

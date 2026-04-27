@@ -1,5 +1,5 @@
 const db = require('../database/db');
-const { sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
+const { sanitizeRarityAbbrev } = require('../src/bot/tcg/rarityOrder');
 const { normalizeElementKey } = require('../src/bot/tcg/elements');
 const tcgEconomy = require('./tcgEconomy');
 const {

@@ -7,8 +7,11 @@ const logger = require('./libs/logger');
 const BATCH_RARITY_KEYS = [...RARITY_ORDER];
 
 const batchFilePath = process.argv[2];
+const skipDb = process.argv.includes('--skip-db');
 
-logger.startup(`Processing batch from ${batchFilePath}...`);
+logger.startup(
+  `Processing batch from ${batchFilePath}${skipDb ? ' (--skip-db)' : ''}...`,
+);
 
 (async () => {
   try {
@@ -35,6 +38,8 @@ logger.startup(`Processing batch from ${batchFilePath}...`);
           character.type,
           character.discord_id,
           elementId,
+          null,
+          { skipDb, cardDescription: character.description },
         );
         logger.info(`Generated card: ${card.outputPath}`);
       }

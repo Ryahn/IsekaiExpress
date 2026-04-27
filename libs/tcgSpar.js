@@ -1,5 +1,6 @@
 const db = require('../database/db');
-const { statLevelMultiplier, sanitizeRarityAbbrev } = require('../src/bot/tcg/cardLayout');
+const { statLevelMultiplier } = require('../src/bot/tcg/cardLayout');
+const { sanitizeRarityAbbrev } = require('../src/bot/tcg/rarityOrder');
 const tcgEconomy = require('./tcgEconomy');
 const tcgInventory = require('./tcgInventory');
 const tcgLoadout = require('./tcgLoadout');

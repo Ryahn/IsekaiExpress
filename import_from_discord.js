@@ -16,6 +16,9 @@ const { RARITY_ORDER } = require('./src/bot/tcg/rarityOrder');
  *
  * `rarity` uses flags per tier; `powerByRarity` matches the design doc (level 1). Omit top-level
  * `power` so the batch uses `powerByRarity` per key (see [batch_worker.js](batch_worker.js)).
+ *
+ * `description` (card blurb) is **preserved** from each existing `*_data.json` by `discord_id` when
+ * you re-run this script; new members get `TBD` until you edit the file.
  */
 
 const CARD_CLASSES = {
@@ -42,17 +45,38 @@ function getAvatar(avatar, userId) {
     : 'https://cdn.discordapp.com/embed/avatars/0.png';
 }
 
-function buildHeroRow(member, classKey) {
+function buildHeroRow(member, classKey, description) {
   return {
     name: member.username,
     discord_id: member.discord_id,
     type: 'hero',
     class: CARD_CLASSES[classKey],
     level: 1,
+    description: description != null && String(description).trim() !== '' ? String(description).trim() : 'TBD',
     powerByRarity: { ...POWER_SCORE_L1 },
     avatar: getAvatar(member.avatar, member.user_id),
     rarity: { ...ALL_TIERS_ON },
   };
+}
+
+/** Keep hand-written card blurbs when re-importing role rosters. */
+function descriptionsByIdFromFile(filePath) {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) return new Map();
+    const map = new Map();
+    for (const row of data) {
+      if (!row || row.discord_id == null) continue;
+      const d = row.description;
+      if (d == null) continue;
+      const s = String(d).trim();
+      if (s.length) map.set(String(row.discord_id), s);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
 }
 
 function logError(context, err) {
@@ -138,11 +162,16 @@ client.once('clientReady', async () => {
     ];
 
     await Promise.all(
-      outputFiles.map(({ file, classKey, members }) => {
-        const data = members.map((m) => buildHeroRow(m, classKey));
+      outputFiles.map(async ({ file, classKey, members }) => {
         const target = path.join(tcgDir, file);
+        const previousDesc = descriptionsByIdFromFile(target);
+        const data = members.map((m) => {
+          const id = String(m.discord_id);
+          const desc = previousDesc.has(id) ? previousDesc.get(id) : 'TBD';
+          return buildHeroRow(m, classKey, desc);
+        });
         return fs.promises.writeFile(target, JSON.stringify(data, null, 2), 'utf8');
-      })
+      }),
     );
 
     const counts = outputFiles

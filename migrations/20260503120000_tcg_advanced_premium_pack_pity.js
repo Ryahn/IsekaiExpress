@@ -1,6 +1,6 @@
 /**
  * Advanced / Premium pack pity — [CardSystem.md]
- * - Advanced: 10 packs without Epic → Epic on 10th (counter force at >= 9)
+ * - Advanced: 10 packs without SSR+ → SSR on 10th pack’s last pull (counter force at >= 9)
  * - Premium: 20 packs without Legendary → Legendary on 20th (>= 19)
  * - Premium: 50 packs without Mythic → Mythic on 50th (>= 49)
  */

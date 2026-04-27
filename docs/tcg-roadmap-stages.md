@@ -6,6 +6,22 @@ This file lists **what is not yet implemented** (or only partially matches the d
 
 ---
 
+## Foundations — card art, rarity model, rolls (aligned with current code)
+
+The following is **implemented** and is the source of truth when [CardSystem.md](../CardSystem.md) still mentions older terms (e.g. “Epic”, six-tier normalization, or `EP`):
+
+- **Catalog PNG layout** — `src/bot/tcg/cardLayout.js` (`CARD` geometry: portrait, name, description/class, element icon, rarity star row). Base frames under `tools/base_card/` use stems from `seeds/rarity.js` (`name` → snake_case `.png`, e.g. `ultra_rare.png`). Stars: `tools/star.png`, counts from seed `stars`.
+- **11 first-class abbreviations** — `N, C, UC, R, U, SR, SSR, SUR, UR, L, M`. **`card_data.rarity`** and **`rarity.abbreviation`** store this string verbatim (no `normalizeRarityKey` / legacy bridge).
+- **Single ordering / comparisons** — `src/bot/tcg/rarityOrder.js` (`RARITY_ORDER`, `rarityRank`, `sanitizeRarityAbbrev`, `isRareOrBetter`, `nextRarityInOrder`). Use this everywhere for “Rare+”, pity tiers, synergy, ability pools, PvE/PvP checks—not ad-hoc tier lists.
+- **Weighted rolls** — `rarity.weight` (+ `stars`) from seeds/DB; `libs/tcgRarityRoll.js` (`rollRarity`) with `libs/tcgRarityModifiers.js` for region/tier multipliers. Migration: `20260627120000_tcg_rarity_weight.js` (drops `high_chance` / `low_chance`).
+- **Packs** — `libs/tcgPacks.js`: DB-driven weights; Basic pity = no **UC** in 9 consecutive packs (force UC); Advanced pity = no **SSR+** in 9 consecutive packs (force **SSR**); Premium separate L/M counters (see code constants).
+- **Direct gold buy** — `libs/tcgDirectBuy.js`: **`L` and `M` are not purchasable** (drops / trade only); explicit guard + user-facing error. Other abbrevs have a gold map.
+- **Batch / import** — All 11 abbrevs available where the pipeline enumerates rarities (e.g. `batch_worker` / import flags derived from `RARITY_ORDER`).
+
+When auditing doc vs code, grep CardSystem for **Epic** / **EP** / **six** tiers and prefer the modules above.
+
+---
+
 ## Stage 1 — Combat engine: passives, class identity, items
 
 **Status:** Implemented (run migration `20260524120000_tcg_set_titles_catalog_signatures.js` for titles + catalog signatures).
@@ -143,9 +159,9 @@ Aligned today: targeted offer/accept, upfront price, duration, optional max batt
 
 ## Stage 10 — QA passes tied to doc tables
 
-- **Pack pity numbers** — [CardSystem.md § Pack Pity System](../CardSystem.md): Basic 10 without UC → guarantee; Advanced 10 without EP; Premium 20 L / 50 M — verify against `libs/tcgPacks.js` and wallet columns.
-- **Direct buy & pack costs** — Compare all gold values in [CardSystem.md § Card Acquisition](../CardSystem.md) to `tcgPacks` / `tcgDirectBuy`.
-- **PvE gold table** — [CardSystem.md § Gold Sources](../CardSystem.md) tier bands vs `tcgPveConfig` `baseGoldForTier` / boss / clear bonuses.
+- **Pack pity numbers** — [CardSystem.md § Pack Pity System](../CardSystem.md) may still say “Epic”; code uses **SSR+** for Advanced pity (counter ≥9 forces **SSR** on last pull of the 10th pack). Basic: no **UC** across packs (counter ≥9). Premium: separate **Legendary** and **Mythic** counters (`>= 19` / `>= 49`). Verify against `libs/tcgPacks.js` and `user_wallets` pity columns.
+- **Direct buy & pack costs** — Compare all gold values in [CardSystem.md § Card Acquisition](../CardSystem.md) to `libs/tcgPacks.js` / `libs/tcgDirectBuy.js`. Confirm doc states **L/M not sold for gold** if it still lists six buyable tiers only.
+- **PvE gold table** — [CardSystem.md § Gold Sources](../CardSystem.md) tier bands vs `libs/tcgPveConfig.js` `baseGoldForTier` / boss / clear bonuses.
 
 ---
 
@@ -160,3 +176,4 @@ Aligned today: targeted offer/accept, upfront price, duration, optional max batt
 ## Related project docs
 
 - [`docs/tcg-stage0-foundations.md`](tcg-stage0-foundations.md) — early slash/ERD mapping (may predate current code; use CardSystem + codebase as source of truth for behavior).
+- [`cursor_card_layout_updates_for_new_card.md`](../cursor_card_layout_updates_for_new_card.md) — design notes for the current `tools/base_card` template, star row, and 11-abbrev rollout (historical Cursor export; **code** in `cardLayout.js` / `seeds/rarity.js` wins if they differ).
