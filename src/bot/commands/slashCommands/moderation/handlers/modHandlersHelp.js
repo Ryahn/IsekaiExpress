@@ -6,7 +6,7 @@ async function helpDocsExecute(client, interaction) {
   const href = `${publicBase}/modhelp`;
   return interaction.editReply({
     content: [
-      `**Mod commands documentation (web)**\n${href}`,
+      `**Mod commands documentation (web)**\n<${href}>`,
       'Log in to the control panel with Discord. This page is only for users with the configured **Staff** or **Mod** role.',
     ].join('\n'),
     ephemeral: true,
