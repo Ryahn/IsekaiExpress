@@ -46,6 +46,38 @@ function requireStaff(req, res, next) {
   return next();
 }
 
+function requireStaffPage(req, res, next) {
+  if (!req.session?.loggedin) return res.redirect('/auth/login');
+  if (!isStaff(req)) return res.status(403).send('Staff only');
+  return next();
+}
+
+function normalizePair(charName, gameName) {
+  return {
+    charNorm: (charName || '').trim().toLowerCase(),
+    gameNorm: (gameName || '').trim().toLowerCase(),
+  };
+}
+
+async function isBlocklisted(charName, gameName) {
+  const { charNorm, gameNorm } = normalizePair(charName, gameName);
+  if (!charNorm || !gameNorm) return false;
+  const rows = await db.sql(
+    'SELECT id FROM char_vote_blocklist WHERE char_name_norm = ? AND game_name_norm = ? LIMIT 1',
+    [charNorm, gameNorm],
+  );
+  return rows.length > 0;
+}
+
+async function addToBlocklistFromSubmission(sub) {
+  const { charNorm, gameNorm } = normalizePair(sub.char_name, sub.game_name);
+  await db.sql(
+    `INSERT IGNORE INTO char_vote_blocklist (char_name_norm, game_name_norm, char_name, game_name, source_submission_id)
+     VALUES (?, ?, ?, ?, ?)`,
+    [charNorm, gameNorm, sub.char_name, sub.game_name, sub.id],
+  );
+}
+
 async function getActiveSeason() {
   const rows = await db.sql(
     "SELECT * FROM char_seasons WHERE status = 'active' ORDER BY id DESC LIMIT 1",
@@ -53,18 +85,45 @@ async function getActiveSeason() {
   return rows[0] || null;
 }
 
+router.get('/admin/seasons', requireStaffPage, async (req, res) => {
+  try {
+    const seasons = await db.sql(`
+      SELECT s.id, s.name, s.status, s.closed_at, s.created_at,
+        (SELECT COUNT(*) FROM char_submissions c WHERE c.season_id = s.id) AS submission_count
+      FROM char_seasons s
+      ORDER BY s.id DESC
+    `);
+    res.render('char_voting_seasons_admin', {
+      user: req.session?.user || null,
+      csrfToken: req.session?.csrf || '',
+      seasons,
+    });
+  } catch (err) {
+    console.error('char_voting admin/seasons error', err);
+    res.status(500).send('Server error');
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
-    const season = await getActiveSeason();
+    const activeSeason = await getActiveSeason();
+    let viewingPastSeason = false;
+    let displaySeason = activeSeason;
 
-    // If no active season, show the most recently closed one (read-only)
-    let displaySeason = season;
-    if (!displaySeason) {
-      const closed = await db.sql(
-        "SELECT * FROM char_seasons WHERE status = 'closed' ORDER BY id DESC LIMIT 1",
+    const seasonIdParam = req.query.season ? parseInt(req.query.season, 10) : NaN;
+    if (Number.isFinite(seasonIdParam) && isStaff(req)) {
+      const rows = await db.sql('SELECT * FROM char_seasons WHERE id = ?', [seasonIdParam]);
+      if (!rows.length) return res.status(404).send('Season not found');
+      displaySeason = rows[0];
+      viewingPastSeason = !activeSeason || displaySeason.id !== activeSeason.id;
+    } else if (!displaySeason) {
+      const rows = await db.sql(
+        "SELECT * FROM char_seasons WHERE status IN ('closed', 'complete') ORDER BY id DESC LIMIT 1",
       );
-      displaySeason = closed[0] || null;
+      displaySeason = rows[0] || null;
     }
+
+    const seasonActive = !!(displaySeason && displaySeason.status === 'active');
 
     let cards = [];
     let userSubmitted = false;
@@ -111,7 +170,8 @@ router.get('/', async (req, res) => {
       csrfToken: req.session?.csrf || '',
       isAdmin: isStaff(req),
       season: displaySeason,
-      seasonActive: !!season,
+      seasonActive,
+      viewingPastSeason,
       cards,
       userSubmitted,
     });
@@ -139,6 +199,15 @@ router.post('/submit', requireLogin, (req, res, next) => {
     const { char_name, game_name } = req.body;
     if (!char_name || !game_name || !req.file) {
       return res.status(400).json({ error: 'All fields and an image are required.' });
+    }
+
+    const cn = char_name.trim();
+    const gn = game_name.trim();
+    if (await isBlocklisted(cn, gn)) {
+      if (filePath) fs.unlink(filePath, () => {});
+      return res.status(400).json({
+        error: 'This character is already on the approved list and cannot be nominated again.',
+      });
     }
 
     const userId = req.session.user.id;
@@ -170,7 +239,7 @@ router.post('/submit', requireLogin, (req, res, next) => {
     const user = req.session.user;
     await db.sql(
       'INSERT INTO char_submissions (season_id, discord_user_id, username, avatar, char_name, game_name, image_filename) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [season.id, user.id, user.username, user.avatar || null, char_name.trim(), game_name.trim(), req.file.filename],
+      [season.id, user.id, user.username, user.avatar || null, cn, gn, req.file.filename],
     );
 
     res.json({ success: true });
@@ -196,12 +265,15 @@ router.post('/vote/:id', requireLogin, async (req, res) => {
       return res.status(400).json({ error: 'Invalid vote type' });
     }
 
-    // Confirm submission belongs to the active season
     const sub = await db.sql(
-      'SELECT id FROM char_submissions WHERE id = ? AND season_id = ?',
+      'SELECT id, char_name, game_name FROM char_submissions WHERE id = ? AND season_id = ?',
       [submissionId, season.id],
     );
     if (!sub.length) return res.status(400).json({ error: 'Submission not in active season' });
+
+    if (await isBlocklisted(sub[0].char_name, sub[0].game_name)) {
+      return res.status(400).json({ error: 'This nomination cannot be voted on.' });
+    }
 
     const existing = await db.sql(
       'SELECT vote_type FROM char_votes WHERE submission_id = ? AND discord_user_id = ?',
@@ -270,6 +342,41 @@ router.post('/delete/:id', requireStaff, async (req, res) => {
   }
 });
 
+router.post('/approve/:id', requireStaff, async (req, res) => {
+  try {
+    const submissionId = parseInt(req.params.id, 10);
+    const seasonIdBody = req.body.season_id != null ? parseInt(req.body.season_id, 10) : null;
+
+    const subs = await db.sql(
+      `SELECT s.*, se.status AS season_status
+       FROM char_submissions s
+       INNER JOIN char_seasons se ON se.id = s.season_id
+       WHERE s.id = ?`,
+      [submissionId],
+    );
+    if (!subs.length) return res.status(404).json({ error: 'Submission not found' });
+
+    const sub = subs[0];
+    if (Number.isFinite(seasonIdBody) && sub.season_id !== seasonIdBody) {
+      return res.status(400).json({ error: 'Submission does not belong to this season.' });
+    }
+    if (sub.season_status !== 'complete') {
+      return res.status(400).json({ error: 'Season must be marked complete before approving nominations.' });
+    }
+    if (sub.status === 'approved') {
+      return res.json({ success: true, already: true });
+    }
+
+    await db.sql("UPDATE char_submissions SET status = 'approved' WHERE id = ?", [submissionId]);
+    await addToBlocklistFromSubmission(sub);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('char_voting approve error', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── Season management (staff only) ─────────────────────────
 
 router.post('/season/start', requireStaff, async (req, res) => {
@@ -277,7 +384,15 @@ router.post('/season/start', requireStaff, async (req, res) => {
     const name = (req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Season name is required.' });
 
-    // Close any currently active season
+    const finished = await db.sql(
+      "SELECT status FROM char_seasons WHERE status IN ('closed', 'complete') ORDER BY id DESC LIMIT 1",
+    );
+    if (finished[0]?.status === 'closed') {
+      return res.status(400).json({
+        error: 'Mark the most recent closed season complete before starting a new one.',
+      });
+    }
+
     await db.sql(
       "UPDATE char_seasons SET status = 'closed', closed_at = NOW() WHERE status = 'active'",
     );
@@ -307,6 +422,28 @@ router.post('/season/close', requireStaff, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('char_voting season/close error', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/season/complete', requireStaff, async (req, res) => {
+  try {
+    const seasonId = parseInt(req.body.season_id, 10);
+    if (!Number.isFinite(seasonId)) {
+      return res.status(400).json({ error: 'season_id is required.' });
+    }
+
+    const rows = await db.sql('SELECT id, status FROM char_seasons WHERE id = ?', [seasonId]);
+    if (!rows.length) return res.status(404).json({ error: 'Season not found' });
+    if (rows[0].status !== 'closed') {
+      return res.status(400).json({ error: 'Only a closed season can be marked complete.' });
+    }
+
+    await db.sql("UPDATE char_seasons SET status = 'complete' WHERE id = ?", [seasonId]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('char_voting season/complete error', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

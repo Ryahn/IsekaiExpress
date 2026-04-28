@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Past seasons — CharVote</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Syne', 'sans-serif'],
+            body: ['DM Sans', 'sans-serif'],
+          },
+          colors: {
+            obsidian: {
+              950: '#06070f',
+              900: '#0b0d1a',
+              800: '#10142b',
+              700: '#171c38',
+              600: '#1e2444',
+            },
+            discord: '#5865F2',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-family: 'DM Sans', sans-serif; }
+    h1, .font-display { font-family: 'Syne', sans-serif; }
+  </style>
+</head>
+<body class="bg-obsidian-950 text-slate-200 min-h-screen">
+  <header class="border-b border-white/5 bg-obsidian-900/80 backdrop-blur-md">
+    <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/char_voting" class="flex items-center gap-3 group">
+        <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-display font-bold text-sm group-hover:bg-indigo-500 transition-colors">CV</div>
+        <span class="font-display font-700 text-lg tracking-tight text-white">Char<span class="text-indigo-400">Vote</span></span>
+      </a>
+      {% if user %}
+        <div class="flex items-center gap-2 text-sm text-slate-400">
+          <span>{{ user.username }}</span>
+        </div>
+      {% endif %}
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 py-10">
+    <div class="mb-8">
+      <h1 class="font-display text-3xl font-800 text-white mb-2 tracking-tight">Past seasons</h1>
+      <p class="text-slate-400 text-sm max-w-xl">Open any season to mark it complete, approve winners for the blocklist, or remove entries.</p>
+    </div>
+
+    <div class="bg-obsidian-800 border border-white/8 rounded-2xl overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-white/8 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <th class="px-4 py-3">ID</th>
+            <th class="px-4 py-3">Name</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3">Nominations</th>
+            <th class="px-4 py-3">Closed</th>
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in seasons %}
+          <tr class="border-b border-white/5 hover:bg-white/[0.02]">
+            <td class="px-4 py-3 text-slate-500 font-mono">{{ row.id }}</td>
+            <td class="px-4 py-3 text-white font-medium">{{ row.name }}</td>
+            <td class="px-4 py-3">
+              {% if row.status == 'active' %}
+                <span class="text-emerald-400 text-xs font-semibold">Active</span>
+              {% elif row.status == 'closed' %}
+                <span class="text-amber-400/90 text-xs font-semibold">Closed</span>
+              {% else %}
+                <span class="text-violet-400 text-xs font-semibold">Complete</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-slate-400">{{ row.submission_count }}</td>
+            <td class="px-4 py-3 text-slate-500 text-xs">
+              {% if row.closed_at %}{{ row.closed_at }}{% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-3 text-right">
+              <a href="/char_voting?season={{ row.id }}"
+                class="inline-flex text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
+                Open →
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if seasons | length == 0 %}
+        <p class="px-4 py-12 text-center text-slate-600 text-sm">No seasons yet.</p>
+      {% endif %}
+    </div>
+
+    <p class="mt-6">
+      <a href="/char_voting" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">← Back to Character Voting</a>
+    </p>
+  </main>
+</body>
+</html>
