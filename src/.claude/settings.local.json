@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/ryanc/Documents/sites/f95bot/**)",
+      "Bash(npm install *)"
+    ]
+  }
+}

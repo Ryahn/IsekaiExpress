@@ -91,6 +91,102 @@ On a boss kill, in addition to the standard rarity-rolled pool drop, there is a 
 
 ---
 
+## Class System (Locked)
+
+**Seven classes.** Each has a standalone passive. No diversity bonus — scales to any number of classes cleanly.
+
+| Class | Passive | Notes |
+|---|---|---|
+| **Guardian** | −5% incoming damage | Standard class |
+| **Artisan** | +5% outgoing damage | Standard class |
+| **Commander** | +3% battle gold | Standard class; applies PvE, spar, PvP |
+| **Phantom** | +8% SPD, wins all speed ties | Standard class |
+| **Sage** | +5% ability proc chance | Standard class |
+| **Warden** | +8% HP (simple form until round-end hooks exist) | Standard class; upgrade to 5% HP recovery/round when sim supports end-of-round hooks |
+| **Sovereign** | +4% to all stats | **Exclusive to Staff, Mod, Uploader cards only. Never assigned to member/anime/game cards.** |
+
+Class is baked on the PNG and stored in `card_data.class`. **Immutable after generation — no rerolling class.**
+
+**Sovereign exclusivity rule:** `create_card.js` / `master.js` must enforce that `class = 'Sovereign'` is only assignable when `card_data.source` is `staff`, `mod`, or `uploader`. Batch pipeline throws if this is violated.
+
+---
+
+## Card Types (Locked)
+
+All cards share the same rarity, element, class, and ability system. `source` is a flag for filtering, display, and gating.
+
+**`card_data.source` values:**
+
+| Value | Who | Rarity floor | Class pool |
+|---|---|---|---|
+| `member` | Regular F95Zone members | None | Guardian / Artisan / Commander / Phantom / Sage / Warden |
+| `staff` | Site staff | SSR minimum | Sovereign only |
+| `mod` | Moderators | SR minimum | Sovereign only |
+| `uploader` | Game uploaders | SR minimum | Sovereign only |
+| `anime` | Anime characters | None | Standard pool |
+| `game` | F95Zone game characters | None | Standard pool |
+
+**Rarity floor enforcement:** batch pipeline rerolls or hard-overrides until the rolled rarity meets the source minimum. Staff/Mod/Uploader cards are never generated below their floor.
+
+**Shared systems:** all source types use the same element pool, ability system, Fusion, Forge, Regrade, Expedition, and drop mechanics.
+
+---
+
+## Element Synergy System (Locked)
+
+Checked once at battle start from loadout composition. All bonuses apply to the **lead card only**. Class passives stack on top.
+
+**10 elements:** Fire, Water, Earth, Wind, Lightning, Ice, Dark, Light, Void, Time
+
+### Tier 1 — Elemental Focus
+Triggered when 2+ cards in the loadout share the lead card's element.
+
+| Cards matching lead element | Bonus |
+|---|---|
+| 2 | +3% to lead's primary stat |
+| 3 | +6% |
+| 4 | +9% |
+| 5 (full mono) | +15% + free Tier 1 ability proc on round 1 |
+
+Primary stat resolved by class at runtime: ATK for Artisan/Phantom, DEF for Guardian/Warden, SPD for Phantom (secondary), HP for Warden (secondary). Full mono is high-reward but leaves you exposed to elemental counters — intentional tradeoff.
+
+### Tier 2 — Elemental Pairs
+Triggered when loadout contains at least 1 card of each paired element. Triggers once maximum regardless of how many of each element are present.
+
+| Pair | Bonus |
+|---|---|
+| Fire + Wind | +8% ATK |
+| Water + Ice | +8% DEF |
+| Lightning + Void | +8% SPD |
+| Earth + Time | +5% HP, +5% DEF |
+| Dark + Light | +10% ATK, −5% DEF |
+| Fire + Ice | −5% ATK, +12% DEF |
+| Water + Lightning | +8% ATK, −3% DEF |
+| Dark + Time | +6% SPD, +6% ATK |
+| Light + Wind | +10% SPD |
+| Earth + Void | +8% HP |
+
+### Tier 3 — Elemental Trinity
+Triggered when loadout contains at least 1 card of each of three specific elements. If multiple Trinities qualify, highest total bonus value wins.
+
+| Trinity | Name | Effect |
+|---|---|---|
+| Fire + Wind + Lightning | **Storm Front** | +12% ATK, ability proc chance +15% |
+| Water + Ice + Earth | **Glacial Fortress** | +15% DEF, first hit received this battle negated |
+| Dark + Void + Time | **Entropy** | +10% ATK, +10% SPD, enemy DEF −8% |
+| Light + Wind + Lightning | **Radiant Surge** | +15% SPD, +8% ATK |
+| Earth + Fire + Time | **Forged Legacy** | +10% DEF, +10% HP, +5% gold |
+| Water + Dark + Void | **Abyssal Tide** | +12% ATK, enemy ability proc chance −10% |
+
+### Stacking Rules
+- Tier 1 + Tier 2 **can** stack (e.g. Fire mono loadout with a Wind card gets both Focus and Fire+Wind pair)
+- Tier 3 **replaces** Tier 2 if the Trinity covers the same pair — you don't get both
+- Trinity + Focus **can** stack if lead's element is part of the Trinity
+- All synergy resolved once at battle start, passed into combat opts as flat multipliers
+- Implementation: `libs/tcgSynergy.js` — new `resolveElementSynergy(loadout, lead)` function
+
+---
+
 ## Rarity System (Locked)
 
 **11 first-class abbreviations (canonical order, lowest → highest):**
@@ -158,7 +254,7 @@ N, C, UC, R, U, SR, SSR, SUR, UR, L, M
 - [x] `libs/tcgPacks.js`: DB-driven weights, `where({ rarity: rolled.abbreviation })`; pity counters use abbreviations
 - [x] `libs/tcgPve.js`: boss drop pools use `rollRarity` + `where({ rarity: rolled.abbreviation })`; `normalizeRarityKey` gone
 - [-] `libs/tcgDirectBuy.js`: purchasable tiers only; explicit `L`/`M` block + user error message — uses `DIRECT_BUY_DROPS_ONLY` Set (not the literal name `DIRECT_BUY_BANNED_RARITIES`).
-- [x] `libs/tcgInventory.js`: `nextRarityTier()` delegates to `nextRarityInOrder()` / `sanitizeRarityAbbrev()` from `rarityOrder.js` (no separate bump-order symbol)
+- [x] `libs/tcgInventory.js`: `nextRarityTier()` delegates to `nextRarityInOrder()` / `sanitizeRarityAbbrev()` from `rarityOrder.js` (no `RARITY_BUMP_ORDER` symbol)
 - [x] `libs/tcgSynergy.js`: `RARITY_ORDER` + `rarityRank` from `rarityOrder.js`
 - [x] `libs/tcgAbilityBattle.js`: `rarityIdx` uses `rarityRank`; no `normalizeRarityKey`
 - [x] `libs/tcgPvp.js`, `libs/tcgSpar.js`: Mythic checks via `sanitizeRarityAbbrev`
@@ -194,7 +290,7 @@ N, C, UC, R, U, SR, SSR, SUR, UR, L, M
 - [x] Daily login claim with XP/gold hooks
 - [x] Battle XP hooks (PvE/PvP)
 - [x] First-win-of-day bonus
-- [x] Message XP: 15 XP default (`xp_settings.min/max_xp_per_gain`), per-channel cooldown (`message_xp_cooldown_seconds`, default 60s) — `libs/xpSystem.js`; migration `20260629120000_xp_settings_message_cooldown.js`
+- [x] Message XP: 15 XP default (`xp_settings` min/max), per-channel cooldown (`message_xp_cooldown_seconds`, default 60s) — `libs/xpSystem.js`; migration `20260629120000_xp_settings_message_cooldown.js`
 - [x] Gold sources table matches `CardSystem.md § Gold Sources` (lending: upfront fee + 40%/60% lender/borrower split on PvE & spar wins with borrowed copy)
 - [x] TCG XP booster doubles message XP
 
@@ -212,10 +308,23 @@ All operations use `card_data_id` + `user_cards` instance row. Never regenerate 
 - [x] Elemental reroll
 - [x] `list_all_cards` pagination/search working for large `card_data` (~110 templates × members)
 - [ ] Loadout lock enforced during active/pending PvP/PvE session
-- [ ] **Class Diversity Bonus** — `libs/tcgSynergy.js` checks loadout for 1× each class before battle sim
-- [ ] Class Diversity Bonus: Guardian lead +5% DEF, Artisan lead +5% ATK, Commander lead +5% gold — stacks with individual class passive
-- [ ] Class Diversity Bonus applies to PvE, spar, and PvP
-- [ ] Embed shows diversity bonus active (e.g. "Class Synergy ✓") when triggered
+
+#### Class System
+- [ ] `card_data.class` updated to support all 7 classes: Guardian, Artisan, Commander, Phantom, Sage, Warden, Sovereign
+- [ ] `card_data.source` column added: enum `member / staff / mod / uploader / anime / game`
+- [ ] Sovereign class assignment restricted to `source IN (staff, mod, uploader)` — enforced in batch pipeline with a hard throw on violation
+- [ ] Rarity floor enforcement in batch pipeline: staff SSR minimum, mod/uploader SR minimum
+- [ ] Class passives applied in combat sim (Guardian −5% incoming, Artisan +5% outgoing, Commander +3% gold, Phantom +8% SPD + tie-win, Sage +5% proc chance, Warden +8% HP, Sovereign +4% all stats)
+- [ ] Warden round-end HP recovery (5%/round) flagged as future upgrade — requires end-of-round hook in sim
+
+#### Element Synergy
+- [ ] `libs/tcgSynergy.js`: new `resolveElementSynergy(loadout, lead)` function
+- [ ] Tier 1 Focus: count lead-matching elements in loadout, apply bonus table (2=+3%, 3=+6%, 4=+9%, 5=+15% + round 1 ability proc)
+- [ ] Tier 2 Pairs: check all 10 pairs, apply bonus if both elements present in loadout (triggers once max)
+- [ ] Tier 3 Trinity: check all 6 trinities, apply highest-value qualifying trinity; replaces Tier 2 if overlap
+- [ ] Tier 1 + Tier 2 stack correctly; Tier 1 + Tier 3 stack correctly
+- [ ] Synergy result passed into combat opts as flat multipliers at battle start
+- [ ] Embed shows active synergy tier and name (e.g. "⚡ Storm Front active") when triggered
 
 #### Fusion
 - [ ] Schema: `tcg_fusion_pity` table — `player_id`, `attempt_count`, `last_attempt_at` (global counter, resets on success)
@@ -370,7 +479,7 @@ Current state: targeted offer/accept, upfront price, duration, optional max batt
 | Rarity model | `src/bot/tcg/rarityOrder.js`, `libs/tcgRarityRoll.js`, `libs/tcgRarityModifiers.js`, `seeds/rarity.js` |
 | Elements | `src/bot/tcg/elements.js`, `src/bot/tcg/abilityIcons.js` |
 | Abilities | `src/bot/tcg/abilityPools.js`, `libs/tcgAbilityBattle.js` |
-| Class system | `libs/tcgSynergy.js`, `libs/tcgAbilityBattle.js` |
+| Class system & element synergy | `libs/tcgSynergy.js`, `libs/tcgAbilityBattle.js` |
 | Economy | `libs/xpSystem.js`, `libs/cardSystem.js` |
 | Packs | `libs/tcgPacks.js` |
 | PvE | `libs/tcgPve.js`, `libs/tcgPveConfig.js` |
@@ -384,7 +493,7 @@ Current state: targeted offer/accept, upfront price, duration, optional max batt
 | Synergy | `libs/tcgSynergy.js` |
 | ORM models | `database/models/User.js`, `Card.js`, `UserCard.js` |
 | Slash commands | `src/bot/commands/slashCommands/tcg/tcg.js`, `cards/get_card.js` |
-| Migrations | `migrations/20260425120000_tcg_stage2_catalog_and_inventory.js` + weight migration |
+| Migrations | `migrations/20260425120000_tcg_stage2_catalog_and_inventory.js` + weight migration; `20260629120000_xp_settings_message_cooldown.js` (Stage 2 message XP) |
 
 ---
 

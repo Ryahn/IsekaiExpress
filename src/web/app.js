@@ -22,7 +22,10 @@ let redisStore = new RedisStore({
 
 const app = express();
 
-nunjucks.configure(path.join(__dirname, 'views'), {
+nunjucks.configure([
+  path.join(__dirname, 'views'),
+  path.join(__dirname, '../char_voting/views'),
+], {
   autoescape: true,                            // Escape variables by default
   express: app,                                // Connect with Express
   watch: config.template.watch,                // Watch for file changes (dev environment)
@@ -47,6 +50,7 @@ app.use(
   express.static(path.join(__dirname, '../bot/media/cards')),
 );
 app.use('/public', express.static(path.join(__dirname, "public")));
+app.use('/char_voting/uploads', express.static(path.join(__dirname, '../char_voting/uploads')));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.set('views', path.join(__dirname, 'views'));
@@ -93,7 +97,8 @@ app.use((req, res, next) => {
     req.path === '/auth/login' ||
     req.path === '/auth/discord/callback' ||
     req.path === '/docs/farm' ||
-    req.path.startsWith('/stats/')
+    req.path.startsWith('/stats/') ||
+    req.path.startsWith('/char_voting')
   ) {
     return next();
   }
