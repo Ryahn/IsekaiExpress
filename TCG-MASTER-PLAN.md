@@ -14,7 +14,7 @@
 ## Architecture: The Three Layers (Non-Negotiable)
 
 ```
-card_data          → Static catalog templates. 60 per member (6 rarities × 10 elements).
+card_data          → Static catalog templates. 110 per member (11 rarities × 10 elements).
                      Holds: base_atk, base_def, base_spd, base_hp, base_power, image_path,
                      rarity (full abbreviation), element, member_id, class, discord_id.
                      Written by: master.js / create_card.js. IMMUTABLE after generation.
@@ -30,6 +30,64 @@ Encounter layer    → In-memory only (PvE fights). Base stats × region/tier mu
 
 **Discord embeds** merge `card_data` (static art URL, base stats) + `user_cards` (level, ability) and compute effective power at display time using:
 `power = base_power × (1 + 0.15 × (level − 1))` — **linear** multiplier (not compound).
+
+---
+
+## Card Progression Systems (Locked)
+
+### Fusion
+Combine cards to climb rarity tiers. Output is always a card.
+
+- **Same rarity + same element** → base resource cost, highest success rate
+- **Same rarity + mixed elements** → increased resource cost
+- **Cost scales with grade** of cards being fused — e.g. fusing 6 A-grade + 1 S-grade into an S requires Diamonds + Rubies
+- **Pity system:** one global counter across all fusion attempts regardless of rarity tier; counter resets on success
+- Resource costs follow the Regrade tiers below (same-element = base, mixed = multiplied)
+
+### Forge
+Sacrifice cards for resources or a gamble. Output is resources or a random card. **No pity.**
+
+- **Guaranteed path:** always yields Shards; baseline output for junk cards
+- **Gamble path:** RNG roll — chance at a better card, chance at bonus Shards, chance at Diamonds or Rubies (rare)
+- Rubies can drop from Forge (rarest outcome)
+- Primary player sink for unwanted cards
+
+### Regrade (D → C → B → A → S)
+Spend resources to upgrade a card's Grade. Grade is **display and prestige only** — no stat impact currently, but the resource tier architecture supports adding stat layers later without rework.
+
+**Resource bands:**
+
+| Upgrade | Preferred resource | Fallback (costs significantly more) |
+|---|---|---|
+| D → C | Shards | — |
+| C → B | Shards | — |
+| B → A | Diamonds | Shards (heavy cost) |
+| A → S | Rubies | Diamonds (heavy cost) |
+
+- **Pity system:** tracked per card; repeated failures eventually guarantee the next regrade success
+- Grade shown on card embed and `/tcg inventory`
+
+### Resources
+
+| Resource | Primary sources | Notes |
+|---|---|---|
+| Shards | Forge (guaranteed output), low-tier expedition drops | Most common; used D→C, C→B |
+| Diamonds | Forge (chance drop), high-end PvE/boss kills, Diamond Mine expedition | Mid-tier; preferred B→A |
+| Rubies | Forge (rare drop), high-tier boss kills, Ruby Mine expedition | Rarest; preferred A→S |
+
+### Expeditions
+Send any card in inventory on a timed passive run. Card is **unavailable for combat** while on expedition.
+
+- **Unlocked per region** — must have beaten that region in PvE to send cards there
+- Duration is time-gated; player claims rewards on return
+- **Standard expeditions:** gold + XP, small Shard drop chance
+- **Mine expeditions** — special expedition type, separate from standard:
+  - **Diamond Mine:** unlocked at mid-game region clear; yields Diamonds passively
+  - **Ruby Mine:** unlocked at late-game region clear; yields Rubies passively
+- Mine expeditions use the same card-lock mechanic; no combat while mining
+
+### Capture Chance (PvE Boss Drop)
+On a boss kill, in addition to the standard rarity-rolled pool drop, there is a small flat % chance the drop is specifically that boss member's card template (same rarity, that member). Makes bosses feel like targeted hunts rather than pure weighted RNG.
 
 ---
 
@@ -52,7 +110,7 @@ N, C, UC, R, U, SR, SSR, SUR, UR, L, M
 
 ## Card Art Pipeline (Locked)
 
-- **60 PNGs per member:** `src/bot/media/cards/{member_slug}/{rarity_slug}/{element}.png`
+- **110 PNGs per member:** `src/bot/media/cards/{member_slug}/{rarity_slug}/{element}.png`
 - **Rarity slug** = snake_case of rarity `name` from seed (e.g. `ultra_rare`, `mythic`, `super_super_rare`)
 - **Base card frame:** `tools/base_card/{rarity_name_snake_case}.png` (e.g. `ultra_rare.png`)
 - **Baked on PNG:** rarity frame, element icon, member name, class, star row
@@ -100,7 +158,7 @@ N, C, UC, R, U, SR, SSR, SUR, UR, L, M
 - [x] `libs/tcgPacks.js`: DB-driven weights, `where({ rarity: rolled.abbreviation })`; pity counters use abbreviations
 - [x] `libs/tcgPve.js`: boss drop pools use `rollRarity` + `where({ rarity: rolled.abbreviation })`; `normalizeRarityKey` gone
 - [-] `libs/tcgDirectBuy.js`: purchasable tiers only; explicit `L`/`M` block + user error message — uses `DIRECT_BUY_DROPS_ONLY` Set (not the literal name `DIRECT_BUY_BANNED_RARITIES`).
-- [x] `libs/tcgInventory.js`: `RARITY_BUMP_ORDER` / `nextRarityTier` use `RARITY_ORDER` from `rarityOrder.js`
+- [x] `libs/tcgInventory.js`: `nextRarityTier()` delegates to `nextRarityInOrder()` / `sanitizeRarityAbbrev()` from `rarityOrder.js` (no separate bump-order symbol)
 - [x] `libs/tcgSynergy.js`: `RARITY_ORDER` + `rarityRank` from `rarityOrder.js`
 - [x] `libs/tcgAbilityBattle.js`: `rarityIdx` uses `rarityRank`; no `normalizeRarityKey`
 - [x] `libs/tcgPvp.js`, `libs/tcgSpar.js`: Mythic checks via `sanitizeRarityAbbrev`
@@ -152,8 +210,54 @@ All operations use `card_data_id` + `user_cards` instance row. Never regenerate 
 - [x] Fuse/level-up (level 1→5 via combining; levels stick to owner's card even when lent)
 - [x] Set bonuses
 - [x] Elemental reroll
-- [x] `list_all_cards` pagination/search working for large `card_data` (60× members)
+- [x] `list_all_cards` pagination/search working for large `card_data` (~110 templates × members)
 - [ ] Loadout lock enforced during active/pending PvP/PvE session
+- [ ] **Class Diversity Bonus** — `libs/tcgSynergy.js` checks loadout for 1× each class before battle sim
+- [ ] Class Diversity Bonus: Guardian lead +5% DEF, Artisan lead +5% ATK, Commander lead +5% gold — stacks with individual class passive
+- [ ] Class Diversity Bonus applies to PvE, spar, and PvP
+- [ ] Embed shows diversity bonus active (e.g. "Class Synergy ✓") when triggered
+
+#### Fusion
+- [ ] Schema: `tcg_fusion_pity` table — `player_id`, `attempt_count`, `last_attempt_at` (global counter, resets on success)
+- [ ] `libs/tcgFusion.js`: validate same-rarity input cards; calculate resource cost (same element = base rate, mixed elements = increased cost, scales with input card grades per Regrade band)
+- [ ] Fusion output: always a card one rarity tier higher via `grantTemplateWithTrx`
+- [ ] Pity: guarantee success after threshold; reset global counter on any success
+- [ ] Slash: `/tcg fusion` — select cards, preview cost breakdown, confirm
+
+#### Forge
+- [ ] Schema: no pity table needed
+- [ ] `libs/tcgForge.js`: accept 1+ cards; **guaranteed path** yields Shards; **gamble path** RNG rolls — better card / bonus Shards / Diamonds (chance) / Rubies (rare chance)
+- [ ] Cards destroyed on Forge regardless of path
+- [ ] Slash: `/tcg forge` — select card(s), choose guaranteed or gamble, confirm
+
+#### Regrade (D → C → B → A → S)
+- [ ] Schema: `grade` column on `user_cards` (enum: D, C, B, A, S, default D); `regrade_pity` int column per card
+- [ ] `libs/tcgRegrade.js`: validate resource availability; apply cost per band; roll success/fail; increment `regrade_pity` on fail, reset on success
+- [ ] Cost bands: D→C and C→B use Shards; B→A prefers Diamonds (Shards accepted at heavy multiplier); A→S prefers Rubies (Diamonds accepted at heavy multiplier)
+- [ ] Grade shown in card embed and `/tcg inventory`
+- [ ] Slash: `/tcg regrade` — select card, shows current grade + cost + pity progress, confirm
+
+#### Resources
+- [ ] Schema: `shards`, `diamonds`, `rubies` columns on `user_wallets` (or equivalent)
+- [ ] Shards: awarded from Forge guaranteed path and low-tier expedition drops
+- [ ] Diamonds: awarded from Forge gamble (chance), high-end PvE/boss kills, Diamond Mine expedition
+- [ ] Rubies: awarded from Forge gamble (rare), high-tier boss kills, Ruby Mine expedition
+- [ ] Resource balances shown in `/tcg profile` or `/tcg inventory`
+
+#### Expeditions
+- [ ] Schema: `tcg_expeditions` — `player_id`, `user_card_id` (FK), `region`, `expedition_type` (enum: standard / diamond_mine / ruby_mine), `started_at`, `returns_at`, `claimed`
+- [ ] Card flagged unavailable for combat and loadout while active expedition row exists
+- [ ] Region gate: player must have cleared that PvE region before sending cards there
+- [ ] Standard expedition rewards on claim: gold + XP + small Shard drop chance
+- [ ] Diamond Mine: unlocked at mid-game region clear; yields Diamonds on claim
+- [ ] Ruby Mine: unlocked at late-game region clear; yields Rubies on claim
+- [ ] Slash: `/tcg expedition send`, `/tcg expedition view`, `/tcg expedition claim`
+- [ ] Optional DM alarm when expedition returns
+
+#### Capture Chance (Boss Drop)
+- [ ] On boss kill, roll a flat % chance for a targeted drop of that boss member's specific card template (in addition to standard pool drop)
+- [ ] Capture % defined as a config constant in `libs/tcgPveConfig.js`
+- [ ] On capture trigger, insert `user_cards` row via `grantTemplateWithTrx` for that specific `card_data` template
 
 ---
 
@@ -266,11 +370,16 @@ Current state: targeted offer/accept, upfront price, duration, optional max batt
 | Rarity model | `src/bot/tcg/rarityOrder.js`, `libs/tcgRarityRoll.js`, `libs/tcgRarityModifiers.js`, `seeds/rarity.js` |
 | Elements | `src/bot/tcg/elements.js`, `src/bot/tcg/abilityIcons.js` |
 | Abilities | `src/bot/tcg/abilityPools.js`, `libs/tcgAbilityBattle.js` |
+| Class system | `libs/tcgSynergy.js`, `libs/tcgAbilityBattle.js` |
 | Economy | `libs/xpSystem.js`, `libs/cardSystem.js` |
 | Packs | `libs/tcgPacks.js` |
 | PvE | `libs/tcgPve.js`, `libs/tcgPveConfig.js` |
 | PvP/Spar | `libs/tcgPvp.js`, `libs/tcgSpar.js` |
 | Inventory | `libs/tcgInventory.js` |
+| Fusion | `libs/tcgFusion.js` *(planned — Stage 3; not in repo yet)* |
+| Forge | `libs/tcgForge.js` *(planned — Stage 3; not in repo yet)* |
+| Regrade | `libs/tcgRegrade.js` *(planned — Stage 3; not in repo yet)* |
+| Expeditions | `libs/tcgExpeditions.js` *(planned — Stage 3; not in repo yet)* |
 | Shop | `libs/tcgDirectBuy.js` |
 | Synergy | `libs/tcgSynergy.js` |
 | ORM models | `database/models/User.js`, `Card.js`, `UserCard.js` |

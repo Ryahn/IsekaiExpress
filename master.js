@@ -12,7 +12,98 @@ const trialmodData = require('./src/bot/tcg/trialmod_data.json');
 
 const BATCH_SIZE = 5;
 
+/**
+ * For running `master.js` on the host while MySQL is exposed on localhost (e.g. Docker port map).
+ * Sets env before fork so workers inherit; `config`/`dotenv` do not override existing env vars.
+ * @returns {{ useLocalDb: boolean, dbPort: number | null }}
+ */
+function applyMysqlCliOverrides(argv = process.argv) {
+  const out = { useLocalDb: false, dbPort: null };
+  if (argv.includes('--use-local-db')) {
+    process.env.MYSQL_HOST = '127.0.0.1';
+    out.useLocalDb = true;
+  }
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith('--db-port=')) {
+      const p = parseInt(a.slice('--db-port='.length), 10);
+      if (!Number.isNaN(p) && p > 0) {
+        process.env.MYSQL_PORT = String(p);
+        out.dbPort = p;
+      }
+    } else if (a === '--db-port' && argv[i + 1] != null) {
+      const p = parseInt(argv[i + 1], 10);
+      if (!Number.isNaN(p) && p > 0) {
+        process.env.MYSQL_PORT = String(p);
+        out.dbPort = p;
+      }
+    }
+  }
+  return out;
+}
+
+const mysqlCli = applyMysqlCliOverrides();
 const skipDb = process.argv.includes('--skip-db');
+
+/** Role JSON files — same keys as merge sources (see `mergeByDiscordIdPriority`). */
+const GROUP_SOURCE = {
+  staff: staffData,
+  mod: modData,
+  trialmod: trialmodData,
+  uploader: uploaderData,
+  retired: retiredData,
+  respected: respectedData,
+};
+const KNOWN_REGEN_GROUPS = new Set(Object.keys(GROUP_SOURCE));
+
+/**
+ * @returns {{ userIds: Set<string>, groupTokens: string[], requested: boolean }}
+ */
+function parseRegenCli(argv = process.argv) {
+  const userIds = new Set();
+  const groupTokens = [];
+  let requested = false;
+  for (const a of argv) {
+    if (a.startsWith('--regen-user=')) {
+      requested = true;
+      for (const part of a.slice('--regen-user='.length).split(',')) {
+        const id = part.trim();
+        if (id) userIds.add(id);
+      }
+    }
+    if (a.startsWith('--regen-group=')) {
+      requested = true;
+      for (const part of a.slice('--regen-group='.length).split(',')) {
+        const g = part.trim().toLowerCase();
+        if (g) groupTokens.push(g);
+      }
+    }
+  }
+  return { userIds, groupTokens, requested };
+}
+
+/**
+ * @param {Set<string>} userIds
+ * @param {string[]} groupTokens
+ * @returns {{ allow: Set<string>, unknownGroups: string[] }}
+ */
+function expandRegenAllowList(userIds, groupTokens) {
+  const allow = new Set();
+  for (const id of userIds) allow.add(String(id));
+  const unknownGroups = [];
+  for (const g of groupTokens) {
+    if (!KNOWN_REGEN_GROUPS.has(g)) {
+      unknownGroups.push(g);
+      continue;
+    }
+    for (const row of GROUP_SOURCE[g]) {
+      if (row && row.discord_id != null) allow.add(String(row.discord_id));
+    }
+  }
+  return { allow, unknownGroups };
+}
+
+const regenCli = parseRegenCli();
 
 /** 6 rarities × 10 elements per character in batch_worker */
 const CARDS_PER_CHARACTER = 60;
@@ -92,6 +183,36 @@ const allCharacterData = mergeByDiscordIdPriority([
   retiredData,
   respectedData,
 ]);
+
+let characterDataForRun = allCharacterData;
+let regenHint = '';
+if (regenCli.requested) {
+  const { allow, unknownGroups } = expandRegenAllowList(regenCli.userIds, regenCli.groupTokens);
+  for (const g of unknownGroups) {
+    logger.warn(
+      `Unknown --regen-group "${g}" (use: ${[...KNOWN_REGEN_GROUPS].sort().join(', ')})`,
+    );
+  }
+  if (allow.size === 0) {
+    logger.error('Regen filter matched no discord IDs; fix --regen-user / --regen-group and try again.');
+    process.exit(1);
+  }
+  const mergedIds = new Set(allCharacterData.map((r) => String(r.discord_id)));
+  for (const id of regenCli.userIds) {
+    if (!mergedIds.has(String(id))) {
+      logger.warn(`--regen-user ${id}: not found in merged character data`);
+    }
+  }
+  characterDataForRun = allCharacterData.filter((row) => allow.has(String(row.discord_id)));
+  if (characterDataForRun.length === 0) {
+    logger.error('Regen filter excluded every merged row; nothing to run.');
+    process.exit(1);
+  }
+  const parts = [];
+  if (regenCli.userIds.size) parts.push(`users=${regenCli.userIds.size}`);
+  if (regenCli.groupTokens.length) parts.push(`groups=${[...new Set(regenCli.groupTokens)].join('+')}`);
+  regenHint = ` (--regen: ${parts.join(', ')} → ${characterDataForRun.length} character(s))`;
+}
 
 async function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -184,7 +305,15 @@ const counts = {
   respected: respectedData.length,
   merged: allCharacterData.length,
 };
+const dbCliHint = (() => {
+  if (skipDb) return '';
+  const parts = [];
+  if (mysqlCli.useLocalDb) parts.push('MYSQL_HOST=127.0.0.1');
+  if (mysqlCli.dbPort != null) parts.push(`MYSQL_PORT=${mysqlCli.dbPort}`);
+  if (!parts.length) return '';
+  return ` (${parts.join(', ')} from CLI)`;
+})();
 logger.startup(
-  `TCG batch: files staff=${counts.staff} mod=${counts.mod} trialmod=${counts.trialmod} uploader=${counts.uploader} retired=${counts.retired} respected=${counts.respected} → merged unique=${counts.merged}${skipDb ? ' (--skip-db: no database writes)' : ''}`,
+  `TCG batch: files staff=${counts.staff} mod=${counts.mod} trialmod=${counts.trialmod} uploader=${counts.uploader} retired=${counts.retired} respected=${counts.respected} → merged unique=${counts.merged}${regenHint}${skipDb ? ' (--skip-db: no database writes)' : ''}${dbCliHint}`,
 );
-runBatches(allCharacterData, { skipDb });
+runBatches(characterDataForRun, { skipDb });
