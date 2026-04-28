@@ -11,6 +11,28 @@
 
 ---
 
+## Discord slash commands (`/tcg`) — option budget
+
+Discord allows at most **25 top-level options** per slash command (subcommands and subcommand **groups** each count as one root). The bot implements `/tcg` in `src/bot/commands/slashCommands/tcg/tcg.js`.
+
+**Design (keeps headroom for new player features):**
+
+| Group / root | Path pattern | Role |
+|---|---|---|
+| **craft** | `/tcg craft <sub>` | Instance actions: `fuse` (level), `rarity_fuse` (rarity ascend), `forge`, `regrade`, `breakdown`, `seal`, `reroll` |
+| **account** | `/tcg account <sub>` | `balance` (profile embed), `convert`, `daily` |
+| **squad** | `/tcg squad <sub>` | `show` (loadout), `synergy`, `equip`, `unequip` |
+| **pve** | `/tcg pve <sub>` | `progress`, `fight`, **`spar`** (practice), `travel` |
+| *(existing)* | `/tcg expedition …`, `/tcg store …`, `/tcg trade …`, `/tcg lend …`, `/tcg pvp …` | Unchanged |
+| **Top-level** | `/tcg inventory`, `/tcg view`, `/tcg titles` | High-traffic browsing; stay un-nested for now |
+| **staff** | `/tcg staff …` | Moderation / catalog |
+
+**If `/tcg` approaches the cap again:** prefer nesting under an existing group, or add a **second** slash (e.g. staff-only `/tcgmod` for `grant` / `set_signature`) so player-facing `/tcg` stays simple.
+
+**Naming:** `rarity_fuse` avoids clashing with level `fuse` in the same `craft` group.
+
+---
+
 ## Architecture: The Three Layers (Non-Negotiable)
 
 ```
@@ -65,7 +87,7 @@ Spend resources to upgrade a card's Grade. Grade is **display and prestige only*
 | A → S | Rubies | Diamonds (heavy cost) |
 
 - **Pity system:** tracked per card; repeated failures eventually guarantee the next regrade success
-- Grade shown on card embed and `/tcg inventory`
+- Grade shown on card embed and `/tcg inventory` (unchanged top-level)
 
 ### Resources
 
@@ -331,27 +353,27 @@ All operations use `card_data_id` + `user_cards` instance row. Never regenerate 
 - [x] `libs/tcgFusion.js`: same-rarity + same `discord_id` (character); resource cost scales mixed elements + grades; spends shards/diamonds/rubies via wallet
 - [x] Fusion output: next rarity tier for that character (`grantTemplateWithTrx` on success)
 - [x] Pity: forced success after threshold (`FUSION_PITY_FORCE`); counter resets on success
-- [-] Slash: `/tcg fusion` — instant resolve (no separate preview/confirm step)
+- [-] Slash: `/tcg craft rarity_fuse` — instant resolve (no separate preview/confirm step)
 
 #### Forge
 - [x] Schema: no pity table
 - [x] `libs/tcgForge.js`: guaranteed → shards; gamble → variable shards + RNG card / diamonds / rubies
 - [x] Cards destroyed on Forge regardless of path
-- [-] Slash: `/tcg forge` — instant (no confirm modal)
+- [-] Slash: `/tcg craft forge` — instant (no confirm modal)
 
 #### Regrade (D → C → B → A → S)
 - [x] Schema: `user_cards.grade`, `user_cards.regrade_pity` — migration `20260630120000_tcg_stage3_class_source_progression.js`
 - [x] `libs/tcgRegrade.js`: resource check, spend, success/fail roll, pity increment/reset
 - [-] Cost bands: D→C / C→B / B→A match shard/diamond intent; **A→S primary path is 8 rubies + 90 diamonds** (stricter than doc’s “rubies preferred, diamonds fallback” wording alone)
-- [x] Grade + regrade pity on `/tcg view` and grade on `/tcg inventory`; `/tcg balance` shows wallet resources
-- [-] Slash: `/tcg regrade` — instant (`shard_fallback` option); no confirm step
+- [x] Grade + regrade pity on `/tcg view` and grade on `/tcg inventory`; `/tcg account balance` shows wallet resources
+- [-] Slash: `/tcg craft regrade` — instant (`shard_fallback` option); no confirm step
 
 #### Resources
 - [x] Schema: `user_wallets.tcg_shards`, `tcg_diamonds`, `tcg_rubies`
 - [x] Shards: Forge guaranteed/gamble, standard expedition claim (`tcgExpeditions.js`)
 - [x] Diamonds: Forge gamble, tier **8+** battle-boss wins (`tcgPve.js`), Diamond Mine expedition
 - [x] Rubies: Forge gamble (rare), tier **10** boss rubies + Ruby Mine expedition
-- [x] Resource balances in `/tcg balance` (TCG profile embed)
+- [x] Resource balances in `/tcg account balance` (TCG profile embed)
 
 #### Expeditions
 - [x] Schema: `tcg_expeditions` — `user_id`, `user_card_id`, `region`, `expedition_type`, `started_at`, `returns_at`, `claimed`

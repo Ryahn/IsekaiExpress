@@ -587,7 +587,7 @@ async function applyPreservationSeal(client, discordUser, userCardId) {
     const w = await trx('user_wallets').where({ user_id: internalId }).forUpdate().first();
     const seals = Number(w.tcg_preservation_seal_charges) || 0;
     if (seals < 1) {
-      result = { ok: false, error: 'No **Preservation Seal** applications — buy in `/tcg shop`.' };
+      result = { ok: false, error: 'No **Preservation Seal** applications — buy in `/tcg store buy`.' };
       return;
     }
     const inst = await loadOwnedInstance(internalId, userCardId, trx);

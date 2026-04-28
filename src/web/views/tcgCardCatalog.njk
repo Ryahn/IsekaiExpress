@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Browse TCG card templates — search by name, rarity, element, region, and more. Read-only catalog.">
+  <title>TCG card catalog · IsekaiExpress</title>
+  <link rel="shortcut icon" type="image/x-icon" href="/public/assets/img/favicons/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Syne:wght@600;700&display=swap" rel="stylesheet">
+  <link href="/public/assets/tcg-catalog/tcg-catalog.css" rel="stylesheet">
+</head>
+<body class="tcg-catalog">
+  <header class="tcg-header">
+    <div class="tcg-header__inner">
+      <div class="tcg-logo">
+        <span class="tcg-logo__accent">IsekaiExpress</span> TCG catalog
+        <span class="tcg-logo__sub">Template browser</span>
+      </div>
+      <p class="tcg-stat" aria-live="polite">
+        Templates in catalog: <strong id="tcgTotal">—</strong>
+      </p>
+    </div>
+  </header>
+
+  <section class="tcg-filters" aria-label="Filters">
+    <div class="tcg-filters__inner">
+      <div class="tcg-row">
+        <label class="tcg-search">
+          <span class="visually-hidden">Search name, description, class</span>
+          <input type="search" id="tcgSearch" placeholder="Search name, class, flavor…" autocomplete="off">
+        </label>
+        <select id="tcgSort" class="tcg-select" aria-label="Sort">
+          <option value="rarity_desc">Rarity (high → low)</option>
+          <option value="rarity_asc">Rarity (low → high)</option>
+          <option value="name_asc">Name A–Z</option>
+          <option value="name_desc">Name Z–A</option>
+          <option value="newest">Recently updated</option>
+        </select>
+        <select id="tcgRegion" class="tcg-select" aria-label="Region">
+          <option value="">Any region</option>
+          {% for r in facetMeta.regions %}
+          <option value="{{ r.id }}">{{ r.label }}</option>
+          {% endfor %}
+        </select>
+        <select id="tcgBoss" class="tcg-select" aria-label="Boss cards">
+          <option value="">Boss: any</option>
+          <option value="1">Boss pool only</option>
+          <option value="0">Non-boss</option>
+        </select>
+        <select id="tcgSource" class="tcg-select" aria-label="Source">
+          <option value="">Any source</option>
+          {% for s in facetMeta.sources %}
+          <option value="{{ s }}">{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <div class="tcg-label">Rarity</div>
+        <div class="tcg-chip-row" id="tcgChipsRarity">
+          {% for r in facetMeta.rarities %}
+          <button type="button" class="tcg-chip tcg-chip--rarity" data-rarity="{{ r.abbrev }}"
+            title="{{ r.label }}" style="--rarity-color: {{ r.color }}">{{ r.chip_label }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <div>
+        <div class="tcg-label">Element</div>
+        <div class="tcg-chip-row" id="tcgChipsElement">
+          {% for e in facetMeta.elements %}
+          <button type="button" class="tcg-chip tcg-chip--element" data-element="{{ e.id }}"
+            title="{{ e.label }}">
+            <img src="{{ e.icon_url }}" alt="" width="22" height="22">
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="tcg-row">
+        <label class="tcg-class-input">
+          <span class="visually-hidden">Class contains</span>
+          <input type="text" id="tcgClass" placeholder="Filter by class contains…" maxlength="120">
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <main class="tcg-main">
+    <div class="tcg-results">
+      <span id="tcgResultsLine">Loading…</span>
+    </div>
+    <div id="tcgGrid" class="tcg-grid" role="list"></div>
+    <nav id="tcgPagination" class="tcg-pagination" aria-label="Pagination"></nav>
+  </main>
+
+  <div id="tcgModal" class="tcg-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="tcgModalTitle">
+    <div class="tcg-modal" tabindex="-1">
+      <div class="tcg-modal__media">
+        <img id="tcgModalImg" class="tcg-modal__img" src="" alt="">
+      </div>
+      <div class="tcg-modal__content">
+        <button type="button" class="tcg-modal__close" id="tcgModalClose" aria-label="Close">&times;</button>
+        <h2 id="tcgModalTitle" class="tcg-modal__title"></h2>
+        <div id="tcgModalBadges" class="tcg-modal__badges"></div>
+        <div id="tcgModalDesc" class="tcg-modal__desc"></div>
+        <div id="tcgModalStats"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.__TCG_CATALOG__ = {
+      defaultPageSize: {{ defaultPageSize | default(24) }},
+      maxPageSize: {{ maxPageSize | default(48) }},
+    };
+  </script>
+  <script src="/public/assets/tcg-catalog/tcg-catalog.js" defer></script>
+  <style>
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .tcx-class input, #tcgClass { width: 100%; max-width: 280px; padding: 0.65rem 0.85rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); background: var(--tcg-elevated, #171d2a); color: var(--tcg-text, #e8ecf4); font-size: 0.875rem; font-family: inherit; }
+    #tcgClass:focus { outline: none; border-color: #1fa89a; box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.15); }
+  </style>
+</body>
+</html>

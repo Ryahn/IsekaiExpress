@@ -23,7 +23,7 @@ const SPAR_WIN_GOLD = 10;
 async function runSpar(client, discordUser) {
   const detail = await tcgLoadout.getLoadoutDetail(client, discordUser);
   if (!detail || !detail.row.main_user_card_id) {
-    return { ok: false, error: 'Set a **main** fighter with `/tcg equip` (slot: Main).' };
+    return { ok: false, error: 'Set a **main** fighter with `/tcg squad equip` (slot: Main).' };
   }
 
   const mainId = detail.row.main_user_card_id;

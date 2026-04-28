@@ -101,7 +101,7 @@ const SHOP_ITEMS = Object.freeze({
   }),
   preservation_seal: Object.freeze({
     label: 'Preservation Seal',
-    description: '**1** application charge — use `/tcg seal` on a copy: blocks **reroll**, **trade**, **breakdown**; wager rules when PvP wagers ship.',
+    description: '**1** application charge — use `/tcg craft seal` on a copy: blocks **reroll**, **trade**, **breakdown**; wager rules when PvP wagers ship.',
     cost: 1500,
     serverDailyLimit: 10,
     playerDailyLimit: 1,

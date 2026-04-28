@@ -308,7 +308,7 @@ async function getProgressSummary(client, discordUser) {
 async function runPveFight(client, discordUser) {
   const detail = await tcgLoadout.getLoadoutDetail(client, discordUser);
   if (!detail || !detail.row.main_user_card_id) {
-    return { ok: false, error: 'Set a **main** card with `/tcg equip` before PvE.' };
+    return { ok: false, error: 'Set a **main** card with `/tcg squad equip` before PvE.' };
   }
 
   await client.db.checkUser(discordUser);

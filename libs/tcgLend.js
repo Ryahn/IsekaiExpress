@@ -330,7 +330,7 @@ async function recallLendWithToken(client, discordUser, lendId) {
     const w = await trx('user_wallets').where({ user_id: uid }).forUpdate().first();
     const tok = Number(w.tcg_recall_token_charges) || 0;
     if (tok < 1) {
-      result = { ok: false, error: 'Need a **Recall Token** (`/tcg shop`).' };
+      result = { ok: false, error: 'Need a **Recall Token** (`/tcg store buy`).' };
       return;
     }
     await trx('user_wallets').where({ user_id: uid }).update({

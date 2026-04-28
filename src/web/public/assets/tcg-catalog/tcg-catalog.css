@@ -1,0 +1,491 @@
+/* TCG catalog — layout from card reference; distinct palette (amber / teal, not Discord blurple). */
+
+:root {
+  --tcg-bg: #080b10;
+  --tcg-surface: #101520;
+  --tcg-elevated: #171d2a;
+  --tcg-border: rgba(45, 212, 191, 0.14);
+  --tcg-text: #e8ecf4;
+  --tcg-muted: #8b95a8;
+  --tcg-accent: #e8a838;
+  --tcg-accent-dim: #c78a2a;
+  --tcg-teal: #2dd4bf;
+  --tcg-teal-dim: #1fa89a;
+  --tcg-shadow: rgba(0, 0, 0, 0.45);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body.tcg-catalog {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Outfit", system-ui, sans-serif;
+  font-weight: 400;
+  color: var(--tcg-text);
+  background-color: var(--tcg-bg);
+  background-image:
+    radial-gradient(ellipse 120% 80% at 10% -20%, rgba(232, 168, 56, 0.08), transparent 50%),
+    radial-gradient(ellipse 90% 60% at 90% 0%, rgba(45, 212, 191, 0.06), transparent 45%),
+    linear-gradient(180deg, #06080c 0%, var(--tcg-bg) 40%);
+}
+
+.tcg-catalog a {
+  color: var(--tcg-teal);
+  text-decoration: none;
+}
+.tcg-catalog a:hover {
+  text-decoration: underline;
+}
+
+.tcg-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: linear-gradient(180deg, var(--tcg-surface) 0%, rgba(16, 21, 32, 0.92) 100%);
+  border-bottom: 1px solid var(--tcg-border);
+  backdrop-filter: blur(8px);
+}
+
+.tcg-header__inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.tcg-logo {
+  font-family: "Syne", sans-serif;
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+.tcg-logo__accent {
+  color: var(--tcg-accent);
+}
+.tcg-logo__sub {
+  display: block;
+  font-family: "Outfit", sans-serif;
+  font-weight: 500;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--tcg-muted);
+  margin-top: 0.2rem;
+}
+
+.tcg-stat {
+  font-size: 0.85rem;
+  color: var(--tcg-muted);
+}
+.tcg-stat strong {
+  color: var(--tcg-text);
+  font-weight: 600;
+}
+
+.tcg-filters {
+  background: var(--tcg-surface);
+  border-bottom: 1px solid var(--tcg-border);
+}
+
+.tcg-filters__inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.tcg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.tcg-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--tcg-muted);
+  width: 100%;
+  margin-bottom: -0.35rem;
+}
+
+.tcg-search {
+  flex: 1 1 200px;
+  max-width: 320px;
+}
+
+.tcg-search input,
+.tcg-select {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--tcg-elevated);
+  color: var(--tcg-text);
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+.tcg-search input:focus,
+.tcg-select:focus {
+  outline: none;
+  border-color: var(--tcg-teal-dim);
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.15);
+}
+
+.tcg-select {
+  max-width: 200px;
+  cursor: pointer;
+}
+
+.tcg-class-input {
+  max-width: 180px;
+}
+
+.tcg-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.tcg-chip {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--tcg-elevated);
+  color: var(--tcg-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.tcg-chip:hover {
+  color: var(--tcg-text);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.tcg-chip.is-active {
+  color: #0a0e14;
+  border-color: var(--tcg-accent);
+  background: var(--tcg-accent);
+  box-shadow: 0 0 12px rgba(232, 168, 56, 0.25);
+}
+
+.tcg-chip--rarity.is-active {
+  color: #0a0e14;
+  border-color: var(--rarity-color, var(--tcg-accent));
+  background: var(--rarity-color, var(--tcg-accent));
+  box-shadow: 0 0 14px rgba(232, 168, 56, 0.35);
+}
+
+.tcg-chip--element {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.tcg-chip--element img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.tcg-chip--element.is-active {
+  border-color: var(--tcg-teal);
+  background: rgba(45, 212, 191, 0.18);
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.25);
+}
+
+.tcg-main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 3rem;
+}
+
+.tcg-results {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--tcg-muted);
+}
+
+.tcg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1.25rem;
+}
+
+.tcg-card {
+  background: var(--tcg-elevated);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tcg-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px var(--tcg-shadow);
+}
+
+.tcg-card__img {
+  width: 100%;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  background: var(--tcg-surface);
+  display: block;
+}
+
+.tcg-card__body {
+  padding: 0.75rem 0.85rem 0.9rem;
+}
+
+.tcg-card__name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin: 0 0 0.4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tcg-card__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+}
+
+.tcg-pill {
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #0a0e14;
+}
+
+.tcg-pill--boss {
+  background: #c45c6a;
+  color: #fff;
+}
+
+.tcg-empty,
+.tcg-loading {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--tcg-muted);
+}
+
+.tcg-loading__spinner {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--tcg-elevated);
+  border-top-color: var(--tcg-accent);
+  border-radius: 50%;
+  margin: 0 auto 0.75rem;
+  animation: tcg-spin 0.85s linear infinite;
+}
+
+@keyframes tcg-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tcg-pagination {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 2rem;
+}
+
+.tcg-page-btn {
+  min-width: 2.25rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--tcg-elevated);
+  color: var(--tcg-text);
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.tcg-page-btn:hover:not(:disabled) {
+  border-color: var(--tcg-teal);
+  color: var(--tcg-teal);
+}
+
+.tcg-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tcg-page-btn.is-current {
+  background: rgba(45, 212, 191, 0.2);
+  border-color: var(--tcg-teal);
+  color: var(--tcg-teal);
+}
+
+/* Modal */
+.tcg-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(4, 6, 10, 0.88);
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.tcg-modal-overlay.is-open {
+  display: flex;
+}
+
+.tcg-modal {
+  width: 100%;
+  max-width: 920px;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--tcg-surface);
+  border: 1px solid var(--tcg-border);
+  border-radius: 16px;
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) 1fr;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+
+@media (max-width: 720px) {
+  .tcg-modal {
+    grid-template-columns: 1fr;
+    max-height: none;
+  }
+}
+
+.tcg-modal__media {
+  background: var(--tcg-bg);
+}
+
+.tcg-modal__img {
+  width: 100%;
+  height: auto;
+  display: block;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+}
+
+.tcg-modal__content {
+  padding: 1.35rem 1.5rem 1.5rem;
+  position: relative;
+}
+
+.tcg-modal__close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  border: none;
+  background: transparent;
+  color: var(--tcg-muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem;
+}
+.tcg-modal__close:hover {
+  color: var(--tcg-text);
+}
+
+.tcg-modal__title {
+  font-family: "Syne", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 1.75rem 0.75rem 0;
+  letter-spacing: -0.02em;
+}
+
+.tcg-modal__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.tcg-badge {
+  font-size: 0.72rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 6px;
+  font-weight: 600;
+  background: var(--tcg-elevated);
+  color: var(--tcg-muted);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tcg-modal__desc {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--tcg-muted);
+  margin-bottom: 1rem;
+}
+
+.tcg-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 520px) {
+  .tcg-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.tcg-stat-cell {
+  background: var(--tcg-elevated);
+  border-radius: 8px;
+  padding: 0.55rem;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tcg-stat-cell span {
+  display: block;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tcg-muted);
+  margin-bottom: 0.2rem;
+}
+.tcg-stat-cell strong {
+  font-size: 1.05rem;
+  font-weight: 700;
+}

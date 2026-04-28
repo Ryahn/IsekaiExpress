@@ -124,7 +124,7 @@ async function createTradeOffer(
         const lic = Number(wProp.tcg_trade_license_charges) || 0;
         if (useTradeLicense) {
           if (lic < 1) {
-            result = { ok: false, error: 'You need a **Trade License** charge (`/tcg shop`).' };
+            result = { ok: false, error: 'You need a **Trade License** charge (`/tcg store buy`).' };
             throw new Error('TRADE_ABORT');
           }
           taxExempt = true;

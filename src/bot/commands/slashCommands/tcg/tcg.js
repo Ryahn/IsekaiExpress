@@ -66,28 +66,6 @@ module.exports = {
     .setDescription('Card game — economy, collection, battles')
     .addSubcommand((sub) =>
       sub
-        .setName('balance')
-        .setDescription('View your TCG gold, XP, resources, and inventory space'),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('convert')
-        .setDescription(`Convert XP to gold (${tcgEconomy.XP_PER_GOLD_UNIT} XP = 1g)`)
-        .addIntegerOption((opt) =>
-          opt
-            .setName('xp')
-            .setDescription(`XP to spend (multiple of ${tcgEconomy.XP_PER_GOLD_UNIT})`)
-            .setRequired(true)
-            .setMinValue(tcgEconomy.XP_PER_GOLD_UNIT),
-        ),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('daily')
-        .setDescription(`Claim daily login XP (${tcgEconomy.DAILY_LOGIN_XP} XP / 24h)`),
-    )
-    .addSubcommand((sub) =>
-      sub
         .setName('inventory')
         .setDescription('List your owned card copies')
         .addIntegerOption((o) =>
@@ -102,72 +80,93 @@ module.exports = {
           o.setName('instance').setDescription('Copy ID from /tcg inventory').setRequired(true).setMinValue(1),
         ),
     )
-    .addSubcommand((sub) =>
-      sub
-        .setName('breakdown')
-        .setDescription('Destroy a copy for gold ([CardSystem.md] values)')
-        .addIntegerOption((o) =>
-          o.setName('instance').setDescription('Copy ID to break down').setRequired(true).setMinValue(1),
-        ),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('fuse')
-        .setDescription('Fuse two copies **or** one copy + Fusion Catalyst (shop) → +1 level')
-        .addIntegerOption((o) =>
-          o.setName('first').setDescription('Copy ID (first of two, or only copy with catalyst)').setRequired(true).setMinValue(1),
-        )
-        .addIntegerOption((o) =>
-          o.setName('second').setDescription('Second copy ID (omit with catalyst)').setRequired(false).setMinValue(1),
-        )
-        .addBooleanOption((o) =>
-          o
-            .setName('use_catalyst')
-            .setDescription('Use 1× Fusion Catalyst instead of a second copy'),
-        ),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('fusion')
-        .setDescription('Rarity fusion: 2+ copies same rarity → one **next tier** (costs shards/gems)')
-        .addIntegerOption((o) =>
-          o.setName('first').setDescription('Copy ID').setRequired(true).setMinValue(1),
-        )
-        .addIntegerOption((o) =>
-          o.setName('second').setDescription('Copy ID').setRequired(true).setMinValue(1),
-        )
-        .addIntegerOption((o) => o.setName('third').setDescription('Optional 3rd copy').setMinValue(1)),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('forge')
-        .setDescription('Destroy copies for resources (guaranteed shards or gamble)')
-        .addStringOption((o) =>
-          o
-            .setName('copies')
-            .setDescription('Comma-separated copy IDs (e.g. 12,15,20)')
-            .setRequired(true),
-        )
-        .addStringOption((o) =>
-          o
-            .setName('mode')
-            .setDescription('Mode')
-            .setRequired(true)
-            .addChoices(
-              { name: 'Guaranteed shards', value: 'guaranteed' },
-              { name: 'Gamble (bonus loot chance)', value: 'gamble' },
+    .addSubcommandGroup((group) =>
+      group
+        .setName('craft')
+        .setDescription('Copy actions — level fuse, rarity fuse, salvage, forge, grade, seal, reroll')
+        .addSubcommand((sub) =>
+          sub
+            .setName('fuse')
+            .setDescription('Fuse two copies **or** one copy + Fusion Catalyst (shop) → +1 level')
+            .addIntegerOption((o) =>
+              o.setName('first').setDescription('Copy ID (first of two, or only copy with catalyst)').setRequired(true).setMinValue(1),
+            )
+            .addIntegerOption((o) =>
+              o.setName('second').setDescription('Second copy ID (omit with catalyst)').setRequired(false).setMinValue(1),
+            )
+            .addBooleanOption((o) =>
+              o
+                .setName('use_catalyst')
+                .setDescription('Use 1× Fusion Catalyst instead of a second copy'),
             ),
-        ),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('regrade')
-        .setDescription('Upgrade **grade** D→S on one copy (resources + pity)')
-        .addIntegerOption((o) =>
-          o.setName('instance').setDescription('Copy ID').setRequired(true).setMinValue(1),
         )
-        .addBooleanOption((o) =>
-          o.setName('shard_fallback').setDescription('Pay heavy **shards** for B→A / A→S'),
+        .addSubcommand((sub) =>
+          sub
+            .setName('rarity_fuse')
+            .setDescription('Rarity fusion (ascend): 2+ same rarity → one **next tier** (shards/gems)')
+            .addIntegerOption((o) =>
+              o.setName('first').setDescription('Copy ID').setRequired(true).setMinValue(1),
+            )
+            .addIntegerOption((o) =>
+              o.setName('second').setDescription('Copy ID').setRequired(true).setMinValue(1),
+            )
+            .addIntegerOption((o) => o.setName('third').setDescription('Optional 3rd copy').setMinValue(1)),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('forge')
+            .setDescription('Destroy copies for resources (guaranteed shards or gamble)')
+            .addStringOption((o) =>
+              o
+                .setName('copies')
+                .setDescription('Comma-separated copy IDs (e.g. 12,15,20)')
+                .setRequired(true),
+            )
+            .addStringOption((o) =>
+              o
+                .setName('mode')
+                .setDescription('Mode')
+                .setRequired(true)
+                .addChoices(
+                  { name: 'Guaranteed shards', value: 'guaranteed' },
+                  { name: 'Gamble (bonus loot chance)', value: 'gamble' },
+                ),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('regrade')
+            .setDescription('Upgrade **grade** D→S on one copy (resources + pity)')
+            .addIntegerOption((o) =>
+              o.setName('instance').setDescription('Copy ID').setRequired(true).setMinValue(1),
+            )
+            .addBooleanOption((o) =>
+              o.setName('shard_fallback').setDescription('Pay heavy **shards** for B→A / A→S'),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('breakdown')
+            .setDescription('Destroy a copy for gold ([CardSystem.md] values)')
+            .addIntegerOption((o) =>
+              o.setName('instance').setDescription('Copy ID to break down').setRequired(true).setMinValue(1),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('seal')
+            .setDescription('Apply 1× Preservation Seal charge to a copy (blocks reroll/trade/breakdown)')
+            .addIntegerOption((o) =>
+              o.setName('instance').setDescription('Copy ID').setRequired(true).setMinValue(1),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('reroll')
+            .setDescription('Pay gold to move this copy to a random other element (same character & rarity)')
+            .addIntegerOption((o) =>
+              o.setName('instance').setDescription('Copy ID to reroll').setRequired(true).setMinValue(1),
+            ),
         ),
     )
     .addSubcommandGroup((group) =>
@@ -206,86 +205,93 @@ module.exports = {
             ),
         ),
     )
-    .addSubcommand((sub) =>
-      sub
-        .setName('seal')
-        .setDescription('Apply 1× Preservation Seal charge to a copy (blocks reroll/trade/breakdown)')
-        .addIntegerOption((o) =>
-          o.setName('instance').setDescription('Copy ID').setRequired(true).setMinValue(1),
-        ),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('reroll')
-        .setDescription('Pay gold to move this copy to a random other element (same character & rarity)')
-        .addIntegerOption((o) =>
-          o.setName('instance').setDescription('Copy ID to reroll').setRequired(true).setMinValue(1),
-        ),
-    )
-    .addSubcommand((sub) =>
-      sub.setName('loadout').setDescription('View your main + 2 support slots'),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('synergy')
-        .setDescription('Preview combat synergies (spar vs your current PvE region)')
-        .addStringOption((o) => {
-          o
-            .setName('enemy_element')
-            .setDescription('Optional: include Counter Build vs this element');
-          o.addChoices({ name: '— (skip Counter Build)', value: 'none' });
-          for (const k of ELEMENT_IDS) {
-            o.addChoices({ name: DISPLAY_LABEL[k], value: k });
-          }
-          return o;
-        }),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('equip')
-        .setDescription('Put a copy into your loadout')
-        .addStringOption((o) =>
-          o
-            .setName('slot')
-            .setDescription('Slot')
-            .setRequired(true)
-            .addChoices(
-              { name: 'Main (fighter)', value: 'main' },
-              { name: 'Support 1', value: 'support1' },
-              { name: 'Support 2', value: 'support2' },
+    .addSubcommandGroup((group) =>
+      group
+        .setName('account')
+        .setDescription('Profile, XP conversion, daily login')
+        .addSubcommand((sub) =>
+          sub
+            .setName('balance')
+            .setDescription('View your TCG gold, XP, resources, and inventory space'),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('convert')
+            .setDescription(`Convert XP to gold (${tcgEconomy.XP_PER_GOLD_UNIT} XP = 1g)`)
+            .addIntegerOption((opt) =>
+              opt
+                .setName('xp')
+                .setDescription(`XP to spend (multiple of ${tcgEconomy.XP_PER_GOLD_UNIT})`)
+                .setRequired(true)
+                .setMinValue(tcgEconomy.XP_PER_GOLD_UNIT),
             ),
         )
-        .addIntegerOption((o) =>
-          o.setName('instance').setDescription('Copy ID from /tcg inventory').setRequired(true).setMinValue(1),
+        .addSubcommand((sub) =>
+          sub
+            .setName('daily')
+            .setDescription(`Claim daily login XP (${tcgEconomy.DAILY_LOGIN_XP} XP / 24h)`),
         ),
     )
-    .addSubcommand((sub) =>
-      sub
-        .setName('unequip')
-        .setDescription('Clear a loadout slot')
-        .addStringOption((o) =>
-          o
-            .setName('slot')
-            .setDescription('Slot')
-            .setRequired(true)
-            .addChoices(
-              { name: 'Main', value: 'main' },
-              { name: 'Support 1', value: 'support1' },
-              { name: 'Support 2', value: 'support2' },
+    .addSubcommandGroup((group) =>
+      group
+        .setName('squad')
+        .setDescription('Loadout and synergy preview')
+        .addSubcommand((sub) => sub.setName('show').setDescription('View your main + 2 support slots'))
+        .addSubcommand((sub) =>
+          sub
+            .setName('synergy')
+            .setDescription('Preview combat synergies (spar vs your current PvE region)')
+            .addStringOption((o) => {
+              o
+                .setName('enemy_element')
+                .setDescription('Optional: include Counter Build vs this element');
+              o.addChoices({ name: '— (skip Counter Build)', value: 'none' });
+              for (const k of ELEMENT_IDS) {
+                o.addChoices({ name: DISPLAY_LABEL[k], value: k });
+              }
+              return o;
+            }),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('equip')
+            .setDescription('Put a copy into your loadout')
+            .addStringOption((o) =>
+              o
+                .setName('slot')
+                .setDescription('Slot')
+                .setRequired(true)
+                .addChoices(
+                  { name: 'Main (fighter)', value: 'main' },
+                  { name: 'Support 1', value: 'support1' },
+                  { name: 'Support 2', value: 'support2' },
+                ),
+            )
+            .addIntegerOption((o) =>
+              o.setName('instance').setDescription('Copy ID from /tcg inventory').setRequired(true).setMinValue(1),
             ),
-        ),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('spar')
-        .setDescription(
-          `Practice fight: your **main** vs random catalog card (win **+${tcgSpar.SPAR_WIN_GOLD}**g, PvE XP rules)`,
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('unequip')
+            .setDescription('Clear a loadout slot')
+            .addStringOption((o) =>
+              o
+                .setName('slot')
+                .setDescription('Slot')
+                .setRequired(true)
+                .addChoices(
+                  { name: 'Main', value: 'main' },
+                  { name: 'Support 1', value: 'support1' },
+                  { name: 'Support 2', value: 'support2' },
+                ),
+            ),
         ),
     )
     .addSubcommandGroup((group) =>
       group
         .setName('pve')
-        .setDescription('PvE progression, travel, and battles')
+        .setDescription('PvE progression, travel, spar, and battles')
         .addSubcommand((sub) =>
           sub.setName('progress').setDescription('Region, tier, and progress toward tier clear'),
         )
@@ -293,6 +299,13 @@ module.exports = {
           sub
             .setName('fight')
             .setDescription('Fight a PvE battle (main card; region rules, gold by tier, advances on win)'),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('spar')
+            .setDescription(
+              `Practice: your **main** vs random catalog card (win **+${tcgSpar.SPAR_WIN_GOLD}**g, PvE XP rules)`,
+            ),
         )
         .addSubcommand((sub) =>
           sub
@@ -310,96 +323,105 @@ module.exports = {
             ),
         ),
     )
-    .addSubcommand((sub) =>
-      sub
-        .setName('buy_pack')
-        .setDescription(
-          `Buy a card pack — Basic / Advanced / Premium / Boss (${tcgPacks.BOSS_PACK_COST}g) / Region (${tcgPacks.REGION_PACK_COST}g + region)`,
-        )
-        .addStringOption((o) =>
-          o
+    .addSubcommandGroup((group) =>
+      group
+        .setName('store')
+        .setDescription('Gold store — packs, direct card buys, rotating item shop')
+        .addSubcommand((sub) =>
+          sub
             .setName('pack')
-            .setDescription('Pack type')
-            .setRequired(true)
-            .addChoices(
-              {
-                name: `Basic — ${tcgPacks.BASIC_PACK_COST}g · 3× C/UC`,
-                value: 'basic',
-              },
-              {
-                name: `Advanced — ${tcgPacks.ADVANCED_PACK_COST}g · 4× (N–M, DB weights)`,
-                value: 'advanced',
-              },
-              {
-                name: `Premium — ${tcgPacks.PREMIUM_PACK_COST}g · 5× UC–M`,
-                value: 'premium',
-              },
-              {
-                name: `Boss — ${tcgPacks.BOSS_PACK_COST}g · 4× Rare+ guarantee`,
-                value: 'boss',
-              },
-              {
-                name: `Region — ${tcgPacks.REGION_PACK_COST}g · 4× region pool`,
-                value: 'region',
-              },
+            .setDescription(
+              `Buy a card pack — Basic / Advanced / Premium / Boss (${tcgPacks.BOSS_PACK_COST}g) / Region (${tcgPacks.REGION_PACK_COST}g + region)`,
+            )
+            .addStringOption((o) =>
+              o
+                .setName('pack')
+                .setDescription('Pack type')
+                .setRequired(true)
+                .addChoices(
+                  {
+                    name: `Basic — ${tcgPacks.BASIC_PACK_COST}g · 3× C/UC`,
+                    value: 'basic',
+                  },
+                  {
+                    name: `Advanced — ${tcgPacks.ADVANCED_PACK_COST}g · 4× (N–M, DB weights)`,
+                    value: 'advanced',
+                  },
+                  {
+                    name: `Premium — ${tcgPacks.PREMIUM_PACK_COST}g · 5× UC–M`,
+                    value: 'premium',
+                  },
+                  {
+                    name: `Boss — ${tcgPacks.BOSS_PACK_COST}g · 4× Rare+ guarantee`,
+                    value: 'boss',
+                  },
+                  {
+                    name: `Region — ${tcgPacks.REGION_PACK_COST}g · 4× region pool`,
+                    value: 'region',
+                  },
+                ),
+            )
+            .addIntegerOption((o) =>
+              o
+                .setName('region')
+                .setDescription('Home Turf 1–6 / tcg_region (required for Region pack)')
+                .setMinValue(tcgPacks.REGION_ID_MIN)
+                .setMaxValue(tcgPacks.REGION_ID_MAX),
             ),
         )
-        .addIntegerOption((o) =>
-          o
-            .setName('region')
-            .setDescription('Home Turf 1–6 / tcg_region (required for Region pack)')
-            .setMinValue(tcgPacks.REGION_ID_MIN)
-            .setMaxValue(tcgPacks.REGION_ID_MAX),
-        ),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('buy_card')
-        .setDescription(
-          'Buy one catalog copy for a member at a rarity (Legendary/Mythic not sold for gold).',
+        .addSubcommand((sub) =>
+          sub
+            .setName('card')
+            .setDescription(
+              'Buy one catalog copy for a member at a rarity (Legendary/Mythic not sold for gold).',
+            )
+            .addUserOption((o) =>
+              o
+                .setName('member')
+                .setDescription('Discord user whose card templates to buy (matches card_data.discord_id)')
+                .setRequired(true),
+            )
+            .addStringOption((o) => {
+              o.setName('rarity')
+                .setDescription('Rarity to buy (L/M are drop-only; not listed here)')
+                .setRequired(true);
+              for (const abbrev of RARITY_ORDER) {
+                const cost = tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY[abbrev];
+                if (cost == null) continue;
+                o.addChoices({ name: `${abbrev} — ${cost}g`, value: abbrev });
+              }
+              return o;
+            })
+            .addStringOption((o) => {
+              o
+                .setName('element')
+                .setDescription('Element when multiple templates exist at this rarity (omit = random among matches)');
+              o.addChoices({ name: '— Any element', value: 'any' });
+              for (const k of ELEMENT_IDS) {
+                o.addChoices({ name: DISPLAY_LABEL[k], value: k });
+              }
+              return o;
+            }),
         )
-        .addUserOption((o) =>
-          o
-            .setName('member')
-            .setDescription('Discord user whose card templates to buy (matches card_data.discord_id)')
-            .setRequired(true),
+        .addSubcommand((sub) =>
+          sub
+            .setName('browse')
+            .setDescription('TCG item shop — gold only, daily limits (UTC) ([CardSystem.md])'),
         )
-        .addStringOption((o) => {
-          o.setName('rarity')
-            .setDescription('Rarity to buy (L/M are drop-only; not listed here)')
-            .setRequired(true);
-          for (const abbrev of RARITY_ORDER) {
-            const cost = tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY[abbrev];
-            if (cost == null) continue;
-            o.addChoices({ name: `${abbrev} — ${cost}g`, value: abbrev });
-          }
-          return o;
-        })
-        .addStringOption((o) => {
-          o
-            .setName('element')
-            .setDescription('Element when multiple templates exist at this rarity (omit = random among matches)');
-          o.addChoices({ name: '— Any element', value: 'any' });
-          for (const k of ELEMENT_IDS) {
-            o.addChoices({ name: DISPLAY_LABEL[k], value: k });
-          }
-          return o;
+        .addSubcommand((sub) => {
+          const b = sub
+            .setName('buy')
+            .setDescription('Purchase one rotating shop item')
+            .addStringOption((opt) => {
+              opt.setName('item').setDescription('Item').setRequired(true);
+              for (const [sku, def] of Object.entries(tcgShop.SHOP_ITEMS)) {
+                opt.addChoices({ name: `${def.label} — ${def.cost}g`, value: sku });
+              }
+              return opt;
+            });
+          return b;
         }),
     )
-    .addSubcommand((sub) => sub.setName('shop').setDescription('TCG item shop — gold only, daily limits (UTC) ([CardSystem.md])'))
-    .addSubcommand((sub) => {
-      const b = sub
-        .setName('shop_buy')
-        .setDescription('Purchase one shop item')
-        .addStringOption((opt) => {
-          opt.setName('item').setDescription('Item').setRequired(true);
-          for (const [sku, def] of Object.entries(tcgShop.SHOP_ITEMS)) {
-            opt.addChoices({ name: `${def.label} — ${def.cost}g`, value: sku });
-          }
-          return opt;
-        });
-      return b;
-    })
     .addSubcommandGroup((group) =>
       group
         .setName('trade')
@@ -778,6 +800,388 @@ module.exports = {
       return interaction.editReply({ content: 'Unknown expedition subcommand.', ephemeral: true });
     }
 
+    if (subcommandGroup === 'craft') {
+      if (sub === 'fuse') {
+        const first = interaction.options.getInteger('first', true);
+        const second = interaction.options.getInteger('second');
+        const useCatalyst = interaction.options.getBoolean('use_catalyst') ?? false;
+        const result = await tcgInventory.fuseInstances(client, discordUser, first, second ?? null, {
+          fusionCatalyst: useCatalyst,
+        });
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        let extra = '';
+        if (result.rarityDust?.upgraded) {
+          extra = ` **Rarity Dust:** upgraded toward **${result.rarityDust.newRarity}** (**${result.rarityDust.templateName}**).`;
+        } else if (result.rarityDust?.dustConsumed) {
+          extra = ' _(Rarity Dust consumed — no rarity bump this time)._';
+        }
+        if (result.fusionCatalystUsed) {
+          extra = ` _(Fusion Catalyst used)._${extra}`;
+        }
+        return interaction.editReply({
+          content: `Fused into one **Lv${result.newLevel}** copy (**#${result.userCardId}**).${extra}`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'rarity_fuse') {
+        const ids = [
+          interaction.options.getInteger('first', true),
+          interaction.options.getInteger('second', true),
+          interaction.options.getInteger('third'),
+        ].filter((n) => n != null && n > 0);
+        const r = await tcgFusion.attemptRarityFusion(client, discordUser, ids);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.success) {
+          return interaction.editReply({
+            content: `${r.message} Pity **${r.attemptsNow} / ${tcgFusion.FUSION_PITY_FORCE}**.`,
+            ephemeral: true,
+          });
+        }
+        const t = r.template;
+        const el = t.element ? DISPLAY_LABEL[t.element] || t.element : '—';
+        return interaction.editReply({
+          content: `**Rarity fuse success**${r.forcedPity ? ' _(pity)_' : ''}! **${t.name}** · ${t.rarity} · ${el} · copy **#${r.userCardId}**`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'forge') {
+        const raw = interaction.options.getString('copies', true);
+        const mode = interaction.options.getString('mode', true);
+        const ids = raw
+          .split(/[\s,]+/)
+          .map((s) => Number(s.trim()))
+          .filter((n) => Number.isFinite(n) && n > 0);
+        const r = await tcgForge.forgeCards(client, discordUser, ids, mode);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        return interaction.editReply({ content: r.summary, ephemeral: true });
+      }
+      if (sub === 'regrade') {
+        const instanceId = interaction.options.getInteger('instance', true);
+        const fb = interaction.options.getBoolean('shard_fallback') ?? false;
+        const r = await tcgRegrade.attemptRegrade(client, discordUser, instanceId, fb);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.success) {
+          return interaction.editReply({
+            content: `Regrade **failed**. Pity **${r.pityNow} / ${tcgRegrade.PITY_FORCE}**. Resources spent.`,
+            ephemeral: true,
+          });
+        }
+        return interaction.editReply({
+          content: `**Grade → ${r.newGrade}**! (paid shards **${r.paid.shards}** · diamonds **${r.paid.diamonds}** · rubies **${r.paid.rubies}**)`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'breakdown') {
+        const instanceId = interaction.options.getInteger('instance', true);
+        const result = await tcgInventory.breakdownInstance(client, discordUser, instanceId);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `Breakdown **${result.templateName}**: **+${result.gold}**g (total **${result.newGold.toLocaleString()}**g).`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'seal') {
+        const instanceId = interaction.options.getInteger('instance', true);
+        const result = await tcgInventory.applyPreservationSeal(client, discordUser, instanceId);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `Preservation Seal applied to **#${instanceId}**. **${result.sealsLeft}** seal charge(s) left.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'reroll') {
+        const instanceId = interaction.options.getInteger('instance', true);
+        const result = await tcgInventory.rerollElement(client, discordUser, instanceId);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `Paid **${result.cost}**g → new element **${result.elementLabel}**. Remaining gold: **${result.newGold.toLocaleString()}**g.`,
+          ephemeral: true,
+        });
+      }
+      return interaction.editReply({ content: 'Unknown craft subcommand.', ephemeral: true });
+    }
+
+    if (subcommandGroup === 'account') {
+      if (sub === 'balance') {
+        const bal = await tcgEconomy.getTcgBalance(client, discordUser);
+        if (!bal) {
+          return interaction.editReply({ content: 'Could not load your profile.', ephemeral: true });
+        }
+        const owned = await tcgInventory.countInventoryForDiscordUser(client, discordUser);
+        const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
+        let titleCount = 0;
+        if (internalId) {
+          await tcgSetProgress.syncTitleUnlocks(db.query, internalId);
+          const titleRows = await tcgSetProgress.listUnlockedTitles(internalId);
+          titleCount = titleRows.length;
+        }
+        const cap = internalId
+          ? await tcgInventory.getEffectiveInventoryCapForUser(internalId)
+          : tcgInventory.DEFAULT_INVENTORY_CAP + bal.inventoryBonusSlots;
+        const dailyLine = bal.dailyReady
+          ? 'Daily login: **ready** (`/tcg account daily`)'
+          : `Daily login: on cooldown (~${formatDuration(bal.dailyRemainingSec)} remaining)`;
+        const bF = tcgPacks.BASIC_PACK_PITY_FORCE_AT;
+        const pB = bal.basicPackPity;
+        let basicPityLine;
+        if (pB <= 0) {
+          basicPityLine = '**Basic:** No streak (no consecutive Basic packs without an Uncommon in any pull).';
+        } else if (pB >= bF) {
+          basicPityLine = `**Basic:** Streak **${pB}** — next Basic Pack guarantees Uncommon on the last card.`;
+        } else {
+          const need = bF - pB;
+          basicPityLine = `**Basic:** Streak **${pB}** — **${need}** more Basic pack(s) with no Uncommon, then the following pack guarantees one.`;
+        }
+
+        const aF = tcgPacks.ADVANCED_PACK_PITY_FORCE_AT;
+        const pA = bal.advancedPackPity;
+        let advancedPityLine;
+        if (pA <= 0) {
+          advancedPityLine = '**Advanced:** No streak (no consecutive Advanced packs without **SSR+** in any pull).';
+        } else if (pA >= aF) {
+          advancedPityLine = `**Advanced:** Streak **${pA}** — next Advanced Pack guarantees **SSR** on the last card.`;
+        } else {
+          const need = aF - pA;
+          advancedPityLine = `**Advanced:** Streak **${pA}** — **${need}** more Advanced pack(s) without **SSR+**, then the following pack guarantees **SSR** on the last.`;
+        }
+
+        const lF = tcgPacks.PREMIUM_LEGENDARY_PITY_FORCE_AT;
+        const mF = tcgPacks.PREMIUM_MYTHIC_PITY_FORCE_AT;
+        const pPL = bal.premiumLegendaryPity;
+        const pPM = bal.premiumMythicPity;
+        let premLLine;
+        if (pPL <= 0) {
+          premLLine = '**Premium (Legendary):** No streak (no consecutive Premium packs without L/M).';
+        } else if (pPL >= lF) {
+          premLLine = `**Premium (Legendary):** Streak **${pPL}** — next Premium Pack guarantees Legendary on the last card.`;
+        } else {
+          const need = lF - pPL;
+          premLLine = `**Premium (Legendary):** Streak **${pPL}** — **${need}** more Premium pack(s) without Legendary/Mythic, then the following pack guarantees one.`;
+        }
+        let premMLine;
+        if (pPM <= 0) {
+          premMLine = '**Premium (Mythic):** No streak (no consecutive Premium packs without Mythic).';
+        } else if (pPM >= mF) {
+          premMLine = `**Premium (Mythic):** Streak **${pPM}** — next Premium Pack guarantees Mythic on the last card.`;
+        } else {
+          const need = mF - pPM;
+          premMLine = `**Premium (Mythic):** Streak **${pPM}** — **${need}** more Premium pack(s) without Mythic, then the following pack guarantees one.`;
+        }
+
+        const pityBlock = [basicPityLine, advancedPityLine, premLLine, premMLine].join('\n');
+        const directBuyHelpLine = RARITY_ORDER.filter((a) => tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY[a] != null)
+          .map((a) => `**${a}** ${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY[a]}g`)
+          .join(' · ');
+
+        const embed = new EmbedBuilder()
+          .setTitle('TCG profile')
+          .addFields(
+            { name: 'Gold', value: `${bal.gold.toLocaleString()}g`, inline: true },
+            { name: 'XP', value: String(bal.xp), inline: true },
+            { name: 'Level', value: String(bal.level), inline: true },
+            {
+              name: 'Resources',
+              value: `Shards **${bal.shards}** · Diamonds **${bal.diamonds}** · Rubies **${bal.rubies}**`,
+              inline: false,
+            },
+            {
+              name: 'Shop combat charges',
+              value: [
+                `Focus **${bal.shardFocusCharges}** · Veil **${bal.ironVeilCharges}** · Overclock **${bal.overclockCharges}**`,
+                `Null Ward **${bal.nullWardCharges}** · Revive **${bal.reviveShardCharges}**`,
+              ].join('\n'),
+              inline: false,
+            },
+            {
+              name: 'Other shop stock',
+              value: [
+                `Catalyst **${bal.fusionCatalystCharges}** · Dust _${bal.rarityDustNextFuse ? '**primed**' : 'off'}_`,
+                `Seals **${bal.preservationSealCharges}** · Recall **${bal.recallTokenCharges}** · License **${bal.tradeLicenseCharges}**`,
+                bal.xpBoosterActive
+                  ? `XP Booster **on** → <t:${bal.xpBoosterUntil}:R>`
+                  : 'XP Booster off',
+              ].join('\n'),
+              inline: false,
+            },
+            {
+              name: 'Collection',
+              value:
+                `${owned} / ${cap} cards · **${titleCount}** set title(s) (\`/tcg titles\`)` +
+                (bal.inventoryBonusSlots > 0
+                  ? `\n_Shop bonus:_ **+${bal.inventoryBonusSlots}** slots (\`/tcg store buy\`)`
+                  : ''),
+              inline: false,
+            },
+            {
+              name: 'Packs',
+              value: [
+                `Basic **${tcgPacks.BASIC_PACK_COST}**g · 3× N/C/UC`,
+                `Advanced **${tcgPacks.ADVANCED_PACK_COST}**g · 4× N–M (rarity table)`,
+                `Premium **${tcgPacks.PREMIUM_PACK_COST}**g · 5× N–M (rarity table)`,
+                `Boss **${tcgPacks.BOSS_PACK_COST}**g · 4× · 1× Rare+ · boss-tag chance`,
+                `Region **${tcgPacks.REGION_PACK_COST}**g · 4× pool · \`region\` ${tcgPacks.REGION_ID_MIN}–${tcgPacks.REGION_ID_MAX}`,
+                `Direct **card** — ${directBuyHelpLine} · **L/M** not sold for gold`,
+                `\`/tcg store pack\` · \`/tcg store card\` · \`/tcg store browse\` · \`/tcg trade\``,
+              ].join('\n'),
+              inline: false,
+            },
+            { name: 'Pack pity', value: pityBlock, inline: false },
+            { name: 'Status', value: dailyLine, inline: false },
+          )
+          .setColor(0x5865f2);
+        return interaction.editReply({ embeds: [embed], ephemeral: true });
+      }
+      if (sub === 'convert') {
+        const xp = interaction.options.getInteger('xp', true);
+        const result = await tcgEconomy.convertXpToGold(client, discordUser, xp);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `Converted **${xp}** XP → **${result.goldGained}**g. You now have **${result.newGold.toLocaleString()}**g and **${result.newXp}** XP.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'daily') {
+        const result = await tcgEconomy.claimTcgDaily(client, discordUser);
+        if (!result.ok) {
+          if (result.error === 'cooldown') {
+            return interaction.editReply({
+              content: `Daily already claimed. Try again in **${formatDuration(result.remainingSec)}**.`,
+              ephemeral: true,
+            });
+          }
+          return interaction.editReply({ content: result.error || 'Could not claim daily.', ephemeral: true });
+        }
+        const bal = await tcgEconomy.getTcgBalance(client, discordUser);
+        return interaction.editReply({
+          content: `**+${result.xpGained}** daily login XP. You now have **${bal.xp}** XP.`,
+          ephemeral: true,
+        });
+      }
+      return interaction.editReply({ content: 'Unknown account subcommand.', ephemeral: true });
+    }
+
+    if (subcommandGroup === 'squad') {
+      if (sub === 'show') {
+        const detail = await tcgLoadout.getLoadoutDetail(client, discordUser);
+        if (!detail) {
+          return interaction.editReply({ content: 'Could not load loadout.', ephemeral: true });
+        }
+        const fmt = (c, label, rawId) => {
+          if (rawId && !c) {
+            return `**${label}:** stale slot (copy #${rawId} gone) — \`/tcg squad unequip\` then re-equip`;
+          }
+          if (!c) return `**${label}:** — empty —`;
+          const el = c.element ? (DISPLAY_LABEL[c.element] || c.element) : '—';
+          const reg =
+            c.tcg_region != null && c.tcg_region !== ''
+              ? ` · PvE region **${c.tcg_region}**`
+              : '';
+          const cl = c.class ? ` · ${c.class}` : '';
+          return `**${label}:** ${c.name} (#${c.user_card_id}) · ${c.rarity} · Lv${c.level} · ${el}${cl}${reg}`;
+        };
+        const embed = new EmbedBuilder()
+          .setTitle('Loadout')
+          .setDescription(
+            `${fmt(detail.main, 'Main', detail.row.main_user_card_id)}\n`
+              + `${fmt(detail.support1, 'Support 1', detail.row.support1_user_card_id)}\n`
+              + `${fmt(detail.support2, 'Support 2', detail.row.support2_user_card_id)}\n\n`
+              + '_Synergies in **`/tcg pve spar`** & **`/tcg pve fight`** (60% cap). Preview: **`/tcg squad synergy`**. **Home Turf:** `tcg_region` 1–6, PvE only. **Class:** Commander / Guardian / Artisan (+aliases)._',
+          )
+          .setFooter({ text: '/tcg squad synergy — optional enemy_element for Counter Build' })
+          .setColor(0x9b59b6);
+        return interaction.editReply({ embeds: [embed], ephemeral: true });
+      }
+      if (sub === 'synergy') {
+        const enemyOpt = interaction.options.getString('enemy_element');
+        const enemyEl = enemyOpt && enemyOpt !== 'none' ? enemyOpt : null;
+
+        const detail = await tcgLoadout.getLoadoutDetail(client, discordUser);
+        if (!detail || !detail.row.main_user_card_id) {
+          return interaction.editReply({
+            content: 'Equip a **main** card first (`/tcg squad equip`).',
+            ephemeral: true,
+          });
+        }
+
+        const summary = await tcgPve.getProgressSummary(client, discordUser);
+        if (!summary) {
+          return interaction.editReply({ content: 'Could not load PvE progress.', ephemeral: true });
+        }
+
+        const loadout = {
+          main: detail.main,
+          support1: detail.support1,
+          support2: detail.support2,
+        };
+
+        const synSpar = tcgSynergy.computeCombatSynergy(loadout, enemyEl, null);
+        const synPve = tcgSynergy.computeCombatSynergy(
+          loadout,
+          enemyEl,
+          Number(summary.current_region),
+        );
+
+        const fmt = (syn, label) => {
+          const lines =
+            syn.summaryLines && syn.summaryLines.length
+              ? syn.summaryLines.map((l) => `· ${l}`).join('\n')
+              : '_No synergies matched — try supports, classes, rarities, elements, or `tcg_region`._';
+          const bits = [];
+          if (syn.weaknessImmune) bits.push('Weakness immunity');
+          if (syn.goldMult > 1) bits.push(`×${syn.goldMult.toFixed(2)} battle gold`);
+          const foot = bits.length ? `\n_${bits.join(' · ')}_` : '';
+          return `**${label}**\n${lines}${foot}`;
+        };
+
+        const enLine = enemyEl
+          ? `Counter Build includes **${DISPLAY_LABEL[enemyEl] || enemyEl}**.`
+          : '_Pick **enemy_element** to preview Counter Build._';
+
+        const embed = new EmbedBuilder()
+          .setTitle('Loadout — synergy preview')
+          .setDescription(
+            `${fmt(synSpar, 'Spar (no Home Turf)')}\n\n${fmt(
+              synPve,
+              `PvE — ${summary.regionName} · Tier ${summary.tierRoman}`,
+            )}\n\n${enLine}\n_Bonuses use the 60% cap ([CardSystem.md])._`,
+          )
+          .setFooter({ text: '/tcg pve fight uses the PvE column; /tcg pve spar uses the Spar column.' })
+          .setColor(0x9b59b6);
+        return interaction.editReply({ embeds: [embed], ephemeral: true });
+      }
+      if (sub === 'equip') {
+        const slot = interaction.options.getString('slot', true);
+        const instanceId = interaction.options.getInteger('instance', true);
+        const result = await tcgLoadout.setLoadoutSlot(client, discordUser, slot, instanceId);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `Equipped copy **#${instanceId}** as **${slot}**.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'unequip') {
+        const slot = interaction.options.getString('slot', true);
+        const result = await tcgLoadout.setLoadoutSlot(client, discordUser, slot, null);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({ content: `Cleared **${slot}**.`, ephemeral: true });
+      }
+      return interaction.editReply({ content: 'Unknown squad subcommand.', ephemeral: true });
+    }
+
     if (subcommandGroup === 'pvp') {
       if (sub === 'challenge') {
         const opponent = interaction.options.getUser('opponent', true);
@@ -1082,361 +1486,260 @@ module.exports = {
           .setColor(won ? 0x57f287 : 0xed4245);
         return interaction.editReply({ embeds: [embed], ephemeral: true });
       }
+      if (sub === 'spar') {
+        const result = await tcgSpar.runSpar(client, discordUser);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        const {
+          sim,
+          goldGained,
+          won,
+          playerLabel,
+          enemyLabel,
+          playerLevel,
+          synergyLines,
+          synergyGoldMult,
+          shardFocusConsumed,
+        } = result;
+        const combatExtra = combatItemsEmbedValue(result);
+        const title = won ? 'Spar — victory' : sim.outcome === 'draw' ? 'Spar — draw' : 'Spar — defeat';
+        const logText = sim.log.slice(0, 14).join('\n') || '—';
+        const goldLine = goldGained
+          ? `**+${goldGained}**g${
+              synergyGoldMult > 1 ? ` _(×${synergyGoldMult.toFixed(2)} from Pure / Triangle)_` : ''
+            }`
+          : '**0**g (win for gold)';
+        const synBlock =
+          synergyLines && synergyLines.length
+            ? `\n_Synergy:_ ${synergyLines.join(' · ')}\n`
+            : '';
+        const embed = new EmbedBuilder()
+          .setTitle(title)
+          .setDescription(
+            `**${playerLabel}** (Lv${playerLevel} main) vs **${enemyLabel}** (scaled)${synBlock}`
+              + `${sim.elementSummary}\n\n${logText}${sim.log.length > 14 ? '\n…' : ''}`,
+          )
+          .addFields(
+            { name: 'Result', value: `${sim.outcome.toUpperCase()} · ${sim.rounds} steps`, inline: true },
+            { name: 'Gold', value: goldLine, inline: true },
+            { name: 'XP', value: 'Applied via PvE rules (`awardTcgBattleXp`)', inline: false },
+            ...(combatExtra
+              ? [{ name: 'Combat items', value: combatExtra, inline: false }]
+              : shardFocusConsumed
+                ? [
+                    {
+                      name: 'Shard of Focus',
+                      value: '**+15% ATK** applied this fight · 1 charge consumed.',
+                      inline: false,
+                    },
+                  ]
+                : []),
+          )
+          .setColor(won ? 0x57f287 : 0xed4245);
+        return interaction.editReply({ embeds: [embed], ephemeral: true });
+      }
       return interaction.editReply({ content: 'Unknown pve subcommand.', ephemeral: true });
     }
 
-    if (sub === 'buy_pack') {
-      const pack = interaction.options.getString('pack', true);
-      let result;
-      if (pack === 'basic') result = await tcgPacks.buyBasicPack(client, discordUser);
-      else if (pack === 'advanced') result = await tcgPacks.buyAdvancedPack(client, discordUser);
-      else if (pack === 'premium') result = await tcgPacks.buyPremiumPack(client, discordUser);
-      else if (pack === 'boss') result = await tcgPacks.buyBossPack(client, discordUser);
-      else if (pack === 'region') {
-        const region = interaction.options.getInteger('region');
-        if (region == null) {
-          return interaction.editReply({
-            content:
-              '**Region pack:** set **region** to **1–6** (Home Turf — matches catalog `tcg_region`).',
-            ephemeral: true,
-          });
-        }
-        result = await tcgPacks.buyRegionPack(client, discordUser, region);
-      } else return interaction.editReply({ content: 'Unknown pack type.', ephemeral: true });
-
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-
-      const lines = formatTcgPullLines(result.pulls);
-      let title = 'Pack';
-      let color = 0xf1c40f;
-      let pityBlock = '';
-      let footer = '';
-
-      if (result.packKind === 'basic') {
-        title = 'Basic Pack';
-        color = 0xf1c40f;
-        const forceAt = tcgPacks.BASIC_PACK_PITY_FORCE_AT;
-        if (result.pityTriggered) {
-          pityBlock =
-            '\n\n**Pity:** Last card was a guaranteed Uncommon (after **9** Basic packs in a row with no Uncommon).';
-        } else if (result.pityAfter > 0) {
-          if (result.pityAfter >= forceAt) {
-            pityBlock = `\n\n**Pity:** Your next Basic Pack will guarantee an Uncommon on the last card (streak **${result.pityAfter}**).`;
-          } else {
-            const need = forceAt - result.pityAfter;
-            pityBlock = `\n\n_Pity streak:_ **${result.pityAfter}** Basic pack(s) with no Uncommon. **${need}** more like that, then the following pack guarantees one on the last card.`;
+    if (subcommandGroup === 'store') {
+      if (sub === 'pack') {
+        const packType = interaction.options.getString('pack', true);
+        let result;
+        if (packType === 'basic') result = await tcgPacks.buyBasicPack(client, discordUser);
+        else if (packType === 'advanced') result = await tcgPacks.buyAdvancedPack(client, discordUser);
+        else if (packType === 'premium') result = await tcgPacks.buyPremiumPack(client, discordUser);
+        else if (packType === 'boss') result = await tcgPacks.buyBossPack(client, discordUser);
+        else if (packType === 'region') {
+          const region = interaction.options.getInteger('region');
+          if (region == null) {
+            return interaction.editReply({
+              content:
+                '**Region pack:** set **region** to **1–6** (Home Turf — matches catalog `tcg_region`).',
+              ephemeral: true,
+            });
           }
+          result = await tcgPacks.buyRegionPack(client, discordUser, region);
+        } else return interaction.editReply({ content: 'Unknown pack type.', ephemeral: true });
+
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
         }
-        footer = `Pulls: **N** / **C** / **UC** only, weighted from the rarity table. Pity: after ${forceAt} consecutive Basic packs with no Uncommon in any pull, the next pack forces UC on pull 3.`;
-      } else if (result.packKind === 'advanced') {
-        title = 'Advanced Pack';
-        color = 0x9b59b6;
-        const forceAt = tcgPacks.ADVANCED_PACK_PITY_FORCE_AT;
-        if (result.pityTriggered) {
-          pityBlock =
-            '\n\n**Pity:** Last card was a guaranteed **SSR** (after **9** Advanced packs in a row with no **SSR+** in any pull).';
-        } else if (result.pityAfter > 0) {
-          if (result.pityAfter >= forceAt) {
-            pityBlock = `\n\n**Pity:** Your next Advanced Pack will guarantee **SSR** on the last card (streak **${result.pityAfter}**).`;
-          } else {
-            const need = forceAt - result.pityAfter;
-            pityBlock = `\n\n_Pity streak:_ **${result.pityAfter}** Advanced pack(s) with no **SSR+** in any pull. **${need}** more like that, then the following pack guarantees **SSR** on the last card.`;
+
+        const lines = formatTcgPullLines(result.pulls);
+        let title = 'Pack';
+        let color = 0xf1c40f;
+        let pityBlock = '';
+        let footer = '';
+
+        if (result.packKind === 'basic') {
+          title = 'Basic Pack';
+          color = 0xf1c40f;
+          const forceAt = tcgPacks.BASIC_PACK_PITY_FORCE_AT;
+          if (result.pityTriggered) {
+            pityBlock =
+              '\n\n**Pity:** Last card was a guaranteed Uncommon (after **9** Basic packs in a row with no Uncommon).';
+          } else if (result.pityAfter > 0) {
+            if (result.pityAfter >= forceAt) {
+              pityBlock = `\n\n**Pity:** Your next Basic Pack will guarantee an Uncommon on the last card (streak **${result.pityAfter}**).`;
+            } else {
+              const need = forceAt - result.pityAfter;
+              pityBlock = `\n\n_Pity streak:_ **${result.pityAfter}** Basic pack(s) with no Uncommon. **${need}** more like that, then the following pack guarantees one on the last card.`;
+            }
           }
-        }
-        footer = `Pulls: **N–M** (weights from the \`rarity\` table). Pity: after ${forceAt} consecutive Advanced packs with no **SSR+** in any pull, the next pack forces **SSR** on pull 4.`;
-      } else if (result.packKind === 'premium') {
-        title = 'Premium Pack';
-        color = 0xe67e22;
-        const lF = tcgPacks.PREMIUM_LEGENDARY_PITY_FORCE_AT;
-        const mF = tcgPacks.PREMIUM_MYTHIC_PITY_FORCE_AT;
-        const parts = [];
-        if (result.pityMythicTriggered) {
-          parts.push(
-            '**Pity (Mythic):** Last card was a guaranteed Mythic (after **49** Premium packs in a row with no Mythic).',
-          );
-        } else if (result.pityLegendaryTriggered) {
-          parts.push(
-            '**Pity (Legendary):** Last card was a guaranteed Legendary (after **19** Premium packs in a row with no Legendary or Mythic).',
-          );
-        }
-        if (!result.pityMythicTriggered && result.pityMythicAfter > 0) {
-          if (result.pityMythicAfter >= mF) {
+          footer = `Pulls: **N** / **C** / **UC** only, weighted from the rarity table. Pity: after ${forceAt} consecutive Basic packs with no Uncommon in any pull, the next pack forces UC on pull 3.`;
+        } else if (result.packKind === 'advanced') {
+          title = 'Advanced Pack';
+          color = 0x9b59b6;
+          const forceAt = tcgPacks.ADVANCED_PACK_PITY_FORCE_AT;
+          if (result.pityTriggered) {
+            pityBlock =
+              '\n\n**Pity:** Last card was a guaranteed **SSR** (after **9** Advanced packs in a row with no **SSR+** in any pull).';
+          } else if (result.pityAfter > 0) {
+            if (result.pityAfter >= forceAt) {
+              pityBlock = `\n\n**Pity:** Your next Advanced Pack will guarantee **SSR** on the last card (streak **${result.pityAfter}**).`;
+            } else {
+              const need = forceAt - result.pityAfter;
+              pityBlock = `\n\n_Pity streak:_ **${result.pityAfter}** Advanced pack(s) with no **SSR+** in any pull. **${need}** more like that, then the following pack guarantees **SSR** on the last card.`;
+            }
+          }
+          footer = `Pulls: **N–M** (weights from the \`rarity\` table). Pity: after ${forceAt} consecutive Advanced packs with no **SSR+** in any pull, the next pack forces **SSR** on pull 4.`;
+        } else if (result.packKind === 'premium') {
+          title = 'Premium Pack';
+          color = 0xe67e22;
+          const lF = tcgPacks.PREMIUM_LEGENDARY_PITY_FORCE_AT;
+          const mF = tcgPacks.PREMIUM_MYTHIC_PITY_FORCE_AT;
+          const parts = [];
+          if (result.pityMythicTriggered) {
             parts.push(
-              `**Pity (Mythic):** Next Premium Pack guarantees Mythic on the last card (streak **${result.pityMythicAfter}**).`,
+              '**Pity (Mythic):** Last card was a guaranteed Mythic (after **49** Premium packs in a row with no Mythic).',
             );
-          } else {
-            const need = mF - result.pityMythicAfter;
+          } else if (result.pityLegendaryTriggered) {
             parts.push(
-              `_Mythic streak:_ **${result.pityMythicAfter}** — **${need}** more Premium pack(s) with no Mythic, then the following pack guarantees one on the last card.`,
+              '**Pity (Legendary):** Last card was a guaranteed Legendary (after **19** Premium packs in a row with no Legendary or Mythic).',
             );
           }
-        }
-        if (!result.pityLegendaryTriggered && result.pityLegendaryAfter > 0) {
-          if (result.pityLegendaryAfter >= lF) {
-            parts.push(
-              `**Pity (Legendary):** Next Premium Pack guarantees Legendary on the last card (streak **${result.pityLegendaryAfter}**).`,
-            );
-          } else {
-            const need = lF - result.pityLegendaryAfter;
-            parts.push(
-              `_Legendary streak:_ **${result.pityLegendaryAfter}** — **${need}** more Premium pack(s) with no Legendary/Mythic, then the following pack guarantees one on the last card.`,
-            );
+          if (!result.pityMythicTriggered && result.pityMythicAfter > 0) {
+            if (result.pityMythicAfter >= mF) {
+              parts.push(
+                `**Pity (Mythic):** Next Premium Pack guarantees Mythic on the last card (streak **${result.pityMythicAfter}**).`,
+              );
+            } else {
+              const need = mF - result.pityMythicAfter;
+              parts.push(
+                `_Mythic streak:_ **${result.pityMythicAfter}** — **${need}** more Premium pack(s) with no Mythic, then the following pack guarantees one on the last card.`,
+              );
+            }
           }
+          if (!result.pityLegendaryTriggered && result.pityLegendaryAfter > 0) {
+            if (result.pityLegendaryAfter >= lF) {
+              parts.push(
+                `**Pity (Legendary):** Next Premium Pack guarantees Legendary on the last card (streak **${result.pityLegendaryAfter}**).`,
+              );
+            } else {
+              const need = lF - result.pityLegendaryAfter;
+              parts.push(
+                `_Legendary streak:_ **${result.pityLegendaryAfter}** — **${need}** more Premium pack(s) with no Legendary/Mythic, then the following pack guarantees one on the last card.`,
+              );
+            }
+          }
+          if (parts.length) pityBlock = `\n\n${parts.join('\n')}`;
+          footer = `Pulls: **N–M** (weights from the \`rarity\` table). Pity: Legendary after ${lF} consecutive packs with no L/M; Mythic after ${mF} with no M (Mythic pity wins on the last pull if both apply).`;
+        } else if (result.packKind === 'region') {
+          title = `Region Pack · Home Turf ${result.regionId}`;
+          color = 0x1abc9c;
+          footer =
+            'Uniform random among catalog cards with this tcg_region (any rarity). No pack pity ([CardSystem.md] Region Pack).';
+        } else if (result.packKind === 'boss') {
+          title = 'Boss Pack';
+          color = 0xa93226;
+          const pct = Math.round(tcgPacks.BOSS_PACK_BOSS_TAG_CHANCE * 100);
+          if (result.bossTaggedPulls > 0) {
+            pityBlock = `\n\n_Boss-tagged catalog cards:_ **${result.bossTaggedPulls}** (\`card_data.is_boss_card\`).`;
+          }
+          footer = `Guaranteed **Rare+** if none in pulls 1–3 (pull 4 forces **R–M** from the rarity table). ~${pct}% per card to try a boss-tagged template first, else weighted \`rarity\` pool like Advanced.`;
         }
-        if (parts.length) pityBlock = `\n\n${parts.join('\n')}`;
-        footer = `Pulls: **N–M** (weights from the \`rarity\` table). Pity: Legendary after ${lF} consecutive packs with no L/M; Mythic after ${mF} with no M (Mythic pity wins on the last pull if both apply).`;
-      } else if (result.packKind === 'region') {
-        title = `Region Pack · Home Turf ${result.regionId}`;
-        color = 0x1abc9c;
-        footer =
-          'Uniform random among catalog cards with this tcg_region (any rarity). No pack pity ([CardSystem.md] Region Pack).';
-      } else if (result.packKind === 'boss') {
-        title = 'Boss Pack';
-        color = 0xa93226;
-        const pct = Math.round(tcgPacks.BOSS_PACK_BOSS_TAG_CHANCE * 100);
-        if (result.bossTaggedPulls > 0) {
-          pityBlock = `\n\n_Boss-tagged catalog cards:_ **${result.bossTaggedPulls}** (\`card_data.is_boss_card\`).`;
+
+        const embed = new EmbedBuilder()
+          .setTitle(title)
+          .setDescription(
+            `**−${result.cost}**g · **${result.newGold.toLocaleString()}**g remaining\n\n${lines.join('\n')}${pityBlock}`,
+          )
+          .setFooter({ text: footer })
+          .setColor(color);
+        return interaction.editReply({ embeds: [embed], ephemeral: true });
+      }
+
+      if (sub === 'card') {
+        const member = interaction.options.getUser('member', true);
+        const rarity = interaction.options.getString('rarity', true);
+        const rawEl = interaction.options.getString('element');
+        const elementOpt = rawEl && rawEl !== 'any' ? rawEl : null;
+        const directResult = await tcgDirectBuy.buyDirectCatalogCopy(
+          client,
+          discordUser,
+          member,
+          rarity,
+          elementOpt,
+        );
+        if (!directResult.ok) {
+          return interaction.editReply({ content: directResult.error, ephemeral: true });
         }
-        footer = `Guaranteed **Rare+** if none in pulls 1–3 (pull 4 forces **R–M** from the rarity table). ~${pct}% per card to try a boss-tagged template first, else weighted \`rarity\` pool like Advanced.`;
+        const g = directResult.grant;
+        const meta = g.template;
+        const el = meta.element ? DISPLAY_LABEL[meta.element] || meta.element : '—';
+        const poolHint =
+          directResult.matchCount > 1 && !elementOpt
+            ? `\n_${directResult.matchCount} templates at this rarity — random element; set **element** to pick one._`
+            : '';
+        return interaction.editReply({
+          content: `**−${directResult.cost}**g · **${directResult.newGold.toLocaleString()}**g remaining\n**${meta.name}** · ${meta.rarity} · ${el} · copy **#${g.userCardId}**${poolHint}`,
+          ephemeral: true,
+        });
       }
 
-      const embed = new EmbedBuilder()
-        .setTitle(title)
-        .setDescription(
-          `**−${result.cost}**g · **${result.newGold.toLocaleString()}**g remaining\n\n${lines.join('\n')}${pityBlock}`,
-        )
-        .setFooter({ text: footer })
-        .setColor(color);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (sub === 'buy_card') {
-      const member = interaction.options.getUser('member', true);
-      const rarity = interaction.options.getString('rarity', true);
-      const rawEl = interaction.options.getString('element');
-      const elementOpt = rawEl && rawEl !== 'any' ? rawEl : null;
-      const result = await tcgDirectBuy.buyDirectCatalogCopy(
-        client,
-        discordUser,
-        member,
-        rarity,
-        elementOpt,
-      );
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      const g = result.grant;
-      const meta = g.template;
-      const el = meta.element ? DISPLAY_LABEL[meta.element] || meta.element : '—';
-      const poolHint =
-        result.matchCount > 1 && !elementOpt
-          ? `\n_${result.matchCount} templates at this rarity — random element; set **element** to pick one._`
-          : '';
-      return interaction.editReply({
-        content: `**−${result.cost}**g · **${result.newGold.toLocaleString()}**g remaining\n**${meta.name}** · ${meta.rarity} · ${el} · copy **#${g.userCardId}**${poolHint}`,
-        ephemeral: true,
-      });
-    }
-
-    if (sub === 'shop') {
-      const snap = await tcgShop.getShopSnapshot(client, discordUser);
-      const lines = snap.items.map(
-        (i) =>
-          `**${i.label}** — **${i.cost}**g\n${i.description}\n· Server stock left today: **${i.serverRemaining}** · You can still buy: **${i.playerRemaining}**`,
-      );
-      const embed = new EmbedBuilder()
-        .setTitle('TCG item shop')
-        .setDescription(`${lines.join('\n\n')}\n\nUse \`/tcg shop_buy\`.`)
-        .setFooter({ text: `UTC date: ${snap.dayUtc} · Resets midnight UTC · [CardSystem.md] Item Shop` })
-        .setColor(0x3498db);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (sub === 'shop_buy') {
-      const item = interaction.options.getString('item', true);
-      const result = await tcgShop.buyShopItem(client, discordUser, item);
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      const bonusLine =
-        result.bonusSlotsAdded > 0
-          ? `\nInventory cap **+${result.bonusSlotsAdded}** (total shop bonus: **${result.inventoryBonusSlots}**).`
-          : '';
-      const chargeLine =
-        result.chargeColumn && result.chargeAfter != null
-          ? `\n**${result.label}** stack: **${result.chargeAfter}** stored.`
-          : '';
-      const dustLine = result.rarityDustPrimed ? '\n**Rarity Dust** primed for your **next** fuse.' : '';
-      const xpLine =
-        result.xpBoosterUntil != null
-          ? `\n**XP Booster** active until <t:${Math.floor(Number(result.xpBoosterUntil))}:R>.`
-          : '';
-      return interaction.editReply({
-        content: `**${result.label}** — **−${result.cost}**g · **${result.newGold.toLocaleString()}**g remaining${bonusLine}${chargeLine}${dustLine}${xpLine}`,
-        ephemeral: true,
-      });
-    }
-
-    if (sub === 'balance') {
-      const bal = await tcgEconomy.getTcgBalance(client, discordUser);
-      if (!bal) {
-        return interaction.editReply({ content: 'Could not load your profile.', ephemeral: true });
-      }
-      const owned = await tcgInventory.countInventoryForDiscordUser(client, discordUser);
-      const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
-      let titleCount = 0;
-      if (internalId) {
-        await tcgSetProgress.syncTitleUnlocks(db.query, internalId);
-        const titleRows = await tcgSetProgress.listUnlockedTitles(internalId);
-        titleCount = titleRows.length;
-      }
-      const cap = internalId
-        ? await tcgInventory.getEffectiveInventoryCapForUser(internalId)
-        : tcgInventory.DEFAULT_INVENTORY_CAP + bal.inventoryBonusSlots;
-      const dailyLine = bal.dailyReady
-        ? 'Daily login: **ready** (`/tcg daily`)'
-        : `Daily login: on cooldown (~${formatDuration(bal.dailyRemainingSec)} remaining)`;
-      const bF = tcgPacks.BASIC_PACK_PITY_FORCE_AT;
-      const pB = bal.basicPackPity;
-      let basicPityLine;
-      if (pB <= 0) {
-        basicPityLine = '**Basic:** No streak (no consecutive Basic packs without an Uncommon in any pull).';
-      } else if (pB >= bF) {
-        basicPityLine = `**Basic:** Streak **${pB}** — next Basic Pack guarantees Uncommon on the last card.`;
-      } else {
-        const need = bF - pB;
-        basicPityLine = `**Basic:** Streak **${pB}** — **${need}** more Basic pack(s) with no Uncommon, then the following pack guarantees one.`;
+      if (sub === 'browse') {
+        const snap = await tcgShop.getShopSnapshot(client, discordUser);
+        const lines = snap.items.map(
+          (i) =>
+            `**${i.label}** — **${i.cost}**g\n${i.description}\n· Server stock left today: **${i.serverRemaining}** · You can still buy: **${i.playerRemaining}**`,
+        );
+        const embed = new EmbedBuilder()
+          .setTitle('TCG item shop')
+          .setDescription(`${lines.join('\n\n')}\n\nUse \`/tcg store buy\`.`)
+          .setFooter({ text: `UTC date: ${snap.dayUtc} · Resets midnight UTC · [CardSystem.md] Item Shop` })
+          .setColor(0x3498db);
+        return interaction.editReply({ embeds: [embed], ephemeral: true });
       }
 
-      const aF = tcgPacks.ADVANCED_PACK_PITY_FORCE_AT;
-      const pA = bal.advancedPackPity;
-      let advancedPityLine;
-      if (pA <= 0) {
-        advancedPityLine = '**Advanced:** No streak (no consecutive Advanced packs without **SSR+** in any pull).';
-      } else if (pA >= aF) {
-        advancedPityLine = `**Advanced:** Streak **${pA}** — next Advanced Pack guarantees **SSR** on the last card.`;
-      } else {
-        const need = aF - pA;
-        advancedPityLine = `**Advanced:** Streak **${pA}** — **${need}** more Advanced pack(s) without **SSR+**, then the following pack guarantees **SSR** on the last.`;
-      }
-
-      const lF = tcgPacks.PREMIUM_LEGENDARY_PITY_FORCE_AT;
-      const mF = tcgPacks.PREMIUM_MYTHIC_PITY_FORCE_AT;
-      const pPL = bal.premiumLegendaryPity;
-      const pPM = bal.premiumMythicPity;
-      let premLLine;
-      if (pPL <= 0) {
-        premLLine = '**Premium (Legendary):** No streak (no consecutive Premium packs without L/M).';
-      } else if (pPL >= lF) {
-        premLLine = `**Premium (Legendary):** Streak **${pPL}** — next Premium Pack guarantees Legendary on the last card.`;
-      } else {
-        const need = lF - pPL;
-        premLLine = `**Premium (Legendary):** Streak **${pPL}** — **${need}** more Premium pack(s) without Legendary/Mythic, then the following pack guarantees one.`;
-      }
-      let premMLine;
-      if (pPM <= 0) {
-        premMLine = '**Premium (Mythic):** No streak (no consecutive Premium packs without Mythic).';
-      } else if (pPM >= mF) {
-        premMLine = `**Premium (Mythic):** Streak **${pPM}** — next Premium Pack guarantees Mythic on the last card.`;
-      } else {
-        const need = mF - pPM;
-        premMLine = `**Premium (Mythic):** Streak **${pPM}** — **${need}** more Premium pack(s) without Mythic, then the following pack guarantees one.`;
-      }
-
-      const pityBlock = [basicPityLine, advancedPityLine, premLLine, premMLine].join('\n');
-      const directBuyHelpLine = RARITY_ORDER.filter((a) => tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY[a] != null)
-        .map((a) => `**${a}** ${tcgDirectBuy.DIRECT_BUY_GOLD_BY_RARITY[a]}g`)
-        .join(' · ');
-
-      const embed = new EmbedBuilder()
-        .setTitle('TCG profile')
-        .addFields(
-          { name: 'Gold', value: `${bal.gold.toLocaleString()}g`, inline: true },
-          { name: 'XP', value: String(bal.xp), inline: true },
-          { name: 'Level', value: String(bal.level), inline: true },
-          {
-            name: 'Resources',
-            value: `Shards **${bal.shards}** · Diamonds **${bal.diamonds}** · Rubies **${bal.rubies}**`,
-            inline: false,
-          },
-          {
-            name: 'Shop combat charges',
-            value: [
-              `Focus **${bal.shardFocusCharges}** · Veil **${bal.ironVeilCharges}** · Overclock **${bal.overclockCharges}**`,
-              `Null Ward **${bal.nullWardCharges}** · Revive **${bal.reviveShardCharges}**`,
-            ].join('\n'),
-            inline: false,
-          },
-          {
-            name: 'Other shop stock',
-            value: [
-              `Catalyst **${bal.fusionCatalystCharges}** · Dust _${bal.rarityDustNextFuse ? '**primed**' : 'off'}_`,
-              `Seals **${bal.preservationSealCharges}** · Recall **${bal.recallTokenCharges}** · License **${bal.tradeLicenseCharges}**`,
-              bal.xpBoosterActive
-                ? `XP Booster **on** → <t:${bal.xpBoosterUntil}:R>`
-                : 'XP Booster off',
-            ].join('\n'),
-            inline: false,
-          },
-          {
-            name: 'Collection',
-            value:
-              `${owned} / ${cap} cards · **${titleCount}** set title(s) (\`/tcg titles\`)` +
-              (bal.inventoryBonusSlots > 0
-                ? `\n_Shop bonus:_ **+${bal.inventoryBonusSlots}** slots (\`/tcg shop\`)`
-                : ''),
-            inline: false,
-          },
-          {
-            name: 'Packs',
-            value: [
-              `Basic **${tcgPacks.BASIC_PACK_COST}**g · 3× N/C/UC`,
-              `Advanced **${tcgPacks.ADVANCED_PACK_COST}**g · 4× N–M (rarity table)`,
-              `Premium **${tcgPacks.PREMIUM_PACK_COST}**g · 5× N–M (rarity table)`,
-              `Boss **${tcgPacks.BOSS_PACK_COST}**g · 4× · 1× Rare+ · boss-tag chance`,
-              `Region **${tcgPacks.REGION_PACK_COST}**g · 4× pool · \`region\` ${tcgPacks.REGION_ID_MIN}–${tcgPacks.REGION_ID_MAX}`,
-              `Direct **buy_card** — ${directBuyHelpLine} · **L/M** not sold for gold`,
-              `\`/tcg buy_pack\` · \`/tcg buy_card\` · \`/tcg shop\` · \`/tcg trade\``,
-            ].join('\n'),
-            inline: false,
-          },
-          { name: 'Pack pity', value: pityBlock, inline: false },
-          { name: 'Status', value: dailyLine, inline: false },
-        )
-        .setColor(0x5865f2);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (sub === 'convert') {
-      const xp = interaction.options.getInteger('xp', true);
-      const result = await tcgEconomy.convertXpToGold(client, discordUser, xp);
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      return interaction.editReply({
-        content: `Converted **${xp}** XP → **${result.goldGained}**g. You now have **${result.newGold.toLocaleString()}**g and **${result.newXp}** XP.`,
-        ephemeral: true,
-      });
-    }
-
-    if (sub === 'daily') {
-      const result = await tcgEconomy.claimTcgDaily(client, discordUser);
-      if (!result.ok) {
-        if (result.error === 'cooldown') {
-          return interaction.editReply({
-            content: `Daily already claimed. Try again in **${formatDuration(result.remainingSec)}**.`,
-            ephemeral: true,
-          });
+      if (sub === 'buy') {
+        const item = interaction.options.getString('item', true);
+        const buyResult = await tcgShop.buyShopItem(client, discordUser, item);
+        if (!buyResult.ok) {
+          return interaction.editReply({ content: buyResult.error, ephemeral: true });
         }
-        return interaction.editReply({ content: result.error || 'Could not claim daily.', ephemeral: true });
+        const bonusLine =
+          buyResult.bonusSlotsAdded > 0
+            ? `\nInventory cap **+${buyResult.bonusSlotsAdded}** (total shop bonus: **${buyResult.inventoryBonusSlots}**).`
+            : '';
+        const chargeLine =
+          buyResult.chargeColumn && buyResult.chargeAfter != null
+            ? `\n**${buyResult.label}** stack: **${buyResult.chargeAfter}** stored.`
+            : '';
+        const dustLine = buyResult.rarityDustPrimed
+          ? '\n**Rarity Dust** primed for your **next** `/tcg craft fuse`.'
+          : '';
+        const xpLine =
+          buyResult.xpBoosterUntil != null
+            ? `\n**XP Booster** active until <t:${Math.floor(Number(buyResult.xpBoosterUntil))}:R>.`
+            : '';
+        return interaction.editReply({
+          content: `**${buyResult.label}** — **−${buyResult.cost}**g · **${buyResult.newGold.toLocaleString()}**g remaining${bonusLine}${chargeLine}${dustLine}${xpLine}`,
+          ephemeral: true,
+        });
       }
-      const bal = await tcgEconomy.getTcgBalance(client, discordUser);
-      return interaction.editReply({
-        content: `**+${result.xpGained}** daily login XP. You now have **${bal.xp}** XP.`,
-        ephemeral: true,
-      });
+
+      return interaction.editReply({ content: 'Unknown store subcommand.', ephemeral: true });
     }
 
     if (sub === 'inventory') {
@@ -1449,7 +1752,7 @@ module.exports = {
       );
       if (!total) {
         return interaction.editReply({
-          content: `No cards yet. Open a **Basic Pack** with \`/tcg buy_pack\` or ask staff for \`/tcg staff grant\`.`,
+          content: `No cards yet. Open a **Basic Pack** with \`/tcg store pack\` or ask staff for \`/tcg staff grant\`.`,
           ephemeral: true,
         });
       }
@@ -1514,284 +1817,6 @@ module.exports = {
         )
         .setImage(row.image_url || null)
         .setColor(0x5865f2);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (sub === 'breakdown') {
-      const instanceId = interaction.options.getInteger('instance', true);
-      const result = await tcgInventory.breakdownInstance(client, discordUser, instanceId);
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      return interaction.editReply({
-        content: `Breakdown **${result.templateName}**: **+${result.gold}**g (total **${result.newGold.toLocaleString()}**g).`,
-        ephemeral: true,
-      });
-    }
-
-    if (sub === 'fusion') {
-      const ids = [
-        interaction.options.getInteger('first', true),
-        interaction.options.getInteger('second', true),
-        interaction.options.getInteger('third'),
-      ].filter((n) => n != null && n > 0);
-      const r = await tcgFusion.attemptRarityFusion(client, discordUser, ids);
-      if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
-      if (!r.success) {
-        return interaction.editReply({
-          content: `${r.message} Pity **${r.attemptsNow} / ${tcgFusion.FUSION_PITY_FORCE}**.`,
-          ephemeral: true,
-        });
-      }
-      const t = r.template;
-      const el = t.element ? DISPLAY_LABEL[t.element] || t.element : '—';
-      return interaction.editReply({
-        content: `**Fusion success**${r.forcedPity ? ' _(pity)_' : ''}! **${t.name}** · ${t.rarity} · ${el} · copy **#${r.userCardId}**`,
-        ephemeral: true,
-      });
-    }
-
-    if (sub === 'forge') {
-      const raw = interaction.options.getString('copies', true);
-      const mode = interaction.options.getString('mode', true);
-      const ids = raw
-        .split(/[\s,]+/)
-        .map((s) => Number(s.trim()))
-        .filter((n) => Number.isFinite(n) && n > 0);
-      const r = await tcgForge.forgeCards(client, discordUser, ids, mode);
-      if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
-      return interaction.editReply({ content: r.summary, ephemeral: true });
-    }
-
-    if (sub === 'regrade') {
-      const instanceId = interaction.options.getInteger('instance', true);
-      const fb = interaction.options.getBoolean('shard_fallback') ?? false;
-      const r = await tcgRegrade.attemptRegrade(client, discordUser, instanceId, fb);
-      if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
-      if (!r.success) {
-        return interaction.editReply({
-          content: `Regrade **failed**. Pity **${r.pityNow} / ${tcgRegrade.PITY_FORCE}**. Resources spent.`,
-          ephemeral: true,
-        });
-      }
-      return interaction.editReply({
-        content: `**Grade → ${r.newGrade}**! (paid shards **${r.paid.shards}** · diamonds **${r.paid.diamonds}** · rubies **${r.paid.rubies}**)`,
-        ephemeral: true,
-      });
-    }
-
-    if (sub === 'fuse') {
-      const first = interaction.options.getInteger('first', true);
-      const second = interaction.options.getInteger('second');
-      const useCatalyst = interaction.options.getBoolean('use_catalyst') ?? false;
-      const result = await tcgInventory.fuseInstances(client, discordUser, first, second ?? null, {
-        fusionCatalyst: useCatalyst,
-      });
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      let extra = '';
-      if (result.rarityDust?.upgraded) {
-        extra = ` **Rarity Dust:** upgraded toward **${result.rarityDust.newRarity}** (**${result.rarityDust.templateName}**).`;
-      } else if (result.rarityDust?.dustConsumed) {
-        extra = ' _(Rarity Dust consumed — no rarity bump this time)._';
-      }
-      if (result.fusionCatalystUsed) {
-        extra = ` _(Fusion Catalyst used)._${extra}`;
-      }
-      return interaction.editReply({
-        content: `Fused into one **Lv${result.newLevel}** copy (**#${result.userCardId}**).${extra}`,
-        ephemeral: true,
-      });
-    }
-
-    if (sub === 'seal') {
-      const instanceId = interaction.options.getInteger('instance', true);
-      const result = await tcgInventory.applyPreservationSeal(client, discordUser, instanceId);
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      return interaction.editReply({
-        content: `Preservation Seal applied to **#${instanceId}**. **${result.sealsLeft}** seal charge(s) left.`,
-        ephemeral: true,
-      });
-    }
-
-    if (sub === 'reroll') {
-      const instanceId = interaction.options.getInteger('instance', true);
-      const result = await tcgInventory.rerollElement(client, discordUser, instanceId);
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      return interaction.editReply({
-        content: `Paid **${result.cost}**g → new element **${result.elementLabel}**. Remaining gold: **${result.newGold.toLocaleString()}**g.`,
-        ephemeral: true,
-      });
-    }
-
-    if (sub === 'loadout') {
-      const detail = await tcgLoadout.getLoadoutDetail(client, discordUser);
-      if (!detail) {
-        return interaction.editReply({ content: 'Could not load loadout.', ephemeral: true });
-      }
-      const fmt = (c, label, rawId) => {
-        if (rawId && !c) {
-          return `**${label}:** stale slot (copy #${rawId} gone) — \`/tcg unequip\` then re-equip`;
-        }
-        if (!c) return `**${label}:** — empty —`;
-        const el = c.element ? (DISPLAY_LABEL[c.element] || c.element) : '—';
-        const reg =
-          c.tcg_region != null && c.tcg_region !== ''
-            ? ` · PvE region **${c.tcg_region}**`
-            : '';
-        const cl = c.class ? ` · ${c.class}` : '';
-        return `**${label}:** ${c.name} (#${c.user_card_id}) · ${c.rarity} · Lv${c.level} · ${el}${cl}${reg}`;
-      };
-      const embed = new EmbedBuilder()
-        .setTitle('Loadout')
-        .setDescription(
-          `${fmt(detail.main, 'Main', detail.row.main_user_card_id)}\n`
-            + `${fmt(detail.support1, 'Support 1', detail.row.support1_user_card_id)}\n`
-            + `${fmt(detail.support2, 'Support 2', detail.row.support2_user_card_id)}\n\n`
-            + '_Synergies in **`/tcg spar`** & **`/tcg pve fight`** (60% cap). Preview: **`/tcg synergy`**. **Home Turf:** `tcg_region` 1–6, PvE only. **Class:** Commander / Guardian / Artisan (+aliases)._',
-        )
-        .setFooter({ text: '/tcg synergy — optional enemy_element for Counter Build' })
-        .setColor(0x9b59b6);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (sub === 'synergy') {
-      const enemyOpt = interaction.options.getString('enemy_element');
-      const enemyEl = enemyOpt && enemyOpt !== 'none' ? enemyOpt : null;
-
-      const detail = await tcgLoadout.getLoadoutDetail(client, discordUser);
-      if (!detail || !detail.row.main_user_card_id) {
-        return interaction.editReply({
-          content: 'Equip a **main** card first (`/tcg equip`).',
-          ephemeral: true,
-        });
-      }
-
-      const summary = await tcgPve.getProgressSummary(client, discordUser);
-      if (!summary) {
-        return interaction.editReply({ content: 'Could not load PvE progress.', ephemeral: true });
-      }
-
-      const loadout = {
-        main: detail.main,
-        support1: detail.support1,
-        support2: detail.support2,
-      };
-
-      const synSpar = tcgSynergy.computeCombatSynergy(loadout, enemyEl, null);
-      const synPve = tcgSynergy.computeCombatSynergy(
-        loadout,
-        enemyEl,
-        Number(summary.current_region),
-      );
-
-      const fmt = (syn, label) => {
-        const lines =
-          syn.summaryLines && syn.summaryLines.length
-            ? syn.summaryLines.map((l) => `· ${l}`).join('\n')
-            : '_No synergies matched — try supports, classes, rarities, elements, or `tcg_region`._';
-        const bits = [];
-        if (syn.weaknessImmune) bits.push('Weakness immunity');
-        if (syn.goldMult > 1) bits.push(`×${syn.goldMult.toFixed(2)} battle gold`);
-        const foot = bits.length ? `\n_${bits.join(' · ')}_` : '';
-        return `**${label}**\n${lines}${foot}`;
-      };
-
-      const enLine = enemyEl
-        ? `Counter Build includes **${DISPLAY_LABEL[enemyEl] || enemyEl}**.`
-        : '_Pick **enemy_element** to preview Counter Build._';
-
-      const embed = new EmbedBuilder()
-        .setTitle('Loadout — synergy preview')
-        .setDescription(
-          `${fmt(synSpar, 'Spar (no Home Turf)')}\n\n${fmt(
-            synPve,
-            `PvE — ${summary.regionName} · Tier ${summary.tierRoman}`,
-          )}\n\n${enLine}\n_Bonuses use the 60% cap ([CardSystem.md])._`,
-        )
-        .setFooter({ text: '/tcg pve fight uses the PvE column; /tcg spar uses the Spar column.' })
-        .setColor(0x9b59b6);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (sub === 'equip') {
-      const slot = interaction.options.getString('slot', true);
-      const instanceId = interaction.options.getInteger('instance', true);
-      const result = await tcgLoadout.setLoadoutSlot(client, discordUser, slot, instanceId);
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      return interaction.editReply({
-        content: `Equipped copy **#${instanceId}** as **${slot}**.`,
-        ephemeral: true,
-      });
-    }
-
-    if (sub === 'unequip') {
-      const slot = interaction.options.getString('slot', true);
-      const result = await tcgLoadout.setLoadoutSlot(client, discordUser, slot, null);
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      return interaction.editReply({ content: `Cleared **${slot}**.`, ephemeral: true });
-    }
-
-    if (sub === 'spar') {
-      const result = await tcgSpar.runSpar(client, discordUser);
-      if (!result.ok) {
-        return interaction.editReply({ content: result.error, ephemeral: true });
-      }
-      const {
-        sim,
-        goldGained,
-        won,
-        playerLabel,
-        enemyLabel,
-        playerLevel,
-        synergyLines,
-        synergyGoldMult,
-        shardFocusConsumed,
-      } = result;
-      const combatExtra = combatItemsEmbedValue(result);
-      const title = won ? 'Spar — victory' : sim.outcome === 'draw' ? 'Spar — draw' : 'Spar — defeat';
-      const logText = sim.log.slice(0, 14).join('\n') || '—';
-      const goldLine = goldGained
-        ? `**+${goldGained}**g${
-            synergyGoldMult > 1 ? ` _(×${synergyGoldMult.toFixed(2)} from Pure / Triangle)_` : ''
-          }`
-        : '**0**g (win for gold)';
-      const synBlock =
-        synergyLines && synergyLines.length
-          ? `\n_Synergy:_ ${synergyLines.join(' · ')}\n`
-          : '';
-      const embed = new EmbedBuilder()
-        .setTitle(title)
-        .setDescription(
-          `**${playerLabel}** (Lv${playerLevel} main) vs **${enemyLabel}** (scaled)${synBlock}`
-            + `${sim.elementSummary}\n\n${logText}${sim.log.length > 14 ? '\n…' : ''}`,
-        )
-        .addFields(
-          { name: 'Result', value: `${sim.outcome.toUpperCase()} · ${sim.rounds} steps`, inline: true },
-          { name: 'Gold', value: goldLine, inline: true },
-          { name: 'XP', value: 'Applied via PvE rules (`awardTcgBattleXp`)', inline: false },
-          ...(combatExtra
-            ? [{ name: 'Combat items', value: combatExtra, inline: false }]
-            : shardFocusConsumed
-              ? [
-                  {
-                    name: 'Shard of Focus',
-                    value: '**+15% ATK** applied this fight · 1 charge consumed.',
-                    inline: false,
-                  },
-                ]
-              : []),
-        )
-        .setColor(won ? 0x57f287 : 0xed4245);
       return interaction.editReply({ embeds: [embed], ephemeral: true });
     }
 
