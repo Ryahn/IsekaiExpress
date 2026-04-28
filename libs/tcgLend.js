@@ -224,6 +224,8 @@ async function acceptLendOffer(client, borrowerDiscord, lendId) {
       card_id: inst.card_id,
       ability_key: inst.ability_key,
       level: inst.level,
+      grade: inst.grade || 'D',
+      regrade_pity: Number(inst.regrade_pity) || 0,
       acquired_at: ts,
       is_lent: false,
       is_escrowed: false,

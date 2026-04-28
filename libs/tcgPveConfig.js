@@ -192,6 +192,9 @@ function battleBossStatMultiplierForTier(tier) {
   return 4.0;
 }
 
+/** Flat chance to grant the boss catalog template as a card in addition to pool drop ([TCG Master Plan] Capture). */
+const BOSS_MEMBER_CAPTURE_CHANCE = 0.06;
+
 /** Extra gold for winning the battle-boss fight; scales 25g–150g per [CardSystem.md]. */
 function battleBossWinGoldForTier(tier) {
   const t = Math.min(10, Math.max(1, Number(tier) || 1));
@@ -199,6 +202,7 @@ function battleBossWinGoldForTier(tier) {
 }
 
 module.exports = {
+  BOSS_MEMBER_CAPTURE_CHANCE,
   REGION_NAMES,
   BATTLES_PER_TIER,
   TIER_ROMAN,

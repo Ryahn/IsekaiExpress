@@ -12,6 +12,10 @@ const tcgShop = require('../../../../../libs/tcgShop');
 const tcgTrade = require('../../../../../libs/tcgTrade');
 const tcgLend = require('../../../../../libs/tcgLend');
 const tcgPvp = require('../../../../../libs/tcgPvp');
+const tcgFusion = require('../../../../../libs/tcgFusion');
+const tcgForge = require('../../../../../libs/tcgForge');
+const tcgRegrade = require('../../../../../libs/tcgRegrade');
+const tcgExpeditions = require('../../../../../libs/tcgExpeditions');
 const tcgSetProgress = require('../../../../../libs/tcgSetProgress');
 const db = require('../../../../../database/db');
 const { battlesRequiredForTier } = require('../../../../../libs/tcgPveConfig');
@@ -63,7 +67,7 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName('balance')
-        .setDescription('View your TCG gold, XP, and inventory space'),
+        .setDescription('View your TCG gold, XP, resources, and inventory space'),
     )
     .addSubcommand((sub) =>
       sub
@@ -120,6 +124,86 @@ module.exports = {
           o
             .setName('use_catalyst')
             .setDescription('Use 1× Fusion Catalyst instead of a second copy'),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('fusion')
+        .setDescription('Rarity fusion: 2+ copies same rarity → one **next tier** (costs shards/gems)')
+        .addIntegerOption((o) =>
+          o.setName('first').setDescription('Copy ID').setRequired(true).setMinValue(1),
+        )
+        .addIntegerOption((o) =>
+          o.setName('second').setDescription('Copy ID').setRequired(true).setMinValue(1),
+        )
+        .addIntegerOption((o) => o.setName('third').setDescription('Optional 3rd copy').setMinValue(1)),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('forge')
+        .setDescription('Destroy copies for resources (guaranteed shards or gamble)')
+        .addStringOption((o) =>
+          o
+            .setName('copies')
+            .setDescription('Comma-separated copy IDs (e.g. 12,15,20)')
+            .setRequired(true),
+        )
+        .addStringOption((o) =>
+          o
+            .setName('mode')
+            .setDescription('Mode')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Guaranteed shards', value: 'guaranteed' },
+              { name: 'Gamble (bonus loot chance)', value: 'gamble' },
+            ),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('regrade')
+        .setDescription('Upgrade **grade** D→S on one copy (resources + pity)')
+        .addIntegerOption((o) =>
+          o.setName('instance').setDescription('Copy ID').setRequired(true).setMinValue(1),
+        )
+        .addBooleanOption((o) =>
+          o.setName('shard_fallback').setDescription('Pay heavy **shards** for B→A / A→S'),
+        ),
+    )
+    .addSubcommandGroup((group) =>
+      group
+        .setName('expedition')
+        .setDescription('Timed expeditions — lock one copy for shards/diamonds/rubies')
+        .addSubcommand((sub) =>
+          sub
+            .setName('send')
+            .setDescription('Send a copy on expedition')
+            .addIntegerOption((o) =>
+              o.setName('instance').setDescription('Copy ID').setRequired(true).setMinValue(1),
+            )
+            .addIntegerOption((o) =>
+              o.setName('region').setDescription('Region 1–6').setRequired(true).setMinValue(1).setMaxValue(6),
+            )
+            .addStringOption((o) =>
+              o
+                .setName('type')
+                .setDescription('Expedition type')
+                .setRequired(true)
+                .addChoices(
+                  { name: 'Standard (gold/XP/shards)', value: 'standard' },
+                  { name: 'Diamond mine (needs region 3+)', value: 'diamond_mine' },
+                  { name: 'Ruby mine (needs region 5+)', value: 'ruby_mine' },
+                ),
+            ),
+        )
+        .addSubcommand((sub) => sub.setName('list').setDescription('Active expeditions'))
+        .addSubcommand((sub) =>
+          sub
+            .setName('claim')
+            .setDescription('Claim finished expedition rewards')
+            .addIntegerOption((o) =>
+              o.setName('id').setDescription('expedition_id from /tcg expedition list').setMinValue(1),
+            ),
         ),
     )
     .addSubcommand((sub) =>
@@ -649,6 +733,51 @@ module.exports = {
       return interaction.editReply({ content: 'Unknown lend subcommand.', ephemeral: true });
     }
 
+    if (subcommandGroup === 'expedition') {
+      if (sub === 'send') {
+        const instance = interaction.options.getInteger('instance', true);
+        const region = interaction.options.getInteger('region', true);
+        const type = interaction.options.getString('type', true);
+        const r = await tcgExpeditions.sendExpedition(client, discordUser, instance, region, type);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        return interaction.editReply({
+          content: `Expedition **#${r.expeditionId}** started — returns <t:${r.returnsAt}:R> (~${formatDuration(r.durationSec)}).`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'list') {
+        const r = await tcgExpeditions.listExpeditions(client, discordUser);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.rows.length) {
+          return interaction.editReply({ content: 'No active expeditions.', ephemeral: true });
+        }
+        const lines = r.rows.map((x) => {
+          const back = Number(x.returns_at) <= Math.floor(Date.now() / 1000) ? ' **READY**' : '';
+          return `**#${x.expedition_id}** · ${x.name} (${x.rarity}) · R${x.region} · ${x.expedition_type} · <t:${x.returns_at}:R>${back}`;
+        });
+        return interaction.editReply({ content: lines.join('\n'), ephemeral: true });
+      }
+      if (sub === 'claim') {
+        const idOpt = interaction.options.getInteger('id');
+        let exId = idOpt;
+        if (exId == null) {
+          const r0 = await tcgExpeditions.listExpeditions(client, discordUser);
+          if (!r0.ok || !r0.rows.length) {
+            return interaction.editReply({ content: 'No expedition to claim.', ephemeral: true });
+          }
+          exId = r0.rows[0].expedition_id;
+        }
+        const r = await tcgExpeditions.claimExpedition(client, discordUser, exId);
+        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        const parts = [`**+${r.gold}**g`, `**+${r.xp}** XP`];
+        if (r.shards) parts.push(`**+${r.shards}** shards`);
+        if (r.diamonds) parts.push(`**+${r.diamonds}** diamonds`);
+        if (r.rubies) parts.push(`**+${r.rubies}** rubies`);
+        return interaction.editReply({ content: `Claimed: ${parts.join(' · ')}.`, ephemeral: true });
+      }
+      return interaction.editReply({ content: 'Unknown expedition subcommand.', ephemeral: true });
+    }
+
     if (subcommandGroup === 'pvp') {
       if (sub === 'challenge') {
         const opponent = interaction.options.getUser('opponent', true);
@@ -834,6 +963,7 @@ module.exports = {
           battleBossGold,
           isBattleBoss,
           battleBossDrop,
+          bossMemberCapture,
           synergyLines,
           synergyGoldMult,
           shardFocusConsumed,
@@ -884,6 +1014,27 @@ module.exports = {
           }
         }
 
+        let bossCaptureField = null;
+        if (isBattleBoss && won && bossMemberCapture) {
+          const cap = bossMemberCapture;
+          if (cap.granted && cap.template) {
+            const cel = cap.template.element
+              ? `${DISPLAY_LABEL[cap.template.element] || cap.template.element}`
+              : '—';
+            bossCaptureField = {
+              name: 'Boss capture',
+              value: `**${cap.template.name}** · ${cap.template.rarity} · ${cel} · copy **#${cap.userCardId}**`,
+              inline: false,
+            };
+          } else if (cap.reason === 'grant_failed') {
+            bossCaptureField = {
+              name: 'Boss capture',
+              value: `Hit the capture roll but grant failed — ${cap.error || 'unknown error'}`,
+              inline: false,
+            };
+          }
+        }
+
         const synLine =
           synergyLines && synergyLines.length
             ? `\n_Synergy:_ ${synergyLines.join(' · ')}`
@@ -915,6 +1066,7 @@ module.exports = {
             { name: 'Gold', value: goldLine, inline: true },
             { name: 'Streak', value: String(progress.pve_win_streak), inline: true },
             ...(poolDropField ? [poolDropField] : []),
+            ...(bossCaptureField ? [bossCaptureField] : []),
             ...(combatExtraPve
               ? [{ name: 'Combat items', value: combatExtraPve, inline: false }]
               : shardFocusConsumed
@@ -1205,6 +1357,11 @@ module.exports = {
           { name: 'XP', value: String(bal.xp), inline: true },
           { name: 'Level', value: String(bal.level), inline: true },
           {
+            name: 'Resources',
+            value: `Shards **${bal.shards}** · Diamonds **${bal.diamonds}** · Rubies **${bal.rubies}**`,
+            inline: false,
+          },
+          {
             name: 'Shop combat charges',
             value: [
               `Focus **${bal.shardFocusCharges}** · Veil **${bal.ironVeilCharges}** · Overclock **${bal.overclockCharges}**`,
@@ -1299,7 +1456,8 @@ module.exports = {
       const lines = rows.map((r) => {
         const el = r.element ? (DISPLAY_LABEL[r.element] || r.element) : '—';
         const ab = r.ability_key ? String(r.ability_key).replace(/_/g, ' ') : '—';
-        return `**#${r.user_card_id}** · ${r.name} (${r.rarity}) · Lv${r.level} · ${el} · ${ab}`;
+        const gr = r.grade ? String(r.grade).toUpperCase() : 'D';
+        return `**#${r.user_card_id}** · ${r.name} (${r.rarity}) · Lv${r.level} · **${gr}** · ${el} · ${ab}`;
       });
       const embed = new EmbedBuilder()
         .setTitle(`Your collection — page ${p}/${totalPages}`)
@@ -1334,6 +1492,16 @@ module.exports = {
           { name: 'Rarity', value: row.rarity || '—', inline: true },
           { name: 'Element', value: el, inline: true },
           { name: 'Level', value: String(row.level), inline: true },
+          {
+            name: 'Grade',
+            value: row.grade ? String(row.grade).toUpperCase() : 'D',
+            inline: true,
+          },
+          {
+            name: 'Regrade pity',
+            value: `${Number(row.regrade_pity) || 0} / ${tcgRegrade.PITY_FORCE}`,
+            inline: true,
+          },
           { name: 'Ability', value: ab, inline: true },
           { name: 'Power (scaled)', value: String(power), inline: true },
           { name: 'Stats (scaled)', value: stats, inline: false },
@@ -1357,6 +1525,57 @@ module.exports = {
       }
       return interaction.editReply({
         content: `Breakdown **${result.templateName}**: **+${result.gold}**g (total **${result.newGold.toLocaleString()}**g).`,
+        ephemeral: true,
+      });
+    }
+
+    if (sub === 'fusion') {
+      const ids = [
+        interaction.options.getInteger('first', true),
+        interaction.options.getInteger('second', true),
+        interaction.options.getInteger('third'),
+      ].filter((n) => n != null && n > 0);
+      const r = await tcgFusion.attemptRarityFusion(client, discordUser, ids);
+      if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+      if (!r.success) {
+        return interaction.editReply({
+          content: `${r.message} Pity **${r.attemptsNow} / ${tcgFusion.FUSION_PITY_FORCE}**.`,
+          ephemeral: true,
+        });
+      }
+      const t = r.template;
+      const el = t.element ? DISPLAY_LABEL[t.element] || t.element : '—';
+      return interaction.editReply({
+        content: `**Fusion success**${r.forcedPity ? ' _(pity)_' : ''}! **${t.name}** · ${t.rarity} · ${el} · copy **#${r.userCardId}**`,
+        ephemeral: true,
+      });
+    }
+
+    if (sub === 'forge') {
+      const raw = interaction.options.getString('copies', true);
+      const mode = interaction.options.getString('mode', true);
+      const ids = raw
+        .split(/[\s,]+/)
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      const r = await tcgForge.forgeCards(client, discordUser, ids, mode);
+      if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+      return interaction.editReply({ content: r.summary, ephemeral: true });
+    }
+
+    if (sub === 'regrade') {
+      const instanceId = interaction.options.getInteger('instance', true);
+      const fb = interaction.options.getBoolean('shard_fallback') ?? false;
+      const r = await tcgRegrade.attemptRegrade(client, discordUser, instanceId, fb);
+      if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+      if (!r.success) {
+        return interaction.editReply({
+          content: `Regrade **failed**. Pity **${r.pityNow} / ${tcgRegrade.PITY_FORCE}**. Resources spent.`,
+          ephemeral: true,
+        });
+      }
+      return interaction.editReply({
+        content: `**Grade → ${r.newGrade}**! (paid shards **${r.paid.shards}** · diamonds **${r.paid.diamonds}** · rubies **${r.paid.rubies}**)`,
         ephemeral: true,
       });
     }

@@ -23,6 +23,7 @@ function normClassKey(classRaw) {
   if (['commander', 'staff'].includes(s)) return 'commander';
   if (['guardian', 'mod', 'mods', 'moderator'].includes(s)) return 'guardian';
   if (['artisan', 'uploader', 'uploaders'].includes(s)) return 'artisan';
+  if (['phantom', 'sage', 'warden', 'sovereign'].includes(s)) return s;
   return null;
 }
 
@@ -137,7 +138,11 @@ function applyOutgoingDamageMult(fighter) {
 
 function phantomDodge(fighter) {
   if (!hasAbility(fighter.abilities, 'phantom_step')) return false;
-  return Math.random() < 0.2;
+  let p = 0.2;
+  if (fighter.classKey === 'sage') p += 0.05;
+  p += fighter.synergyProcBonus || 0;
+  p *= fighter.synergyProcMult || 1;
+  return Math.random() < Math.min(0.95, p);
 }
 
 function simulateMainVsMainWithPassives(
@@ -155,6 +160,10 @@ function simulateMainVsMainWithPassives(
     defenderWeaknessImmune = false,
     negateEnemyElementAdvantageOnce = false,
     reviveOnLoss = false,
+    /** Element synergy (Glacial Fortress): first incoming hit to player deals 0. */
+    playerNegateFirstHit = false,
+    /** Element synergy (Abyssal Tide): multiplier on enemy phantom_step etc. (< 1). */
+    enemyAbilityProcPenalty = 0,
     combat = null,
     /** Optional multipliers/debuffs the opponent applies to your fighter before passives. Blocked if you have **Sovereign** ([CardSystem.md]). */
     opponentItemEffectsVsPlayer = null,
@@ -195,6 +204,8 @@ function simulateMainVsMainWithPassives(
     completedRounds: 0,
     momentumStacks: 0,
     stolenAtk: 0,
+    synergyProcBonus: combat?.player?.synergyProcBonus || 0,
+    synergyProcMult: 1,
   };
 
   const enemy = {
@@ -215,6 +226,8 @@ function simulateMainVsMainWithPassives(
     completedRounds: 0,
     momentumStacks: 0,
     stolenAtk: 0,
+    synergyProcBonus: 0,
+    synergyProcMult: 1,
   };
 
   function applyItemFx(target, fx) {
@@ -247,6 +260,37 @@ function simulateMainVsMainWithPassives(
     enemy.baseSpd = enemy.spd;
     enemy.baseHp = enemy.hp;
     enemy.maxHp = enemy.hp;
+  }
+
+  function applyClassCombatPassives(fighter) {
+    const ck = fighter.classKey;
+    if (ck === 'phantom') {
+      fighter.spd = Math.round(fighter.spd * 1.08);
+      fighter.baseSpd = fighter.spd;
+    }
+    if (ck === 'warden') {
+      fighter.hp = Math.round(fighter.hp * 1.08);
+      fighter.maxHp = fighter.hp;
+      fighter.baseHp = fighter.hp;
+    }
+    if (ck === 'sovereign') {
+      fighter.atk = Math.round(fighter.atk * 1.04);
+      fighter.def = Math.round(fighter.def * 1.04);
+      fighter.spd = Math.round(fighter.spd * 1.04);
+      fighter.hp = Math.round(fighter.hp * 1.04);
+      fighter.maxHp = fighter.hp;
+      fighter.baseAtk = fighter.atk;
+      fighter.baseDef = fighter.def;
+      fighter.baseSpd = fighter.spd;
+      fighter.baseHp = fighter.hp;
+    }
+  }
+  applyClassCombatPassives(player);
+  applyClassCombatPassives(enemy);
+
+  const pen = Number(enemyAbilityProcPenalty) || 0;
+  if (pen > 0) {
+    enemy.synergyProcMult = Math.max(0.05, 1 - pen);
   }
 
   if (hasAbility(pKeys, 'time_thief')) {
@@ -304,6 +348,7 @@ function simulateMainVsMainWithPassives(
   let globalRound = 0;
   let nullWardConsumed = false;
   let reviveUsed = false;
+  let playerNegateHitsRemaining = playerNegateFirstHit ? 1 : 0;
   function capAbsoluteZero() {
     if (hasAbility(player.abilities, 'absolute_zero')) {
       enemy.spd = Math.min(enemy.spd, player.spd);
@@ -340,6 +385,12 @@ function simulateMainVsMainWithPassives(
     }
     const incomingM = applyIncomingDamageMult(defender);
     const finalDmg = Math.max(1, Math.floor(core * incomingM));
+
+    if (!aIsPlayer && defender === player && playerNegateHitsRemaining > 0) {
+      playerNegateHitsRemaining -= 1;
+      phaseLog.push(`_R${rLabel}: **Glacial Fortress** — first hit negated._`);
+      return { dmg: 0, dodged: false };
+    }
 
     if (phantomDodge(defender)) {
       phaseLog.push(`_R${rLabel}: ${defender.label} **Phantom Step** — dodged!_`);
@@ -406,7 +457,16 @@ function simulateMainVsMainWithPassives(
 
       const pSpd = effectiveSpdInitiative(player, rLabel);
       const eSpd = effectiveSpdInitiative(enemy, rLabel);
-      const playerFirst = pSpd >= eSpd;
+      let playerFirst;
+      if (pSpd > eSpd) playerFirst = true;
+      else if (eSpd > pSpd) playerFirst = false;
+      else {
+        const pPh = player.classKey === 'phantom';
+        const ePh = enemy.classKey === 'phantom';
+        if (pPh && !ePh) playerFirst = true;
+        else if (ePh && !pPh) playerFirst = false;
+        else playerFirst = true;
+      }
 
       if (playerFirst) {
         const r1 = applyStrike(player, enemy, true, phaseLog, rLabel);
@@ -541,6 +601,7 @@ function buildPlayerCombatSide(opts) {
     grantedSynergyAbilityKey,
     distinctRaritiesForMember,
     signatureOverrideKey,
+    synergyProcBonus = 0,
   } = opts;
   const keys = [];
   let main = instanceAbilityKey || null;
@@ -560,6 +621,7 @@ function buildPlayerCombatSide(opts) {
     abilityKeys: keys,
     classKey,
     rarityKey: rarityKey ?? 'C',
+    synergyProcBonus,
   };
 }
 

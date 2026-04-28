@@ -11,6 +11,7 @@ const tcgSetProgress = require('./tcgSetProgress');
 const tcgSynergy = require('./tcgSynergy');
 const tcgCombatBuffs = require('./tcgCombatBuffs');
 const tcgLend = require('./tcgLend');
+const tcgSessionLoadout = require('./tcgSessionLoadout');
 
 /** [CardSystem.md] PvE Tier I–III win — used for casual spar until region progression ships. */
 const SPAR_WIN_GOLD = 10;
@@ -29,6 +30,10 @@ async function runSpar(client, discordUser) {
   await client.db.checkUser(discordUser);
   const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
   if (!internalId) return { ok: false, error: 'User not found.' };
+
+  if (await tcgSessionLoadout.isUserCardOnActiveExpedition(internalId, mainId)) {
+    return { ok: false, error: 'Your **main** card is on **expedition**.' };
+  }
 
   await tcgLend.expireDueLoans(db.query);
 
@@ -102,12 +107,16 @@ async function runSpar(client, discordUser) {
 
   const lv = Math.min(5, Math.max(1, Number(playerRow.level) || 1));
   const mult = statLevelMultiplier(lv);
-  const enemyStats = {
+  let enemyStats = {
     atk: Math.round(Number(enemyTemplate.base_atk) * mult),
     def: Math.round(Number(enemyTemplate.base_def) * mult),
     spd: Math.round(Number(enemyTemplate.base_spd) * mult),
     hp: Math.round(Number(enemyTemplate.base_hp) * mult),
   };
+  if (synMod.enemyDefPct) {
+    const m = 1 + Number(synMod.enemyDefPct);
+    enemyStats = { ...enemyStats, def: Math.max(1, Math.round(enemyStats.def * m)) };
+  }
 
   let mythicSignatureKey = null;
   if (
@@ -124,6 +133,8 @@ async function runSpar(client, discordUser) {
     defenderWeaknessImmune: synMod.weaknessImmune,
     negateEnemyElementAdvantageOnce: combatUsed.nullWard,
     reviveOnLoss,
+    playerNegateFirstHit: Boolean(synMod.playerNegateFirstHit),
+    enemyAbilityProcPenalty: Number(synMod.enemyAbilityProcPenalty) || 0,
     combat: {
       player: tcgAbilityBattle.buildPlayerCombatSide({
         instanceAbilityKey: playerRow.ability_key,
@@ -132,6 +143,7 @@ async function runSpar(client, discordUser) {
         grantedSynergyAbilityKey: synMod.grantedBattleAbilityKey,
         distinctRaritiesForMember: memberDistinct,
         signatureOverrideKey: mythicSignatureKey,
+        synergyProcBonus: Number(synMod.elementAbilityProcBonus) || 0,
       }),
       enemy: tcgAbilityBattle.buildEnemyCombatSide(enemyTemplate),
     },

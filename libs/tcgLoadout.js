@@ -1,5 +1,6 @@
 const db = require('../database/db');
 const tcgEconomy = require('./tcgEconomy');
+const tcgSessionLoadout = require('./tcgSessionLoadout');
 
 const SLOT_COLUMN = {
   main: 'main_user_card_id',
@@ -90,6 +91,12 @@ async function setLoadoutSlot(client, discordUser, slot, userCardId) {
   if (!internalId) return { ok: false, error: 'User not found.' };
 
   await ensureLoadoutRow(internalId);
+
+  const pvpBlock = await tcgSessionLoadout.loadoutChangeBlockedReason(internalId);
+  if (pvpBlock) {
+    return { ok: false, error: pvpBlock };
+  }
+
   const col = SLOT_COLUMN[slot];
 
   if (userCardId == null) {
@@ -108,6 +115,10 @@ async function setLoadoutSlot(client, discordUser, slot, userCardId) {
   }
   if (inst.is_lent || inst.is_escrowed) {
     return { ok: false, error: 'Lent or escrowed cards cannot be equipped.' };
+  }
+
+  if (await tcgSessionLoadout.isUserCardOnActiveExpedition(internalId, userCardId)) {
+    return { ok: false, error: 'That copy is **on expedition** and cannot be equipped.' };
   }
 
   const lo = await db.query('tcg_user_loadouts').where({ user_id: internalId }).first();

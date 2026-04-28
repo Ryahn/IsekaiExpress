@@ -296,7 +296,7 @@ N, C, UC, R, U, SR, SSR, SUR, UR, L, M
 
 ---
 
-### 🔲 STAGE 3 — Inventory & Collection — Pending
+### ✅ STAGE 3 — Inventory & Collection — Complete (partials noted)
 
 All operations use `card_data_id` + `user_cards` instance row. Never regenerate PNG.
 
@@ -307,66 +307,64 @@ All operations use `card_data_id` + `user_cards` instance row. Never regenerate 
 - [x] Set bonuses
 - [x] Elemental reroll
 - [x] `list_all_cards` pagination/search working for large `card_data` (~110 templates × members)
-- [ ] Loadout lock enforced during active/pending PvP/PvE session
+- [-] Loadout lock during active/pending **PvP** (pick/accept window) is enforced; cards on **active expeditions** cannot be equipped and cannot fight as main. No separate “PvE session” loadout freeze beyond expedition + sim-in-flight behavior.
 
 #### Class System
-- [ ] `card_data.class` updated to support all 7 classes: Guardian, Artisan, Commander, Phantom, Sage, Warden, Sovereign
-- [ ] `card_data.source` column added: enum `member / staff / mod / uploader / anime / game`
-- [ ] Sovereign class assignment restricted to `source IN (staff, mod, uploader)` — enforced in batch pipeline with a hard throw on violation
-- [ ] Rarity floor enforcement in batch pipeline: staff SSR minimum, mod/uploader SR minimum
-- [ ] Class passives applied in combat sim (Guardian −5% incoming, Artisan +5% outgoing, Commander +3% gold, Phantom +8% SPD + tie-win, Sage +5% proc chance, Warden +8% HP, Sovereign +4% all stats)
-- [ ] Warden round-end HP recovery (5%/round) flagged as future upgrade — requires end-of-round hook in sim
+- [x] `card_data.class` updated to support all 7 classes: Guardian, Artisan, Commander, Phantom, Sage, Warden, Sovereign (`create_card.js`, `libs/tcgAbilityBattle.js`, `libs/tcgSynergy.js`)
+- [x] `card_data.source` column added: `member / staff / mod / uploader / anime / game` — migration `20260630120000_tcg_stage3_class_source_progression.js`
+- [x] Sovereign class assignment restricted to `source IN (staff, mod, uploader)` — enforced in `create_card.js` / `batch_worker.js`
+- [x] Rarity floor enforcement in batch pipeline: staff SSR minimum, mod/uploader SR minimum (`batch_worker.js`)
+- [x] Class passives applied in combat sim (Guardian −5% incoming, Artisan +5% outgoing, Commander +3% gold, Phantom +8% SPD + tie-win, Sage +5% proc chance, Warden +8% HP, Sovereign +4% all stats)
+- [ ] Warden round-end HP recovery (5%/round) — future upgrade when sim has end-of-round hooks
 
 #### Element Synergy
-- [ ] `libs/tcgSynergy.js`: new `resolveElementSynergy(loadout, lead)` function
-- [ ] Tier 1 Focus: count lead-matching elements in loadout, apply bonus table (2=+3%, 3=+6%, 4=+9%, 5=+15% + round 1 ability proc)
-- [ ] Tier 2 Pairs: check all 10 pairs, apply bonus if both elements present in loadout (triggers once max)
-- [ ] Tier 3 Trinity: check all 6 trinities, apply highest-value qualifying trinity; replaces Tier 2 if overlap
-- [ ] Tier 1 + Tier 2 stack correctly; Tier 1 + Tier 3 stack correctly
-- [ ] Synergy result passed into combat opts as flat multipliers at battle start
-- [ ] Embed shows active synergy tier and name (e.g. "⚡ Storm Front active") when triggered
+- [x] `libs/tcgElementSynergyResolve.js` + `resolveElementSynergy` wired from `libs/tcgSynergy.js` (`computeCombatSynergy`)
+- [x] Tier 1 Focus: count lead-matching elements in loadout, apply bonus table (2=+3%, 3=+6%, 4=+9%, 5=+15% + round 1 ability proc)
+- [x] Tier 2 Pairs: paired elements; trinity replaces overlapping pair per plan
+- [x] Tier 3 Trinity: highest-value qualifying trinity; Glacial / Entropy combat opts (first-hit negate, enemy DEF debuff, proc penalty) in `tcgAbilityBattle.js` / PvE & spar wiring
+- [x] Tier 1 + Tier 2 / Tier 3 stacking per plan
+- [x] Synergy result passed into combat opts at battle start
+- [x] PvE/spar embeds include `_Synergy:_` lines from `summaryLines` (trinity names when applicable)
 
 #### Fusion
-- [ ] Schema: `tcg_fusion_pity` table — `player_id`, `attempt_count`, `last_attempt_at` (global counter, resets on success)
-- [ ] `libs/tcgFusion.js`: validate same-rarity input cards; calculate resource cost (same element = base rate, mixed elements = increased cost, scales with input card grades per Regrade band)
-- [ ] Fusion output: always a card one rarity tier higher via `grantTemplateWithTrx`
-- [ ] Pity: guarantee success after threshold; reset global counter on any success
-- [ ] Slash: `/tcg fusion` — select cards, preview cost breakdown, confirm
+- [x] Schema: `tcg_fusion_pity` — `user_id`, `attempt_count`, `last_attempt_at` (resets on success)
+- [x] `libs/tcgFusion.js`: same-rarity + same `discord_id` (character); resource cost scales mixed elements + grades; spends shards/diamonds/rubies via wallet
+- [x] Fusion output: next rarity tier for that character (`grantTemplateWithTrx` on success)
+- [x] Pity: forced success after threshold (`FUSION_PITY_FORCE`); counter resets on success
+- [-] Slash: `/tcg fusion` — instant resolve (no separate preview/confirm step)
 
 #### Forge
-- [ ] Schema: no pity table needed
-- [ ] `libs/tcgForge.js`: accept 1+ cards; **guaranteed path** yields Shards; **gamble path** RNG rolls — better card / bonus Shards / Diamonds (chance) / Rubies (rare chance)
-- [ ] Cards destroyed on Forge regardless of path
-- [ ] Slash: `/tcg forge` — select card(s), choose guaranteed or gamble, confirm
+- [x] Schema: no pity table
+- [x] `libs/tcgForge.js`: guaranteed → shards; gamble → variable shards + RNG card / diamonds / rubies
+- [x] Cards destroyed on Forge regardless of path
+- [-] Slash: `/tcg forge` — instant (no confirm modal)
 
 #### Regrade (D → C → B → A → S)
-- [ ] Schema: `grade` column on `user_cards` (enum: D, C, B, A, S, default D); `regrade_pity` int column per card
-- [ ] `libs/tcgRegrade.js`: validate resource availability; apply cost per band; roll success/fail; increment `regrade_pity` on fail, reset on success
-- [ ] Cost bands: D→C and C→B use Shards; B→A prefers Diamonds (Shards accepted at heavy multiplier); A→S prefers Rubies (Diamonds accepted at heavy multiplier)
-- [ ] Grade shown in card embed and `/tcg inventory`
-- [ ] Slash: `/tcg regrade` — select card, shows current grade + cost + pity progress, confirm
+- [x] Schema: `user_cards.grade`, `user_cards.regrade_pity` — migration `20260630120000_tcg_stage3_class_source_progression.js`
+- [x] `libs/tcgRegrade.js`: resource check, spend, success/fail roll, pity increment/reset
+- [-] Cost bands: D→C / C→B / B→A match shard/diamond intent; **A→S primary path is 8 rubies + 90 diamonds** (stricter than doc’s “rubies preferred, diamonds fallback” wording alone)
+- [x] Grade + regrade pity on `/tcg view` and grade on `/tcg inventory`; `/tcg balance` shows wallet resources
+- [-] Slash: `/tcg regrade` — instant (`shard_fallback` option); no confirm step
 
 #### Resources
-- [ ] Schema: `shards`, `diamonds`, `rubies` columns on `user_wallets` (or equivalent)
-- [ ] Shards: awarded from Forge guaranteed path and low-tier expedition drops
-- [ ] Diamonds: awarded from Forge gamble (chance), high-end PvE/boss kills, Diamond Mine expedition
-- [ ] Rubies: awarded from Forge gamble (rare), high-tier boss kills, Ruby Mine expedition
-- [ ] Resource balances shown in `/tcg profile` or `/tcg inventory`
+- [x] Schema: `user_wallets.tcg_shards`, `tcg_diamonds`, `tcg_rubies`
+- [x] Shards: Forge guaranteed/gamble, standard expedition claim (`tcgExpeditions.js`)
+- [x] Diamonds: Forge gamble, tier **8+** battle-boss wins (`tcgPve.js`), Diamond Mine expedition
+- [x] Rubies: Forge gamble (rare), tier **10** boss rubies + Ruby Mine expedition
+- [x] Resource balances in `/tcg balance` (TCG profile embed)
 
 #### Expeditions
-- [ ] Schema: `tcg_expeditions` — `player_id`, `user_card_id` (FK), `region`, `expedition_type` (enum: standard / diamond_mine / ruby_mine), `started_at`, `returns_at`, `claimed`
-- [ ] Card flagged unavailable for combat and loadout while active expedition row exists
-- [ ] Region gate: player must have cleared that PvE region before sending cards there
-- [ ] Standard expedition rewards on claim: gold + XP + small Shard drop chance
-- [ ] Diamond Mine: unlocked at mid-game region clear; yields Diamonds on claim
-- [ ] Ruby Mine: unlocked at late-game region clear; yields Rubies on claim
-- [ ] Slash: `/tcg expedition send`, `/tcg expedition view`, `/tcg expedition claim`
+- [x] Schema: `tcg_expeditions` — `user_id`, `user_card_id`, `region`, `expedition_type`, `started_at`, `returns_at`, `claimed`
+- [x] Card unavailable for combat as main while on expedition; cannot equip card that is on an active expedition (`tcgLoadout.js`, `tcgSessionLoadout.js`, `tcgPve.js`, `tcgSpar.js`)
+- [x] Region gate + Diamond/Ruby mine unlocks (`libs/tcgExpeditions.js`)
+- [x] Standard / mine rewards on claim (gold, XP, shards / diamonds / rubies)
+- [-] Slash: `/tcg expedition send`, **`list`** (replaces doc’s `view`), `claim`
 - [ ] Optional DM alarm when expedition returns
 
 #### Capture Chance (Boss Drop)
-- [ ] On boss kill, roll a flat % chance for a targeted drop of that boss member's specific card template (in addition to standard pool drop)
-- [ ] Capture % defined as a config constant in `libs/tcgPveConfig.js`
-- [ ] On capture trigger, insert `user_cards` row via `grantTemplateWithTrx` for that specific `card_data` template
+- [x] On battle-boss win, flat % roll for that boss member’s template (`tryBossMemberTemplateCapture` in `tcgPve.js`)
+- [x] `BOSS_MEMBER_CAPTURE_CHANCE` in `libs/tcgPveConfig.js`
+- [x] Grant via `grantCardToPlayer` / catalog template; **Boss capture** field on PvE fight embed when granted or grant fails
 
 ---
 
@@ -485,15 +483,16 @@ Current state: targeted offer/accept, upfront price, duration, optional max batt
 | PvE | `libs/tcgPve.js`, `libs/tcgPveConfig.js` |
 | PvP/Spar | `libs/tcgPvp.js`, `libs/tcgSpar.js` |
 | Inventory | `libs/tcgInventory.js` |
-| Fusion | `libs/tcgFusion.js` *(planned — Stage 3; not in repo yet)* |
-| Forge | `libs/tcgForge.js` *(planned — Stage 3; not in repo yet)* |
-| Regrade | `libs/tcgRegrade.js` *(planned — Stage 3; not in repo yet)* |
-| Expeditions | `libs/tcgExpeditions.js` *(planned — Stage 3; not in repo yet)* |
+| Fusion | `libs/tcgFusion.js` |
+| Forge | `libs/tcgForge.js` |
+| Regrade | `libs/tcgRegrade.js` |
+| Expeditions | `libs/tcgExpeditions.js`, `libs/tcgSessionLoadout.js` |
+| Element synergy resolve | `libs/tcgElementSynergyResolve.js` |
 | Shop | `libs/tcgDirectBuy.js` |
 | Synergy | `libs/tcgSynergy.js` |
 | ORM models | `database/models/User.js`, `Card.js`, `UserCard.js` |
 | Slash commands | `src/bot/commands/slashCommands/tcg/tcg.js`, `cards/get_card.js` |
-| Migrations | `migrations/20260425120000_tcg_stage2_catalog_and_inventory.js` + weight migration; `20260629120000_xp_settings_message_cooldown.js` (Stage 2 message XP) |
+| Migrations | `migrations/20260425120000_tcg_stage2_catalog_and_inventory.js` + weight migration; `20260629120000_xp_settings_message_cooldown.js` (Stage 2 message XP); `20260630120000_tcg_stage3_class_source_progression.js` (Stage 3: `source`, resources, grade, fusion pity, expeditions) |
 
 ---
 

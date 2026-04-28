@@ -73,7 +73,7 @@ function isDescriptionPlaceholderText(s) {
  * @param {string|number} discordId
  * @param {string} elementKey - canonical element id (tools/card_elements/{key}.png)
  * @param {string|null} [elementIconPath] - optional absolute path to element PNG
- * @param {{ skipDb?: boolean, cardDescription?: string }} [options] — `cardDescription` is the JSON
+ * @param {{ skipDb?: boolean, cardDescription?: string, source?: string }} [options] — `cardDescription` is the JSON
  *   per-user blurb (≤120 chars) shown below the class; maps from `description` in batch JSON.
  */
 async function generateCard(
@@ -88,6 +88,14 @@ async function generateCard(
   options = {},
 ) {
   const abbrev = sanitizeRarityAbbrev(rawRarity, 'C');
+  const cardSource = String(options.source || 'member').toLowerCase();
+  const clsNorm = String(className).trim().toLowerCase();
+  if (clsNorm === 'sovereign' && !['staff', 'mod', 'uploader'].includes(cardSource)) {
+    throw new Error(`Sovereign class requires source staff, mod, or uploader (got source=${cardSource})`);
+  }
+  if (['staff', 'mod', 'uploader'].includes(cardSource) && clsNorm !== 'sovereign') {
+    throw new Error(`source=${cardSource} requires Sovereign class (got "${className}")`);
+  }
   const rSpec = RARITY[abbrev] || RARITY.C;
   const safeUser = safePathSegmentFromName(characterName);
   const raritySlug = rarityPathSlugFromKey(abbrev);
@@ -242,6 +250,7 @@ async function generateCard(
     base_power: basePower,
     tcg_region: tcgRegion,
     is_boss_card: isBossCard,
+    source: cardSource,
     image_url,
     created_at: timestamp(),
     updated_at: timestamp(),

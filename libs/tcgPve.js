@@ -6,6 +6,7 @@ const { applyRegionAndTier } = require('./tcgRarityModifiers');
 const tcgEconomy = require('./tcgEconomy');
 const tcgInventory = require('./tcgInventory');
 const tcgLoadout = require('./tcgLoadout');
+const tcgSessionLoadout = require('./tcgSessionLoadout');
 const tcgBattle = require('./tcgBattle');
 const tcgAbilityBattle = require('./tcgAbilityBattle');
 const tcgCollectionSets = require('./tcgCollectionSets');
@@ -25,6 +26,7 @@ const {
   elementPoolForEncounter,
   enemyDifficultyMultiplier,
   battleBossRarityRowsForTier,
+  BOSS_MEMBER_CAPTURE_CHANCE,
 } = require('./tcgPveConfig');
 
 function nowUnix() {
@@ -185,6 +187,24 @@ async function userOwnsTemplate(internalId, cardId) {
 /**
  * Pool card drop after winning a battle boss ([CardSystem.md]: 40% new / 5% dupe, pity 11).
  */
+/**
+ * Targeted boss template drop (in addition to pool pity drop).
+ * @param {import('discord.js').Client} client
+ * @param {{ id: string, username: string }} discordUser
+ * @param {number} internalId
+ * @param {{ card_id?: number }} enemyTemplate
+ */
+async function tryBossMemberTemplateCapture(client, discordUser, internalId, enemyTemplate) {
+  const cid = enemyTemplate && enemyTemplate.card_id != null ? Number(enemyTemplate.card_id) : null;
+  if (!cid) return { granted: false, reason: 'no_template' };
+  if (Math.random() >= BOSS_MEMBER_CAPTURE_CHANCE) {
+    return { granted: false, reason: 'miss' };
+  }
+  const g = await tcgInventory.grantCardToPlayer(client, discordUser, { cardId: cid });
+  if (!g.ok) return { granted: false, reason: 'grant_failed', error: g.error };
+  return { granted: true, userCardId: g.userCardId, template: g.template };
+}
+
 async function tryBattleBossPoolDrop(client, discordUser, internalId, region, tier, pityBefore) {
   const template = await pickBattleBossDropTemplate(region, tier);
   if (!template) {
@@ -294,6 +314,12 @@ async function runPveFight(client, discordUser) {
   await client.db.checkUser(discordUser);
   const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
   if (!internalId) return { ok: false, error: 'User not found.' };
+
+  if (
+    await tcgSessionLoadout.isUserCardOnActiveExpedition(internalId, detail.row.main_user_card_id)
+  ) {
+    return { ok: false, error: 'Your **main** card is on **expedition** — claim it or equip another main.' };
+  }
 
   await tcgLend.expireDueLoans(db.query);
 
@@ -415,6 +441,13 @@ async function runPveFight(client, discordUser) {
     pFinal = mirrored.player;
     eFinal = mirrored.enemy;
   }
+  if (synMod.enemyDefPct) {
+    const m = 1 + Number(synMod.enemyDefPct);
+    eFinal = {
+      ...eFinal,
+      def: Math.max(1, Math.round(eFinal.def * m)),
+    };
+  }
 
   let mythicSignatureKey = null;
   if (
@@ -433,6 +466,8 @@ async function runPveFight(client, discordUser) {
     defenderWeaknessImmune: synMod.weaknessImmune,
     negateEnemyElementAdvantageOnce: combatUsed.nullWard,
     reviveOnLoss,
+    playerNegateFirstHit: Boolean(synMod.playerNegateFirstHit),
+    enemyAbilityProcPenalty: Number(synMod.enemyAbilityProcPenalty) || 0,
     combat: {
       player: tcgAbilityBattle.buildPlayerCombatSide({
         instanceAbilityKey: playerRow.ability_key,
@@ -441,6 +476,7 @@ async function runPveFight(client, discordUser) {
         grantedSynergyAbilityKey: synMod.grantedBattleAbilityKey,
         distinctRaritiesForMember: memberDistinct,
         signatureOverrideKey: mythicSignatureKey,
+        synergyProcBonus: Number(synMod.elementAbilityProcBonus) || 0,
       }),
       enemy: tcgAbilityBattle.buildEnemyCombatSide(enemyTemplate),
     },
@@ -462,6 +498,7 @@ async function runPveFight(client, discordUser) {
   let battleBossGoldAmount = 0;
   let tierCleared = false;
   let battleBossDrop = null;
+  let bossMemberCapture = null;
 
   if (won) {
     pveWinGold = baseGoldThisTier;
@@ -526,6 +563,18 @@ async function runPveFight(client, discordUser) {
         bbPityAfter,
       );
       bbPityAfter = battleBossDrop.pityAfter;
+      bossMemberCapture = await tryBossMemberTemplateCapture(
+        client,
+        discordUser,
+        internalId,
+        enemyTemplate,
+      );
+      if (tier >= 8) {
+        await tcgEconomy.incrementTcgResources(db.query, internalId, {
+          diamonds: tier >= 10 ? 2 : 1,
+          rubies: tier >= 10 ? 1 : 0,
+        });
+      }
     }
 
     const next = advanceProgressAfterWin(progress);
@@ -580,6 +629,7 @@ async function runPveFight(client, discordUser) {
     enemyLabel: enemyTemplate.name,
     playerLevel: lv,
     battleBossDrop,
+    bossMemberCapture,
     synergyLines: synMod.summaryLines,
     synergyGoldMult: synMod.goldMult,
     synergyWeaknessImmune: synMod.weaknessImmune,

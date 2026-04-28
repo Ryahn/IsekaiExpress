@@ -2,6 +2,7 @@ const { ADVANTAGE_VS, normalizeElementKey } = require('../src/bot/tcg/elements')
 const { rarityRank, sanitizeRarityAbbrev } = require('../src/bot/tcg/rarityOrder');
 const { byTier } = require('../src/bot/tcg/abilityPools');
 const { REGION_NAMES } = require('./tcgPveConfig');
+const { resolveElementSynergy } = require('./tcgElementSynergyResolve');
 
 const SYN_CAP = 0.6;
 
@@ -57,6 +58,7 @@ function normClassKey(c) {
   if (['commander', 'staff'].includes(s)) return { key: 'commander' };
   if (['guardian', 'mod', 'mods', 'moderator'].includes(s)) return { key: 'guardian' };
   if (['artisan', 'uploader', 'uploaders'].includes(s)) return { key: 'artisan' };
+  if (['phantom', 'sage', 'warden', 'sovereign'].includes(s)) return { key: s };
   return { key: s };
 }
 
@@ -64,6 +66,10 @@ function normClassKey(c) {
 function classPrimaryStat(classKey) {
   if (classKey === 'commander' || classKey === 'guardian') return 'def';
   if (classKey === 'artisan') return 'atk';
+  if (classKey === 'phantom') return 'spd';
+  if (classKey === 'warden') return 'hp';
+  if (classKey === 'sage') return 'atk';
+  if (classKey === 'sovereign') return 'atk';
   return 'atk';
 }
 
@@ -71,6 +77,10 @@ function prettyClassLabel(classKey) {
   if (classKey === 'commander') return 'Commander';
   if (classKey === 'guardian') return 'Guardian';
   if (classKey === 'artisan') return 'Artisan';
+  if (classKey === 'phantom') return 'Phantom';
+  if (classKey === 'sage') return 'Sage';
+  if (classKey === 'warden') return 'Warden';
+  if (classKey === 'sovereign') return 'Sovereign';
   return classKey.charAt(0).toUpperCase() + classKey.slice(1);
 }
 
@@ -390,6 +400,26 @@ function computeCombatSynergy(loadout, enemyElement, pveRegion = null) {
     );
   }
 
+  const elSyn = resolveElementSynergy(
+    { main, support1: s1, support2: s2 },
+    main,
+  );
+  atk += elSyn.atkPct;
+  def += elSyn.defPct;
+  spd += elSyn.spdPct || 0;
+  hp += elSyn.hpPct || 0;
+  goldMult *= elSyn.goldMult;
+  summaryLines.push(...elSyn.lines);
+  if (elSyn.grantTier2AbilityOnRound1 && !grantedBattleAbilityKey) {
+    const pool = byTier[2];
+    if (pool && pool.length) {
+      grantedBattleAbilityKey = pool[Math.floor(Math.random() * pool.length)];
+      summaryLines.push(
+        `Elemental Focus — bonus **Tier 2** ability (\`${grantedBattleAbilityKey}\`) round 1`,
+      );
+    }
+  }
+
   return {
     atk,
     all,
@@ -401,6 +431,10 @@ function computeCombatSynergy(loadout, enemyElement, pveRegion = null) {
     goldMult,
     summaryLines,
     grantedBattleAbilityKey,
+    elementAbilityProcBonus: elSyn.abilityProcBonus,
+    playerNegateFirstHit: elSyn.negateFirstPlayerHit,
+    enemyDefPct: elSyn.enemyDefPct,
+    enemyAbilityProcPenalty: elSyn.enemyAbilityProcPenalty,
   };
 }
 
@@ -431,4 +465,5 @@ module.exports = {
   SYN_CAP,
   computeCombatSynergy,
   applySynergyToStats,
+  resolveElementSynergy,
 };

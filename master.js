@@ -112,7 +112,7 @@ const MS_PER_CARD_ESTIMATE = 5000;
 const WORKER_TIMEOUT_MIN_MS = 3 * 60 * 1000;
 
 /**
- * Same shapes as `import_from_discord.js` (hero rows with `powerByRarity`, `rarity`, `class`, etc.).
+ * Same shapes as `import_from_discord.js` (hero rows with `source`, `powerByRarity`, `rarity`, `class`, etc.).
  * When a user appears in more than one role list (e.g. mod + trialmod), the earlier source wins
  * for the full row, except `description`: if the winning row has no blurb, the first non-empty
  * `description` from a later file (same `discord_id`) is copied onto the primary row.

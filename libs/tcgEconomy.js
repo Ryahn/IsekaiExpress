@@ -34,6 +34,9 @@ async function ensureWallet(internalUserId, trx = db.query) {
     await trx('user_wallets').insert({
       user_id: internalUserId,
       gold: 0,
+      tcg_shards: 0,
+      tcg_diamonds: 0,
+      tcg_rubies: 0,
       updated_at: ts,
     });
   } catch (e) {
@@ -158,7 +161,66 @@ async function getTcgBalance(client, discordUser) {
     preservationSealCharges: Number(wallet.tcg_preservation_seal_charges) || 0,
     xpBoosterActive: xpBoostUntil != null && xpBoostUntil > now,
     xpBoosterUntil: xpBoostUntil,
+    shards: Number(wallet.tcg_shards) || 0,
+    diamonds: Number(wallet.tcg_diamonds) || 0,
+    rubies: Number(wallet.tcg_rubies) || 0,
   };
+}
+
+/**
+ * @param {import('knex').Knex} trx
+ * @param {number} internalUserId
+ * @param {{ shards?: number, diamonds?: number, rubies?: number }} delta
+ */
+/**
+ * @param {import('knex').Knex} trx
+ * @param {number} internalUserId
+ * @param {{ shards?: number, diamonds?: number, rubies?: number }} cost
+ * @returns {Promise<{ ok: boolean, error?: string }>}
+ */
+async function trySpendTcgResources(trx, internalUserId, cost) {
+  const uid = Number(internalUserId);
+  const cs = Math.max(0, Math.floor(Number(cost.shards) || 0));
+  const cd = Math.max(0, Math.floor(Number(cost.diamonds) || 0));
+  const cr = Math.max(0, Math.floor(Number(cost.rubies) || 0));
+  await ensureWallet(uid, trx);
+  const w = await trx('user_wallets').where({ user_id: uid }).forUpdate().first();
+  const hs = Number(w.tcg_shards) || 0;
+  const hd = Number(w.tcg_diamonds) || 0;
+  const hr = Number(w.tcg_rubies) || 0;
+  if (hs < cs || hd < cd || hr < cr) {
+    return { ok: false, error: `Need **${cs}** shards, **${cd}** diamonds, **${cr}** rubies (you have ${hs}/${hd}/${hr}).` };
+  }
+  const ts = nowUnix();
+  await trx.raw(
+    `UPDATE user_wallets SET
+      tcg_shards = COALESCE(tcg_shards, 0) - ?,
+      tcg_diamonds = COALESCE(tcg_diamonds, 0) - ?,
+      tcg_rubies = COALESCE(tcg_rubies, 0) - ?,
+      updated_at = ?
+     WHERE user_id = ?`,
+    [cs, cd, cr, ts, uid],
+  );
+  return { ok: true };
+}
+
+async function incrementTcgResources(trx, internalUserId, delta) {
+  const uid = Number(internalUserId);
+  const ds = Math.floor(Number(delta.shards) || 0);
+  const dd = Math.floor(Number(delta.diamonds) || 0);
+  const dr = Math.floor(Number(delta.rubies) || 0);
+  if (!ds && !dd && !dr) return;
+  await ensureWallet(uid, trx);
+  const ts = nowUnix();
+  await trx.raw(
+    `UPDATE user_wallets SET
+      tcg_shards = COALESCE(tcg_shards, 0) + ?,
+      tcg_diamonds = COALESCE(tcg_diamonds, 0) + ?,
+      tcg_rubies = COALESCE(tcg_rubies, 0) + ?,
+      updated_at = ?
+     WHERE user_id = ?`,
+    [ds, dd, dr, ts, uid],
+  );
 }
 
 /**
@@ -309,4 +371,6 @@ module.exports = {
   ensureWallet,
   addGold,
   incrementGoldInternal,
+  incrementTcgResources,
+  trySpendTcgResources,
 };

@@ -8,27 +8,16 @@ const { RARITY_ORDER } = require('./src/bot/tcg/rarityOrder');
 
 /**
  * Fetches guild role members and writes tcg batch JSON for `master.js` / `create_card.js`.
- * Aligns with [CardSystem.md]: 11 rarities (N → M), role-based classes, level-1 power scores.
+ * Aligns with [CardSystem.md]: 11 rarities (N → M), `source` + class rules for Stage 3, level-1 power scores.
  *
- * - Staff   → class **Commander**
- * - Mods    → class **Guardian**
- * - Uploaders / retired → class **Artisan**
+ * **Staff / Mod / Trial mod / Uploader** → `source` staff|mod|uploader, **class Sovereign** (batch rarity floors via `batch_worker.js`).
+ * **Retired / Respected** → `source` **member**, class from prior row if still valid, else **Artisan** (Sovereign on a member row is corrected).
  *
- * `rarity` uses flags per tier; `powerByRarity` matches the design doc (level 1). Omit top-level
- * `power` so the batch uses `powerByRarity` per key (see [batch_worker.js](batch_worker.js)).
- *
- * `description` (card blurb) is **preserved** from each existing `*_data.json` by `discord_id` when
- * you re-run this script; new members get `TBD` until you edit the file.
+ * On each run, rows are **migrated** from the existing file: `description` and per-rarity **toggles** are kept; `powerByRarity`
+ * is refreshed from `POWER_SCORE_L1`; unknown/legacy keys are dropped. Obsolete top-level fields (`power`, `grade`, etc.) are removed.
  */
 
-const CARD_CLASSES = {
-  staff: 'Commander',
-  mod: 'Guardian',
-  trialmod: 'Guardian',
-  uploader: 'Artisan',
-  retired: 'Artisan',
-  respected: 'Artisan',
-};
+/** @typedef {'staff'|'mod'|'uploader'|'member'} CardBatchSource */
 
 const ALL_TIERS_ON = RARITY_ORDER.reduce(
   (acc, abbrev) => {
@@ -37,7 +26,44 @@ const ALL_TIERS_ON = RARITY_ORDER.reduce(
   },
   /** @type {Record<string, number>} */ ({}),
 );
+
+const MEMBER_CLASS_LABEL = {
+  guardian: 'Guardian',
+  artisan: 'Artisan',
+  commander: 'Commander',
+  phantom: 'Phantom',
+  sage: 'Sage',
+  warden: 'Warden',
+};
+
+/**
+ * Discord role file → `card_data.source` for `batch_worker.js` / `create_card.js`.
+ * Trial mods use **mod** (same SR floor as moderators).
+ */
+const SOURCE_BY_CLASS_KEY = {
+  staff: 'staff',
+  mod: 'mod',
+  trialmod: 'mod',
+  uploader: 'uploader',
+  retired: 'member',
+  respected: 'member',
+};
+
 const tcgDir = path.join(__dirname, 'src', 'bot', 'tcg');
+
+/** Keys written to JSON — anything else from an old file is dropped. */
+const HERO_ROW_KEYS = new Set([
+  'name',
+  'discord_id',
+  'type',
+  'class',
+  'level',
+  'description',
+  'powerByRarity',
+  'avatar',
+  'rarity',
+  'source',
+]);
 
 function getAvatar(avatar, userId) {
   return avatar
@@ -45,38 +71,139 @@ function getAvatar(avatar, userId) {
     : 'https://cdn.discordapp.com/embed/avatars/0.png';
 }
 
-function buildHeroRow(member, classKey, description) {
-  return {
-    name: member.username,
-    discord_id: member.discord_id,
-    type: 'hero',
-    class: CARD_CLASSES[classKey],
-    level: 1,
-    description: description != null && String(description).trim() !== '' ? String(description).trim() : 'TBD',
-    powerByRarity: { ...POWER_SCORE_L1 },
-    avatar: getAvatar(member.avatar, member.user_id),
-    rarity: { ...ALL_TIERS_ON },
-  };
+function isRarityEnabled(v) {
+  if (v === false || v === 0 || v === '0') return false;
+  return v != null;
 }
 
-/** Keep hand-written card blurbs when re-importing role rosters. */
-function descriptionsByIdFromFile(filePath) {
+/**
+ * Keep player toggles for each canonical rarity; add missing tiers as on; strip unknown keys.
+ * @param {Record<string, unknown>|null|undefined} prev
+ */
+function normalizeRarityObject(prev) {
+  const out = {};
+  for (const abbrev of RARITY_ORDER) {
+    if (prev && Object.prototype.hasOwnProperty.call(prev, abbrev)) {
+      out[abbrev] = isRarityEnabled(prev[abbrev]) ? 1 : 0;
+    } else {
+      out[abbrev] = ALL_TIERS_ON[abbrev];
+    }
+  }
+  return out;
+}
+
+/**
+ * Canonical level-1 power row; drops legacy tiers (e.g. EP) and non-canonical keys.
+ */
+function normalizePowerByRarity() {
+  const out = {};
+  for (const abbrev of RARITY_ORDER) {
+    out[abbrev] = POWER_SCORE_L1[abbrev] ?? POWER_SCORE_L1.C;
+  }
+  return out;
+}
+
+/**
+ * @param {string|undefined|null} prevClass
+ * @returns {keyof typeof MEMBER_CLASS_LABEL}
+ */
+function normalizedMemberClassKey(prevClass) {
+  const k = String(prevClass || '').trim().toLowerCase();
+  if (k === 'sovereign') return 'artisan';
+  if (MEMBER_CLASS_LABEL[k]) return /** @type {keyof typeof MEMBER_CLASS_LABEL} */ (k);
+  return 'artisan';
+}
+
+/**
+ * @param {string|undefined|null} prevClass
+ */
+function formatMemberClassLabel(prevClass) {
+  const key = normalizedMemberClassKey(prevClass);
+  return MEMBER_CLASS_LABEL[key];
+}
+
+/**
+ * @param {CardBatchSource} source
+ * @param {string|undefined|null} prevClass
+ */
+function resolveClassForRow(source, prevClass) {
+  if (source === 'staff' || source === 'mod' || source === 'uploader') {
+    return 'Sovereign';
+  }
+  return formatMemberClassLabel(prevClass);
+}
+
+/**
+ * @param {Record<string, unknown>|undefined} prevRow
+ * @param {string} descriptionFallback
+ */
+function resolveDescription(prevRow, descriptionFallback) {
+  if (prevRow && prevRow.description != null) {
+    const s = String(prevRow.description).trim();
+    if (s.length) return s;
+  }
+  return descriptionFallback;
+}
+
+/**
+ * Load prior file rows by discord_id for migration (description, rarity toggles, class hint for member files).
+ * @param {string} filePath
+ * @returns {Map<string, Record<string, unknown>>}
+ */
+function previousRowsByIdFromFile(filePath) {
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
     const data = JSON.parse(raw);
-    if (!Array.isArray(data)) return new Map();
     const map = new Map();
+    if (!Array.isArray(data)) return map;
     for (const row of data) {
       if (!row || row.discord_id == null) continue;
-      const d = row.description;
-      if (d == null) continue;
-      const s = String(d).trim();
-      if (s.length) map.set(String(row.discord_id), s);
+      map.set(String(row.discord_id), row);
     }
     return map;
   } catch {
     return new Map();
   }
+}
+
+/**
+ * @param {import('discord.js').GuildMember} memberLike
+ * @param {string} classKey
+ * @param {Record<string, unknown>|undefined} prevRow
+ */
+function buildHeroRow(memberLike, classKey, prevRow) {
+  const id = String(memberLike.discord_id);
+  const source = /** @type {CardBatchSource} */ (
+    SOURCE_BY_CLASS_KEY[classKey] || 'member'
+  );
+  const desc = resolveDescription(prevRow, 'TBD');
+  const rarity = normalizeRarityObject(
+    prevRow && typeof prevRow.rarity === 'object' && prevRow.rarity
+      ? /** @type {Record<string, unknown>} */ (prevRow.rarity)
+      : null,
+  );
+  const prevClass = prevRow && prevRow.class != null ? String(prevRow.class) : null;
+  const className = resolveClassForRow(source, prevClass);
+
+  /** @type {Record<string, unknown>} */
+  const row = {
+    name: memberLike.username,
+    discord_id: memberLike.discord_id,
+    type: 'hero',
+    class: className,
+    level: 1,
+    description: desc != null && String(desc).trim() !== '' ? String(desc).trim() : 'TBD',
+    powerByRarity: normalizePowerByRarity(),
+    avatar: getAvatar(memberLike.avatar, memberLike.user_id),
+    rarity,
+    source,
+  };
+
+  const cleaned = {};
+  for (const k of HERO_ROW_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(row, k)) cleaned[k] = row[k];
+  }
+  return cleaned;
 }
 
 function logError(context, err) {
@@ -100,7 +227,7 @@ function shutdown(exitCode) {
     (destroyErr) => {
       logError('import_from_discord: client.destroy() failed', destroyErr);
       process.exit(1);
-    }
+    },
   );
 }
 
@@ -148,7 +275,7 @@ client.once('clientReady', async () => {
     const modIds = new Set(mods.map((m) => m.discord_id));
     const staffIds = new Set(staff.map((s) => s.discord_id));
     const filteredUploaders = uploaders.filter(
-      (u) => !modIds.has(u.discord_id) && !staffIds.has(u.discord_id)
+      (u) => !modIds.has(u.discord_id) && !staffIds.has(u.discord_id),
     );
     const filteredMods = mods.filter((m) => !staffIds.has(m.discord_id));
 
@@ -164,11 +291,11 @@ client.once('clientReady', async () => {
     await Promise.all(
       outputFiles.map(async ({ file, classKey, members }) => {
         const target = path.join(tcgDir, file);
-        const previousDesc = descriptionsByIdFromFile(target);
+        const previousById = previousRowsByIdFromFile(target);
         const data = members.map((m) => {
           const id = String(m.discord_id);
-          const desc = previousDesc.has(id) ? previousDesc.get(id) : 'TBD';
-          return buildHeroRow(m, classKey, desc);
+          const prevRow = previousById.get(id);
+          return buildHeroRow(m, classKey, prevRow);
         });
         return fs.promises.writeFile(target, JSON.stringify(data, null, 2), 'utf8');
       }),
