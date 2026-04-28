@@ -12,7 +12,7 @@
 # After an old-dump import, the script runs knex migrate:latest (see app_state + custom commands).
 # Seeds are not re-run after a dump (avoid duplicate rows). For a brand-new empty DB only, once:
 #   sh scripts/docker-seed-first-init.sh
-# Manual fix if bot errors on "custom commands": docker compose run --rm --no-deps bot sh -c "npx knex migrate:latest"
+# Manual fix if bot errors on "custom commands": docker compose run --build --rm --no-deps bot sh -c "npx knex migrate:latest"
 services:
   mysql:
     image: mysql:8.0

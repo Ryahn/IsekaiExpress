@@ -35,4 +35,5 @@ wait_for_mysql() {
 
 wait_for_mysql
 echo "Running database migrations (knex migrate:latest via bot)..."
-docker-compose run --rm --no-deps bot sh -c "npx knex migrate:latest"
+# --build ensures migrations baked into the image match the repo (run happens before compose up --build).
+docker-compose run --build --rm --no-deps bot sh -c "npx knex migrate:latest"

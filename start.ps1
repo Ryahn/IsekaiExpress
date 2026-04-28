@@ -59,12 +59,13 @@ function Invoke-DockerCompose {
 
 function Invoke-ComposeRunBotKnex {
     if (-not (Get-Command -Name 'docker' -ErrorAction SilentlyContinue)) { throw "docker not found in PATH" }
+    # --build so we use migrations from current Dockerfile/context, not a stale f95bot-app:latest image.
     $mode = Get-DockerComposeMode
     if ($mode -eq 'v2') {
-        & docker compose run --rm --no-deps bot sh -c "npx knex migrate:latest"
+        & docker compose run --build --rm --no-deps bot sh -c "npx knex migrate:latest"
     }
     else {
-        & docker-compose run --rm --no-deps bot sh -c "npx knex migrate:latest"
+        & docker-compose run --build --rm --no-deps bot sh -c "npx knex migrate:latest"
     }
     if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
