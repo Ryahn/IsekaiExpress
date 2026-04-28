@@ -253,6 +253,7 @@ const groups = [
           { name: 'xp_multiplier', type: 'string', required: false, description: 'XP multiplier' },
           { name: 'min_xp_per_message', type: 'string', required: false, description: 'Min XP per gain' },
           { name: 'max_xp_per_message', type: 'string', required: false, description: 'Max XP per gain' },
+          { name: 'message_xp_cooldown_sec', type: 'string', required: false, description: 'Seconds between message XP per channel (default 60)' },
           { name: 'double_xp_days', type: 'string (choice)', required: false, description: 'Double XP days preset', choices: doubleXpDayChoices },
         ],
       },

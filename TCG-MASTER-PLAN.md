@@ -187,15 +187,15 @@ N, C, UC, R, U, SR, SSR, SUR, UR, L, M
 
 ---
 
-### 🔲 STAGE 2 — Economy & XP — Pending
+### ✅ STAGE 2 — Economy & XP — Complete
 
 - [x] Gold wallet (`user_wallets` or equivalent)
 - [x] XP → gold convert
 - [x] Daily login claim with XP/gold hooks
 - [x] Battle XP hooks (PvE/PvP)
 - [x] First-win-of-day bonus
-- [-] Message XP: 15 XP baseline, 1-minute per-channel cooldown — `libs/xpSystem.js` uses guild `xp_settings` (`messages_per_xp`, random min–max gain); DB defaults are not fixed at 15 XP / 1 msg/min.
-- [-] Gold sources table matches `CardSystem.md § Gold Sources` (including lending income split) — lending uses upfront fee + 60/40 PvE/spar split; not the doc’s single “40% of agreed loan price” line as sole rule.
+- [x] Message XP: 15 XP default (`xp_settings.min/max_xp_per_gain`), per-channel cooldown (`message_xp_cooldown_seconds`, default 60s) — `libs/xpSystem.js`; migration `20260629120000_xp_settings_message_cooldown.js`
+- [x] Gold sources table matches `CardSystem.md § Gold Sources` (lending: upfront fee + 40%/60% lender/borrower split on PvE & spar wins with borrowed copy)
 - [x] TCG XP booster doubles message XP
 
 ---
@@ -356,8 +356,8 @@ Current state: targeted offer/accept, upfront price, duration, optional max batt
 - [x] Pack pity numbers: Basic (no UC in 9 consecutive → force UC); Advanced (no SSR+ in 9 → force SSR); Premium (Legendary counter ≥19; Mythic counter ≥49)
 - [x] All gold costs in `CardSystem.md § Card Acquisition` match `tcgPacks.js` / `tcgDirectBuy.js`; doc states L/M not sold for gold
 - [-] PvE gold table: `CardSystem.md § Gold Sources` tier bands match `tcgPveConfig.js` (`baseGoldForTier`, boss, clear bonuses) — not line-by-line audited in this review.
-- [-] `CardSystem.md § XP System`: 15 XP baseline + 1-minute per-channel cooldown verified in `libs/xpSystem.js` — implementation is settings-driven; defaults in `database/db.js` seed are not 15/1min.
-- [-] `CardSystem.md § Gold Sources`: lending income formula (40% of agreed loan price) reconciled with actual upfront borrow fee + 60/40 battle split — still a doc vs code wording gap.
+- [x] `CardSystem.md § XP System`: 15 XP default + per-channel cooldown — `libs/xpSystem.js`, `xp_settings.message_xp_cooldown_seconds`, `database/db.js` defaults for new guild rows
+- [x] `CardSystem.md § Gold Sources`: lending income documents upfront fee + 40%/60% PvE/spar gold split on borrowed copies
 
 ---
 

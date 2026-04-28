@@ -234,6 +234,11 @@ async function buildModData(client) {
           .addStringOption((o) => o.setName('max_xp_per_message').setDescription('Max XP per gain'))
           .addStringOption((o) =>
             o
+              .setName('message_xp_cooldown_sec')
+              .setDescription('Seconds between message XP grants, per channel (default 60)'),
+          )
+          .addStringOption((o) =>
+            o
               .setName('double_xp_days')
               .setDescription('Double XP days preset')
               .addChoices(...DOUBLE_XP_CHOICES),

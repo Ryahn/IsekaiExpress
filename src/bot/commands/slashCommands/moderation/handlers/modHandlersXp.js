@@ -19,6 +19,10 @@ async function xpSettingsExecute(client, interaction) {
     min_xp_per_gain: Number(xpSettings.min_xp_per_gain),
     max_xp_per_gain: Number(xpSettings.max_xp_per_gain),
     weekend_days: String(xpSettings.weekend_days),
+    message_xp_cooldown_seconds: Math.max(
+      1,
+      Number(xpSettings.message_xp_cooldown_seconds) || 60,
+    ),
   };
 
   if (interaction.options.getString('messages_per_xp')) {
@@ -43,12 +47,21 @@ async function xpSettingsExecute(client, interaction) {
     data.weekend_days = String(days);
   }
 
+  const cooldownOpt = interaction.options.getString('message_xp_cooldown_sec');
+  if (cooldownOpt != null && cooldownOpt !== '') {
+    data.message_xp_cooldown_seconds = Math.max(1, Number(cooldownOpt) || 60);
+  }
+
   await client.db.updateXPSettings(data, guildId);
   const fields = [
     { name: 'Messages Per XP', value: String(data.messages_per_xp) || 'Not set' },
     { name: 'XP Multiplier', value: String(data.weekend_multiplier) || 'Not set' },
     { name: 'Min XP Per Message', value: String(data.min_xp_per_gain) || 'Not set' },
     { name: 'Max XP Per Message', value: String(data.max_xp_per_gain) || 'Not set' },
+    {
+      name: 'Message XP cooldown (sec)',
+      value: String(data.message_xp_cooldown_seconds) || 'Not set',
+    },
     { name: 'Double XP Days', value: String(data.weekend_days) || 'Not set' },
   ];
 

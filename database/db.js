@@ -210,9 +210,10 @@ const self = module.exports = {
     try {
       await db.table('xp_settings').insert({
         guildId,
-        messages_per_xp: 3,
-        min_xp_per_gain: 1,
-        max_xp_per_gain: 5,
+        messages_per_xp: 1,
+        min_xp_per_gain: 15,
+        max_xp_per_gain: 15,
+        message_xp_cooldown_seconds: 60,
         weekend_multiplier: 2,
         weekend_days: 'sat,sun',
         double_xp_enabled: false
@@ -229,9 +230,10 @@ const self = module.exports = {
     const rows = await db.table('xp_settings').select('*');
     if (!rows.length) {
       return {
-        messages_per_xp: 3,
-        min_xp_per_gain: 1,
-        max_xp_per_gain: 3,
+        messages_per_xp: 1,
+        min_xp_per_gain: 15,
+        max_xp_per_gain: 15,
+        message_xp_cooldown_seconds: 60,
         weekend_multiplier: 2,
         weekend_days: 'sat,sun',
         double_xp_enabled: false
