@@ -117,7 +117,7 @@ const groups = [
           { name: 'invite_queue_channel', type: 'channel', required: false, description: 'Channel for pending invite buttons' },
           { name: 'min_account_age_days', type: 'integer', required: false, description: 'Min account age (days) for image trust' },
           { name: 'min_join_age_days', type: 'integer', required: false, description: 'Min days in server for image trust' },
-          { name: 'min_messages_for_image_trust', type: 'integer', required: false, description: 'Min messages in server; account age, join age, and message count must all pass to skip image review' },
+          { name: 'min_messages_for_image_trust', type: 'integer', required: false, description: 'Min messages for trusted path (skip scam scan). Below threshold: OCR/pHash runs; clean results are not queued; partial scan failures still go to image_review_channel' },
           { name: 'mod_log_ping_role', type: 'role', required: false, description: 'Role pinged on mod log posts (invite/link/scam alerts)' },
           { name: 'mod_log_ping_clear', type: 'boolean', required: false, description: 'True to clear mod log role ping' },
         ],

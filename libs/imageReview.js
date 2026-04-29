@@ -5,7 +5,7 @@ const {
   ButtonStyle,
 } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
-const { scanImageAttachment, enforceScamImage } = require('./scamImageScan');
+const { scanImageAttachment, enforceScamImage, buildScamImageEvidenceEmbed } = require('./scamImageScan');
 
 function pickImageAttachment(message) {
   for (const a of message.attachments.values()) {
@@ -90,66 +90,21 @@ function buildImageReviewComponents(pendingId) {
 }
 
 /**
- * Delete message, queue staff review (all image attachments in one mod message).
- * Staff still run scam OCR/pHash so hits are logged to modLogId (no queue, no delete on hit).
+ * Build the image-review queue payload (evidence embed when a scan hit, plus image previews
+ * + Approve/Ban buttons), delete the original message, and post to the review channel.
  */
-async function processImageReview(client, message, staffRoleId) {
-  const attachments = listImageAttachments(message);
-  if (!attachments.length) return;
-
-  const member = await message.guild.members.fetch(message.author.id).catch(() => null);
-  if (!member) return;
-
-  const isStaff = hasGuildAdminOrStaffRole(member, staffRoleId);
-  const needsQueue = await shouldFlagImageForReview(client, message, staffRoleId);
-
-  if (!needsQueue && !isStaff) {
-    return;
-  }
-
+async function queueImageReview(client, message, attachments, member, cfg, chId, options = {}) {
+  const { scan, scanIndex } = options;
+  const hasScan = !!scan;
   const gid = message.guild.id;
-  const cfg = await client.db.getGuildConfigurable(gid);
-  const chId = reviewChannelId(cfg);
-
-  if (needsQueue && !chId) {
-    client.logger.warn('imageReview: no image_review_channel_id or modLogId');
-    return;
-  }
-
   const firstAtt = attachments[0];
   const content = message.content || '';
-
-  for (let i = 0; i < attachments.length; i++) {
-    const att = attachments[i];
-    try {
-      const scan = await scanImageAttachment(client, att);
-      if (scan.hit) {
-        await enforceScamImage(client, message, staffRoleId, scan, i, att.url);
-        if (needsQueue && !isStaff) {
-          try {
-            await message.delete();
-          } catch (_) {
-            /* ignore */
-          }
-        }
-        return;
-      }
-    } catch (e) {
-      client.logger.warn(`imageReview scam scan failed attachment ${i + 1}:`, e);
-    }
-  }
-
-  if (!needsQueue) {
-    return;
-  }
-
-  const attachmentUrl = firstAtt.url;
 
   const pendingId = await client.db.insertPendingImageReview({
     home_guild_id: gid,
     author_id: message.author.id,
     channel_id: message.channelId,
-    attachment_url: attachmentUrl.slice(0, 500),
+    attachment_url: firstAtt.url.slice(0, 500),
     message_content: content.slice(0, 1900),
     status: 'pending',
   });
@@ -162,12 +117,23 @@ async function processImageReview(client, message, staffRoleId) {
   const msgCount = await client.db.getGuildUserMessageCount(gid, message.author.id);
 
   const embeds = [];
-  const maxShow = Math.min(attachments.length, 10);
+  if (hasScan) {
+    const idx = typeof scanIndex === 'number' ? scanIndex : 0;
+    embeds.push(buildScamImageEvidenceEmbed(message, scan, idx, attachments[idx].url));
+  }
+  const previewBudget = hasScan ? 9 : 10;
+  const maxShow = Math.min(attachments.length, previewBudget);
   for (let i = 0; i < maxShow; i++) {
     const att = attachments[i];
+    const title =
+      i === 0
+        ? hasScan
+          ? 'Scam-scan hit — staff review required'
+          : 'Image flagged for review'
+        : `Attachment ${i + 1} / ${attachments.length}`;
     const embed = new EmbedBuilder()
-      .setTitle(i === 0 ? 'Image flagged for review' : `Attachment ${i + 1} / ${attachments.length}`)
-      .setColor(0xffa500)
+      .setTitle(title)
+      .setColor(hasScan ? 0xff4500 : 0xffa500)
       .setImage(att.url)
       .setTimestamp();
     if (i === 0) {
@@ -202,6 +168,82 @@ async function processImageReview(client, message, staffRoleId) {
   if (qMsg) {
     await client.db.updatePendingImageReviewQueueMessage(pendingId, qMsg.id);
   }
+}
+
+/**
+ * Scan attachments and decide enforcement.
+ *
+ * Routing on a scan hit:
+ *   - Staff posters → log only (existing enforceScamImage staff branch).
+ *   - Low-trust users (needsQueue) → ALWAYS staff review, never auto-ban.
+ *   - Trusted users + severity 'review' (pHash-only) → staff review.
+ *   - Trusted users + severity 'auto' (text/link keyword) → ban via enforceScamImage.
+ *
+ * If every image scans clean and the user is low-trust but at least one scan failed
+ * (timeout/error), queue without scan evidence so staff can sanity-check the gap.
+ */
+async function processImageReview(client, message, staffRoleId) {
+  const attachments = listImageAttachments(message);
+  if (!attachments.length) return;
+
+  const member = await message.guild.members.fetch(message.author.id).catch(() => null);
+  if (!member) return;
+
+  const isStaff = hasGuildAdminOrStaffRole(member, staffRoleId);
+  const needsQueue = await shouldFlagImageForReview(client, message, staffRoleId);
+
+  if (!needsQueue && !isStaff) {
+    return;
+  }
+
+  const gid = message.guild.id;
+  const cfg = await client.db.getGuildConfigurable(gid);
+  const chId = reviewChannelId(cfg);
+
+  if (needsQueue && !chId) {
+    client.logger.warn('imageReview: no image_review_channel_id or modLogId');
+    return;
+  }
+
+  let cleanScansCompleted = 0;
+  for (let i = 0; i < attachments.length; i++) {
+    const att = attachments[i];
+    try {
+      const scan = await scanImageAttachment(client, att);
+      if (scan.hit) {
+        if (isStaff) {
+          await enforceScamImage(client, message, staffRoleId, scan, i, att.url);
+          return;
+        }
+        const shouldQueue = needsQueue || scan.severity === 'review';
+        if (shouldQueue) {
+          if (!chId) {
+            client.logger.warn(
+              `imageReview: scan hit (severity=${scan.severity}) but no review channel; skipping action`,
+            );
+            return;
+          }
+          await queueImageReview(client, message, attachments, member, cfg, chId, { scan, scanIndex: i });
+          return;
+        }
+        await enforceScamImage(client, message, staffRoleId, scan, i, att.url);
+        return;
+      }
+      cleanScansCompleted += 1;
+    } catch (e) {
+      client.logger.warn(`imageReview scam scan failed attachment ${i + 1}:`, e);
+    }
+  }
+
+  if (!needsQueue) {
+    return;
+  }
+
+  if (cleanScansCompleted === attachments.length) {
+    return;
+  }
+
+  await queueImageReview(client, message, attachments, member, cfg, chId);
 }
 
 module.exports = {

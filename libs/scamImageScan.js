@@ -12,10 +12,12 @@ const MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 20000;
 const SCAN_TIMEOUT_MS = 25000;
 const OCR_MAX_EDGE = 1600;
-/** blockhash bit length passed to imghash (default 8) */
-const PHASH_BITS = 8;
-/** Hamming distance (bits) — near-duplicate screenshots */
-const PHASH_MAX_HAMMING = 10;
+/** Below this, OCR text / hostname extraction is ignored (still run pHash). Reduces false bans on photos/noise. */
+const OCR_MIN_CONFIDENCE_FOR_TEXT = 60;
+/** blockhash bit length passed to imghash. 16 = 256-bit hash, far less collision-prone than 8 (64-bit). */
+const PHASH_BITS = 16;
+/** Hamming distance (bits) — calibrated for 256-bit hash; ~5% bit diff. */
+const PHASH_MAX_HAMMING = 14;
 const LIST_CACHE_MS = 60 * 1000;
 
 let textListCache = { t: 0, rows: [] };
@@ -41,6 +43,40 @@ function normalizeOcrText(text) {
     .trim();
 }
 
+/**
+ * Tesseract often emits “words” from fur, knit patterns, etc. Treat as unreliable for text blacklist.
+ */
+function isLikelyOcrNoiseText(normalized, ocrRaw) {
+  const n = String(normalized || '');
+  const raw = String(ocrRaw || '');
+  const rawTrim = raw.trim();
+  if (rawTrim.length < 24) return false;
+  const wordish = n.match(/\b[a-z]{4,}\b/g) || [];
+  const longWords = n.match(/\b[a-z]{5,}\b/g) || [];
+  if (wordish.length >= 4 && longWords.length >= 1) return false;
+  const nonSpace = raw.replace(/\s/g, '');
+  if (!nonSpace.length) return true;
+  const letters = nonSpace.replace(/[^a-z]/gi, '').length;
+  if (letters / nonSpace.length < 0.5) return true;
+  const nonAlnum = nonSpace.replace(/[a-z0-9]/gi, '').length;
+  if (nonAlnum / nonSpace.length > 0.15 && wordish.length <= 3) return true;
+  if (longWords.length === 0) return true;
+  return false;
+}
+
+/**
+ * Phrases / multi-part patterns use substring match. Single tokens must appear as tokens, not inside random OCR runs.
+ */
+function keywordPatternMatchesNormalized(normalized, patternLower) {
+  const p = String(patternLower || '');
+  if (!p) return false;
+  if (p.includes(' ')) {
+    return normalized.includes(p);
+  }
+  const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(normalized);
+}
+
 function matchTextBlacklist(normalized, rows) {
   for (const row of rows) {
     const p = String(row.pattern || '').toLowerCase();
@@ -54,7 +90,7 @@ function matchTextBlacklist(normalized, rows) {
         /* invalid regex in DB */
       }
     } else {
-      if (normalized.includes(p)) {
+      if (keywordPatternMatchesNormalized(normalized, p)) {
         return { hit: true, detail: `text:${row.pattern_type}:${row.pattern}` };
       }
     }
@@ -188,7 +224,7 @@ async function preprocessForScan(inputBuffer) {
 /**
  * @param {import('discord.js').Client} client
  * @param {string} url
- * @returns {Promise<{ hit: boolean, reason: string, detail: string, ocrSnippet?: string, phash?: string }>}
+ * @returns {Promise<{ hit: boolean, reason: string, detail: string, severity?: 'auto' | 'review', ocrSnippet?: string, phash?: string }>}
  */
 async function scanImageUrl(client, url) {
   const rawBuf = await downloadImageBuffer(url);
@@ -196,28 +232,56 @@ async function scanImageUrl(client, url) {
 
   const worker = await getOcrWorker();
   const {
-    data: { text: ocrRaw },
+    data: { text: ocrRaw, confidence: ocrConfidenceRaw },
   } = await worker.recognize(pngBuf);
+  const ocrConfidence = typeof ocrConfidenceRaw === 'number' ? ocrConfidenceRaw : 0;
   const normalized = normalizeOcrText(ocrRaw);
   const ocrSnippet = normalized.slice(0, 1200);
 
-  const textRows = await getCachedTextRows(client);
-  const textHit = matchTextBlacklist(normalized, textRows);
-  if (textHit.hit) {
-    return { hit: true, reason: 'ocr', detail: textHit.detail, ocrSnippet };
-  }
+  const trustOcrTokens =
+    ocrConfidence >= OCR_MIN_CONFIDENCE_FOR_TEXT && !isLikelyOcrNoiseText(normalized, ocrRaw);
 
-  const linkHit = await matchLinkBlacklistHosts(client, ocrRaw);
-  if (linkHit.hit) {
-    return { hit: true, reason: 'ocr_link_host', detail: linkHit.detail, ocrSnippet };
+  if (trustOcrTokens) {
+    const textRows = await getCachedTextRows(client);
+    const textHit = matchTextBlacklist(normalized, textRows);
+    if (textHit.hit) {
+      return {
+        hit: true,
+        reason: 'ocr',
+        severity: 'auto',
+        detail: textHit.detail,
+        ocrSnippet,
+        ocrConfidence,
+      };
+    }
+
+    const linkHit = await matchLinkBlacklistHosts(client, ocrRaw);
+    if (linkHit.hit) {
+      return {
+        hit: true,
+        reason: 'ocr_link_host',
+        severity: 'auto',
+        detail: linkHit.detail,
+        ocrSnippet,
+        ocrConfidence,
+      };
+    }
   }
 
   const ph = await matchPhash(client, pngBuf);
   if (ph.hit) {
-    return { hit: true, reason: 'phash', detail: ph.detail, ocrSnippet, phash: ph.phash };
+    return {
+      hit: true,
+      reason: 'phash',
+      severity: 'review',
+      detail: ph.detail,
+      ocrSnippet,
+      phash: ph.phash,
+      ocrConfidence,
+    };
   }
 
-  return { hit: false, reason: 'none', detail: '', ocrSnippet };
+  return { hit: false, reason: 'none', detail: '', ocrSnippet, ocrConfidence };
 }
 
 function withTimeout(promise, ms) {
@@ -254,6 +318,13 @@ function buildScamImageEvidenceEmbed(message, scanResult, attachmentIndex, attac
       { name: 'Channel', value: `<#${message.channelId}>` },
       { name: 'Attachment', value: `#${attachmentIndex + 1} ${attachmentUrl.slice(0, 200)}` },
       { name: 'Match', value: matched },
+      {
+        name: 'OCR confidence',
+        value:
+          typeof scanResult.ocrConfidence === 'number'
+            ? String(Math.round(scanResult.ocrConfidence))
+            : '—',
+      },
       { name: 'OCR excerpt', value: (scanResult.ocrSnippet || '—').slice(0, 900) },
       { name: 'Message content', value: (message.content || '*(none)*').slice(0, 500) },
     )
@@ -324,7 +395,11 @@ module.exports = {
   scanImageAttachment,
   scanImageUrl,
   enforceScamImage,
+  buildScamImageEvidenceEmbed,
   normalizeOcrText,
+  keywordPatternMatchesNormalized,
+  isLikelyOcrNoiseText,
   PHASH_BITS,
   PHASH_MAX_HAMMING,
+  OCR_MIN_CONFIDENCE_FOR_TEXT,
 };

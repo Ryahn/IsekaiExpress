@@ -13,3 +13,4 @@ batch_*.json
 CardSystem.md
 .cursor/
 **/src/card_web/Aniworld*
+.claude
