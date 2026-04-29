@@ -139,6 +139,10 @@ module.exports = {
       if (Number.isFinite(n) && n >= 1 && n <= 6) return { type: 'fixed', region: n };
       return { type: 'none' };
     })(),
+    /** Daily featured offer announcement (UTC); empty = disabled. */
+    featuredAnnounceChannelId: str('TCG_FEATURED_CHANNEL_ID', ''),
+    /** Meta-season key for Season Recall purchase gate (Stage 7 consumes `tcg_season_recall_ready`). */
+    metaSeasonKey: str('TCG_META_SEASON', 's0'),
   },
 
   roles: {

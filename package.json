@@ -12,6 +12,7 @@
     "import:chatdump": "node scripts/importChatdump.js",
     "tcg:batch": "node master.js",
     "migrate": "npx knex migrate:latest",
+    "seed:scam-phash": "node scripts/seed-scam-image-phash.js",
     "docker:up": "docker compose up -d --build",
     "docker:web": "docker compose --profile web up -d --build"
   },
@@ -38,6 +39,7 @@
     "glob": "^8.0.3",
     "got": "^11.8.3",
     "helmet": "^7.1.0",
+    "imghash": "^1.1.4",
     "knex": "^3.1.0",
     "lodash": "^4.17.21",
     "moment": "^2.29.2",

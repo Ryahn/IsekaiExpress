@@ -17,6 +17,7 @@ const tcgForge = require('../../../../../libs/tcgForge');
 const tcgRegrade = require('../../../../../libs/tcgRegrade');
 const tcgExpeditions = require('../../../../../libs/tcgExpeditions');
 const tcgSetProgress = require('../../../../../libs/tcgSetProgress');
+const tcgFeaturedShop = require('../../../../../libs/tcgFeaturedShop');
 const db = require('../../../../../database/db');
 const { battlesRequiredForTier } = require('../../../../../libs/tcgPveConfig');
 const { DISPLAY_LABEL, ELEMENT_IDS } = require('../../../tcg/elements');
@@ -83,7 +84,7 @@ module.exports = {
     .addSubcommandGroup((group) =>
       group
         .setName('craft')
-        .setDescription('Copy actions — level fuse, rarity fuse, salvage, forge, grade, seal, reroll')
+        .setDescription('Copy actions — fuse, forge, regrade, seal, reroll, featured cosmetics')
         .addSubcommand((sub) =>
           sub
             .setName('fuse')
@@ -166,6 +167,22 @@ module.exports = {
             .setDescription('Pay gold to move this copy to a random other element (same character & rarity)')
             .addIntegerOption((o) =>
               o.setName('instance').setDescription('Copy ID to reroll').setRequired(true).setMinValue(1),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('anchor')
+            .setDescription('Use 1× Element Anchor charge — permanently lock this copy’s element (no gold reroll)')
+            .addIntegerOption((o) =>
+              o.setName('instance').setDescription('Copy ID').setRequired(true).setMinValue(1),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('frame')
+            .setDescription('Use 1× Golden Frame charge — golden accent on `/tcg view` for this copy')
+            .addIntegerOption((o) =>
+              o.setName('instance').setDescription('Copy ID').setRequired(true).setMinValue(1),
             ),
         ),
     )
@@ -420,7 +437,12 @@ module.exports = {
               return opt;
             });
           return b;
-        }),
+        })
+        .addSubcommand((sub) =>
+          sub
+            .setName('buy_featured')
+            .setDescription('Buy today’s UTC featured offer (1/day per player; server stock 1–3)'),
+        ),
     )
     .addSubcommandGroup((group) =>
       group
@@ -906,6 +928,28 @@ module.exports = {
           ephemeral: true,
         });
       }
+      if (sub === 'anchor') {
+        const instanceId = interaction.options.getInteger('instance', true);
+        const result = await tcgInventory.applyElementAnchor(client, discordUser, instanceId);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `**Element locked** on **#${instanceId}**. Anchor charges left: **${result.chargesLeft}**.`,
+          ephemeral: true,
+        });
+      }
+      if (sub === 'frame') {
+        const instanceId = interaction.options.getInteger('instance', true);
+        const result = await tcgInventory.applyGoldenFrame(client, discordUser, instanceId);
+        if (!result.ok) {
+          return interaction.editReply({ content: result.error, ephemeral: true });
+        }
+        return interaction.editReply({
+          content: `**Golden frame** applied to **#${instanceId}**. Frame charges left: **${result.chargesLeft}**.`,
+          ephemeral: true,
+        });
+      }
       return interaction.editReply({ content: 'Unknown craft subcommand.', ephemeral: true });
     }
 
@@ -1012,6 +1056,16 @@ module.exports = {
               inline: false,
             },
             {
+              name: 'Featured exclusives (wallet)',
+              value: [
+                `Anchor **${bal.elementAnchorCharges}** · Frame **${bal.goldenFrameCharges}** · Double drop **${bal.doubleDropCharges}**`,
+                `Boss magnet _${bal.bossMagnetQueued ? '**queued** for next Battle Boss' : 'off'}_ · Season recall _${bal.seasonRecallReady ? '**ready** (Stage 7)' : 'off'}_${
+                  bal.seasonRecallPurchasedFor ? ` · bought for **${bal.seasonRecallPurchasedFor}**` : ''
+                }`,
+              ].join('\n'),
+              inline: false,
+            },
+            {
               name: 'Collection',
               value:
                 `${owned} / ${cap} cards · **${titleCount}** set title(s) (\`/tcg titles\`)` +
@@ -1029,7 +1083,7 @@ module.exports = {
                 `Boss **${tcgPacks.BOSS_PACK_COST}**g · 4× · 1× Rare+ · boss-tag chance`,
                 `Region **${tcgPacks.REGION_PACK_COST}**g · 4× pool · \`region\` ${tcgPacks.REGION_ID_MIN}–${tcgPacks.REGION_ID_MAX}`,
                 `Direct **card** — ${directBuyHelpLine} · **L/M** not sold for gold`,
-                `\`/tcg store pack\` · \`/tcg store card\` · \`/tcg store browse\` · \`/tcg trade\``,
+                `\`/tcg store pack\` · \`/tcg store card\` · \`/tcg store browse\` · \`/tcg store buy_featured\` · \`/tcg trade\``,
               ].join('\n'),
               inline: false,
             },
@@ -1704,9 +1758,16 @@ module.exports = {
           (i) =>
             `**${i.label}** — **${i.cost}**g\n${i.description}\n· Server stock left today: **${i.serverRemaining}** · You can still buy: **${i.playerRemaining}**`,
         );
+        const metaKey = client.config.tcg?.metaSeasonKey || 's0';
+        const featRow = await tcgFeaturedShop.ensureFeaturedOfferForDay(snap.dayUtc, metaKey);
+        const feat = tcgFeaturedShop.describeOffer(featRow);
+        const featLeft = Math.max(0, feat.stockCap - feat.sold);
+        const featBlock =
+          `**Daily featured** (Pool **${featRow.pool}**)\n${feat.title}\n**${feat.label}** — **${feat.cost}**g\n${feat.description}\n` +
+          `· Server stock: **${featLeft}** / **${feat.stockCap}** · You: **1**/day · \`/tcg store buy_featured\``;
         const embed = new EmbedBuilder()
           .setTitle('TCG item shop')
-          .setDescription(`${lines.join('\n\n')}\n\nUse \`/tcg store buy\`.`)
+          .setDescription(`${lines.join('\n\n')}\n\n${featBlock}\n\nRotating items: \`/tcg store buy\`.`)
           .setFooter({ text: `UTC date: ${snap.dayUtc} · Resets midnight UTC · [CardSystem.md] Item Shop` })
           .setColor(0x3498db);
         return interaction.editReply({ embeds: [embed], ephemeral: true });
@@ -1739,6 +1800,23 @@ module.exports = {
         });
       }
 
+      if (sub === 'buy_featured') {
+        const metaKey = client.config.tcg?.metaSeasonKey || 's0';
+        const r = await tcgFeaturedShop.buyFeaturedOffer(client, discordUser, metaKey);
+        if (!r.ok) {
+          return interaction.editReply({ content: r.error, ephemeral: true });
+        }
+        const disc = r.pool === 'A' && r.discount != null ? ` (**${r.discount}%** off)` : '';
+        const ex =
+          r.pool === 'B' && r.exclusiveKey === 'season_recall'
+            ? '\n_Season Recall token stored for **Stage 7** decay rules._'
+            : '';
+        return interaction.editReply({
+          content: `**${r.label}**${disc} — **−${r.cost}**g · **${r.newGold.toLocaleString()}**g remaining.${ex}`,
+          ephemeral: true,
+        });
+      }
+
       return interaction.editReply({ content: 'Unknown store subcommand.', ephemeral: true });
     }
 
@@ -1760,7 +1838,9 @@ module.exports = {
         const el = r.element ? (DISPLAY_LABEL[r.element] || r.element) : '—';
         const ab = r.ability_key ? String(r.ability_key).replace(/_/g, ' ') : '—';
         const gr = r.grade ? String(r.grade).toUpperCase() : 'D';
-        return `**#${r.user_card_id}** · ${r.name} (${r.rarity}) · Lv${r.level} · **${gr}** · ${el} · ${ab}`;
+        const tag =
+          (Number(r.tcg_element_locked) ? ' 🔒' : '') + (Number(r.tcg_golden_frame) ? ' ✨' : '');
+        return `**#${r.user_card_id}**${tag} · ${r.name} (${r.rarity}) · Lv${r.level} · **${gr}** · ${el} · ${ab}`;
       });
       const embed = new EmbedBuilder()
         .setTitle(`Your collection — page ${p}/${totalPages}`)
@@ -1788,8 +1868,13 @@ module.exports = {
           ? `ATK ${Math.round(row.base_atk * mult)} · DEF ${Math.round(row.base_def * mult)} · SPD ${Math.round(row.base_spd * mult)} · HP ${Math.round(row.base_hp * mult)}`
           : 'N/A';
       const nextReroll = tcgInventory.nextElementRerollCost(row.element_reroll_count ?? 0);
+      const elementLocked = !!Number(row.tcg_element_locked);
+      const goldenFrame = !!Number(row.tcg_golden_frame);
+      const rerollField = elementLocked
+        ? '**Locked** (Element Anchor) — gold reroll disabled.'
+        : `Next cost: **${nextReroll}**g (count: ${row.element_reroll_count ?? 0})`;
       const embed = new EmbedBuilder()
-        .setTitle(`${row.name} (#${row.user_card_id})`)
+        .setTitle(`${row.name} (#${row.user_card_id})${goldenFrame ? ' ✨' : ''}`)
         .setDescription(row.description || '—')
         .addFields(
           { name: 'Rarity', value: row.rarity || '—', inline: true },
@@ -1810,13 +1895,13 @@ module.exports = {
           { name: 'Stats (scaled)', value: stats, inline: false },
           {
             name: 'Element reroll',
-            value: `Next cost: **${nextReroll}**g (count: ${row.element_reroll_count ?? 0})`,
+            value: rerollField,
             inline: false,
           },
           { name: 'Catalog UUID', value: row.uuid || '—', inline: false },
         )
         .setImage(row.image_url || null)
-        .setColor(0x5865f2);
+        .setColor(goldenFrame ? 0xf1c40f : 0x5865f2);
       return interaction.editReply({ embeds: [embed], ephemeral: true });
     }
 

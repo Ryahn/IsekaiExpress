@@ -194,6 +194,8 @@ async function grantTemplateWithTrx(trx, internalUserId, template, opts = {}) {
     is_escrowed: false,
     element_reroll_count: 0,
     tcg_preservation_sealed: false,
+    tcg_element_locked: false,
+    tcg_golden_frame: false,
     lent_source_user_card_id: null,
     updated_at: ts,
     created_at: ts,
@@ -383,6 +385,8 @@ async function fuseInstances(client, discordUser, instanceA, instanceB, opts = {
         is_escrowed: false,
         element_reroll_count: 0,
         tcg_preservation_sealed: false,
+        tcg_element_locked: !!Number(a.tcg_element_locked),
+        tcg_golden_frame: !!Number(a.tcg_golden_frame),
         lent_source_user_card_id: null,
         updated_at: ts,
         created_at: ts,
@@ -434,6 +438,8 @@ async function fuseInstances(client, discordUser, instanceA, instanceB, opts = {
       is_escrowed: false,
       element_reroll_count: 0,
       tcg_preservation_sealed: false,
+      tcg_element_locked: !!Number(keeper.tcg_element_locked),
+      tcg_golden_frame: !!Number(keeper.tcg_golden_frame),
       lent_source_user_card_id: null,
       updated_at: ts,
       created_at: ts,
@@ -469,6 +475,10 @@ async function rerollElement(client, discordUser, userCardId) {
     }
     if (Number(inst.tcg_preservation_sealed)) {
       result = { ok: false, error: 'Preservation Sealed — reroll blocked ([CardSystem.md]).' };
+      return;
+    }
+    if (Number(inst.tcg_element_locked)) {
+      result = { ok: false, error: '**Element Anchor** — this copy’s element is **locked**; reroll is disabled.' };
       return;
     }
 
@@ -558,6 +568,8 @@ async function fetchInventoryPage(client, discordUser, page = 1, pageSize = 8) {
       'user_cards.level',
       'user_cards.grade',
       'user_cards.ability_key',
+      'user_cards.tcg_element_locked',
+      'user_cards.tcg_golden_frame',
       'card_data.name',
       'card_data.rarity',
       'card_data.element',
@@ -654,6 +666,112 @@ async function getInstanceDetailForOwner(client, discordUser, userCardId) {
   return row || null;
 }
 
+/**
+ * @param {import('discord.js').Client} client
+ * @param {{ id: string, username: string }} discordUser
+ * @param {number} userCardId
+ */
+async function applyElementAnchor(client, discordUser, userCardId) {
+  await client.db.checkUser(discordUser);
+  const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
+  if (!internalId) return { ok: false, error: 'User not found.' };
+
+  let result;
+  await db.query.transaction(async (trx) => {
+    await tcgEconomy.ensureWallet(internalId, trx);
+    const w = await trx('user_wallets').where({ user_id: internalId }).forUpdate().first();
+    const charges = Number(w.tcg_element_anchor_charges) || 0;
+    if (charges < 1) {
+      result = {
+        ok: false,
+        error: 'No **Element Anchor** applications — buy **today’s featured** when Pool B offers it.',
+      };
+      return;
+    }
+    const inst = await loadOwnedInstance(internalId, userCardId, trx);
+    if (!inst) {
+      result = { ok: false, error: 'Copy not found.' };
+      return;
+    }
+    if (inst.is_lent || inst.is_escrowed) {
+      result = { ok: false, error: 'Cannot anchor a lent or escrowed copy.' };
+      return;
+    }
+    if (inst.lent_source_user_card_id) {
+      result = { ok: false, error: 'Cannot anchor a **borrowed** copy.' };
+      return;
+    }
+    if (Number(inst.tcg_element_locked)) {
+      result = { ok: false, error: 'This copy’s element is **already locked**.' };
+      return;
+    }
+    const ts = nowUnix();
+    await trx('user_wallets').where({ user_id: internalId }).update({
+      tcg_element_anchor_charges: charges - 1,
+      updated_at: ts,
+    });
+    await trx('user_cards').where({ user_card_id: userCardId }).update({
+      tcg_element_locked: true,
+      updated_at: ts,
+    });
+    result = { ok: true, chargesLeft: charges - 1 };
+  });
+  return result;
+}
+
+/**
+ * @param {import('discord.js').Client} client
+ * @param {{ id: string, username: string }} discordUser
+ * @param {number} userCardId
+ */
+async function applyGoldenFrame(client, discordUser, userCardId) {
+  await client.db.checkUser(discordUser);
+  const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
+  if (!internalId) return { ok: false, error: 'User not found.' };
+
+  let result;
+  await db.query.transaction(async (trx) => {
+    await tcgEconomy.ensureWallet(internalId, trx);
+    const w = await trx('user_wallets').where({ user_id: internalId }).forUpdate().first();
+    const charges = Number(w.tcg_golden_frame_charges) || 0;
+    if (charges < 1) {
+      result = {
+        ok: false,
+        error: 'No **Golden Frame** applications — buy **today’s featured** when Pool B offers it.',
+      };
+      return;
+    }
+    const inst = await loadOwnedInstance(internalId, userCardId, trx);
+    if (!inst) {
+      result = { ok: false, error: 'Copy not found.' };
+      return;
+    }
+    if (inst.is_lent || inst.is_escrowed) {
+      result = { ok: false, error: 'Cannot frame a lent or escrowed copy.' };
+      return;
+    }
+    if (inst.lent_source_user_card_id) {
+      result = { ok: false, error: 'Cannot frame a **borrowed** copy.' };
+      return;
+    }
+    if (Number(inst.tcg_golden_frame)) {
+      result = { ok: false, error: 'This copy **already** has the golden frame.' };
+      return;
+    }
+    const ts = nowUnix();
+    await trx('user_wallets').where({ user_id: internalId }).update({
+      tcg_golden_frame_charges: charges - 1,
+      updated_at: ts,
+    });
+    await trx('user_cards').where({ user_card_id: userCardId }).update({
+      tcg_golden_frame: true,
+      updated_at: ts,
+    });
+    result = { ok: true, chargesLeft: charges - 1 };
+  });
+  return result;
+}
+
 module.exports = {
   DEFAULT_INVENTORY_CAP,
   effectiveInventoryCap,
@@ -673,4 +791,6 @@ module.exports = {
   getEffectiveInventoryCapForUser,
   fetchInventoryPage,
   getInstanceDetailForOwner,
+  applyElementAnchor,
+  applyGoldenFrame,
 };

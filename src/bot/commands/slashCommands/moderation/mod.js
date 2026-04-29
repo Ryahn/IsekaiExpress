@@ -35,6 +35,12 @@ const {
   blacklistCheckExecute,
 } = require('./handlers/modHandlersBlacklist');
 const {
+  blacklistAddImageTextExecute,
+  blacklistAddImageHashExecute,
+  blacklistListImageTextExecute,
+  blacklistListImageHashesExecute,
+} = require('./handlers/modHandlersScamImageBlacklist');
+const {
   reviewSetExecute,
   reviewViewExecute,
   reviewApproveUserExecute,
@@ -90,7 +96,35 @@ async function buildModData(client) {
           .setName('check')
           .setDescription('Dry run: is this invite blacklisted?')
           .addStringOption((o) => o.setName('invite').setDescription('Invite URL or code').setRequired(true)),
-      ),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('add-image-text')
+          .setDescription('OCR text / domain pattern for scam image auto-enforcement')
+          .addStringOption((o) => o.setName('pattern').setDescription('Pattern').setRequired(true))
+          .addStringOption((o) =>
+            o
+              .setName('type')
+              .setDescription('Match type')
+              .setRequired(true)
+              .addChoices(
+                { name: 'keyword', value: 'keyword' },
+                { name: 'domain', value: 'domain' },
+                { name: 'regex', value: 'regex' },
+              ),
+          ),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('add-image-hash')
+          .setDescription('Add perceptual hash from a reference screenshot')
+          .addAttachmentOption((o) =>
+            o.setName('image').setDescription('Reference image (PNG/JPEG/WebP)').setRequired(true),
+          )
+          .addStringOption((o) => o.setName('description').setDescription('Optional label')),
+      )
+      .addSubcommand((s) => s.setName('list-image-text').setDescription('List OCR blacklist patterns (latest 25)'))
+      .addSubcommand((s) => s.setName('list-image-hashes').setDescription('List image pHash entries (latest 25)')),
   );
 
   b.addSubcommandGroup((g) =>
@@ -122,7 +156,7 @@ async function buildModData(client) {
           .addIntegerOption((o) =>
             o
               .setName('min_messages_for_image_trust')
-              .setDescription('Min messages when age gates not both passed')
+              .setDescription('Min messages in this server (required with age gates; all must pass to skip review)')
               .setMinValue(0),
           ),
       )
@@ -381,6 +415,10 @@ async function execute(client, interaction) {
     'blacklist:remove': blacklistRemoveExecute,
     'blacklist:list': blacklistListExecute,
     'blacklist:check': blacklistCheckExecute,
+    'blacklist:add-image-text': blacklistAddImageTextExecute,
+    'blacklist:add-image-hash': blacklistAddImageHashExecute,
+    'blacklist:list-image-text': blacklistListImageTextExecute,
+    'blacklist:list-image-hashes': blacklistListImageHashesExecute,
     'review:set': reviewSetExecute,
     'review:view': reviewViewExecute,
     'review:approve-user': reviewApproveUserExecute,

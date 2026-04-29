@@ -390,17 +390,17 @@ All operations use `card_data_id` + `user_cards` instance row. Never regenerate 
 
 ---
 
-### 🔲 STAGE 4 — Shop: Featured Slot & Exclusives — Pending
+### ✅ STAGE 4 — Shop: Featured Slot & Exclusives — Done
 
 - [x] Regular combat/card/utility SKUs with daily server + player caps
-- [ ] Featured slot rotation: 1 item/day, 1–3 units, announced in dedicated channel, configurable UTC reset
-- [ ] Pool A: discounted existing items (50–70%)
-- [ ] Pool B exclusives:
-  - [ ] Element Anchor (permanent element lock; immune to reroll)
-  - [ ] Golden Frame (cosmetic border; persisted for embeds)
-  - [ ] Double Drop Token (2× card drop chance next battle)
-  - [ ] Season Recall (once per player per season; ties to Season Decay in Stage 7)
-  - [ ] Boss Magnet (set battle-boss pity to 10/11 for next boss fight)
+- [x] Featured slot rotation: 1 item/day, 1–3 units, announced in dedicated channel (`TCG_FEATURED_CHANNEL_ID`), UTC roll + cron `5 0 * * *` (`tcgFeaturedShop`, `bot.js`)
+- [x] Pool A: discounted existing items (50–70%)
+- [x] Pool B exclusives:
+  - [x] Element Anchor (permanent element lock; immune to reroll) — `/tcg craft anchor`, `user_cards.tcg_element_locked`
+  - [x] Golden Frame (cosmetic accent on `/tcg view`) — `/tcg craft frame`, `user_cards.tcg_golden_frame`
+  - [x] Double Drop Token (second pool-drop roll on next Battle Boss win) — `tcgPve.js`
+  - [x] Season Recall (once per player per `TCG_META_SEASON`; wallet flags for Stage 7)
+  - [x] Boss Magnet (Battle Boss pity floor for next win) — `tcgPve.js`
 - [-] Preservation Seal (wager protection — fully meaningful after Stage 6 PvP escrow) — blocks reroll/trade/breakdown and PvP pick; card wager escrow not implemented.
 
 ---

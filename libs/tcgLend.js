@@ -231,6 +231,8 @@ async function acceptLendOffer(client, borrowerDiscord, lendId) {
       is_escrowed: false,
       element_reroll_count: inst.element_reroll_count || 0,
       tcg_preservation_sealed: false,
+      tcg_element_locked: !!Number(inst.tcg_element_locked),
+      tcg_golden_frame: !!Number(inst.tcg_golden_frame),
       lent_source_user_card_id: lenderCardId,
       updated_at: ts,
       created_at: ts,

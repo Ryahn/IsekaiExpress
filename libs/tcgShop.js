@@ -201,6 +201,57 @@ async function lockOrCreateUserRow(trx, internalUserId, day, sku) {
 }
 
 /**
+ * Merge item effects into a wallet update object (no gold change).
+ * @param {Record<string, unknown>} w wallet row
+ * @param {typeof SHOP_ITEMS[string]} def
+ * @param {number} ts
+ */
+function buildWalletPatchForSkuDef(w, def, ts) {
+  const walletPatch = { updated_at: ts };
+  const slotBonus = Number(def.bonusSlots) || 0;
+  const bonusBefore = Number(w.tcg_inventory_bonus_slots) || 0;
+  const bonusAfter = bonusBefore + slotBonus;
+  if (slotBonus) walletPatch.tcg_inventory_bonus_slots = bonusAfter;
+
+  if (def.charge) {
+    const col = def.charge.column;
+    const per = Number(def.charge.perPurchase) || 0;
+    const before = Number(w[col]) || 0;
+    walletPatch[col] = capStack(before + per);
+  }
+
+  if (def.setRarityDustNextFuse) {
+    walletPatch.tcg_rarity_dust_next_fuse = 1;
+  }
+
+  if (def.xpBoosterHours) {
+    const add = def.xpBoosterHours * 3600;
+    const cur = w.tcg_xp_booster_until != null ? Number(w.tcg_xp_booster_until) : 0;
+    const base = Math.max(ts, cur);
+    walletPatch.tcg_xp_booster_until = base + add;
+  }
+
+  return { walletPatch, bonusSlotsAdded: slotBonus, bonusAfter, bonusBefore };
+}
+
+/**
+ * Apply [CardSystem.md] shop item grants only (Featured Pool A / internal use). No gold, no daily caps.
+ * @param {import('knex').Knex} trx
+ * @param {number} internalUserId
+ * @param {string} sku
+ */
+async function grantShopSkuEffectsOnly(trx, internalUserId, sku) {
+  const def = SHOP_ITEMS[sku];
+  if (!def) return { ok: false, error: 'Unknown shop item.' };
+  await tcgEconomy.ensureWallet(internalUserId, trx);
+  const w = await trx('user_wallets').where({ user_id: internalUserId }).forUpdate().first();
+  const ts = nowUnix();
+  const { walletPatch } = buildWalletPatchForSkuDef(w, def, ts);
+  await trx('user_wallets').where({ user_id: internalUserId }).update(walletPatch);
+  return { ok: true, label: def.label, walletPatch };
+}
+
+/**
  * @param {import('discord.js').Client} client
  * @param {{ id: string, username: string }} discordUser
  * @param {string} sku
@@ -246,32 +297,14 @@ async function buyShopItem(client, discordUser, sku) {
         throw new Error('SHOP_ABORT');
       }
 
-      const slotBonus = Number(def.bonusSlots) || 0;
-      const bonusBefore = Number(w.tcg_inventory_bonus_slots) || 0;
-      const bonusAfter = bonusBefore + slotBonus;
       const newGold = gold - def.cost;
       const ts = nowUnix();
-
-      const walletPatch = { gold: newGold, updated_at: ts };
-      if (slotBonus) walletPatch.tcg_inventory_bonus_slots = bonusAfter;
-
-      if (def.charge) {
-        const col = def.charge.column;
-        const per = Number(def.charge.perPurchase) || 0;
-        const before = Number(w[col]) || 0;
-        walletPatch[col] = capStack(before + per);
-      }
-
-      if (def.setRarityDustNextFuse) {
-        walletPatch.tcg_rarity_dust_next_fuse = 1;
-      }
-
-      if (def.xpBoosterHours) {
-        const add = def.xpBoosterHours * 3600;
-        const cur = w.tcg_xp_booster_until != null ? Number(w.tcg_xp_booster_until) : 0;
-        const base = Math.max(ts, cur);
-        walletPatch.tcg_xp_booster_until = base + add;
-      }
+      const { walletPatch: effectPatch, bonusSlotsAdded, bonusAfter, bonusBefore } = buildWalletPatchForSkuDef(
+        w,
+        def,
+        ts,
+      );
+      const walletPatch = { ...effectPatch, gold: newGold };
 
       await trx('user_wallets').where({ user_id: internalId }).update(walletPatch);
 
@@ -290,8 +323,8 @@ async function buyShopItem(client, discordUser, sku) {
         label: def.label,
         cost: def.cost,
         newGold,
-        bonusSlotsAdded: slotBonus,
-        inventoryBonusSlots: slotBonus ? bonusAfter : bonusBefore,
+        bonusSlotsAdded,
+        inventoryBonusSlots: bonusSlotsAdded ? bonusAfter : bonusBefore,
         chargeColumn: chargeCol,
         chargeAfter: chargeAfter != null ? chargeAfter : undefined,
         rarityDustPrimed: !!def.setRarityDustNextFuse,
@@ -312,4 +345,7 @@ module.exports = {
   getShopSnapshot,
   buyShopItem,
   capStack,
+  buildWalletPatchForSkuDef,
+  grantShopSkuEffectsOnly,
+  lockOrCreateUserRow,
 };

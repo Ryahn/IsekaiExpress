@@ -5,6 +5,7 @@ const config = require('../../config');
 const { farmManager } = require('./utils/farm/farmManager');
 const db = require('../../database/db');
 const { syncPhishGgServers } = require('../../libs/phishGgSync');
+const tcgFeaturedShop = require('../../libs/tcgFeaturedShop');
 const { timestamp } = require('../../libs/utils');
 const logger = require('../../libs/logger');
 const process = require('process');
@@ -177,6 +178,23 @@ const client = new BotClient({
 			}
 			catch (error) {
 				logger.error('[FARM-REMIND] Error in harvest maturity job:', error);
+			}
+		});
+
+		schedule.scheduleJob('5 0 * * *', async () => {
+			try {
+				const ch = config.tcg?.featuredAnnounceChannelId;
+				if (!ch) return;
+				const meta = config.tcg?.metaSeasonKey || 's0';
+				const r = await tcgFeaturedShop.postFeaturedAnnouncementIfConfigured(client, ch, meta);
+				if (r.ok && !r.skipped) {
+					logger.info(`[TCG-FEATURED] posted daily offer msg=${r.messageId}`);
+				} else if (!r.ok && r.error) {
+					logger.warn(`[TCG-FEATURED] announce failed: ${r.error}`);
+				}
+			}
+			catch (err) {
+				logger.error('[TCG-FEATURED] announce job error', err);
 			}
 		});
 

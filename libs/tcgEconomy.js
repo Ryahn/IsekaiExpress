@@ -164,6 +164,14 @@ async function getTcgBalance(client, discordUser) {
     shards: Number(wallet.tcg_shards) || 0,
     diamonds: Number(wallet.tcg_diamonds) || 0,
     rubies: Number(wallet.tcg_rubies) || 0,
+    elementAnchorCharges: Number(wallet.tcg_element_anchor_charges) || 0,
+    goldenFrameCharges: Number(wallet.tcg_golden_frame_charges) || 0,
+    doubleDropCharges: Number(wallet.tcg_double_drop_charges) || 0,
+    bossMagnetQueued: !!Number(wallet.tcg_bb_magnet_next),
+    seasonRecallReady: !!Number(wallet.tcg_season_recall_ready),
+    seasonRecallPurchasedFor: wallet.tcg_season_recall_purchased_for
+      ? String(wallet.tcg_season_recall_purchased_for)
+      : null,
   };
 }
 

@@ -205,7 +205,8 @@ async function tryBossMemberTemplateCapture(client, discordUser, internalId, ene
   return { granted: true, userCardId: g.userCardId, template: g.template };
 }
 
-async function tryBattleBossPoolDrop(client, discordUser, internalId, region, tier, pityBefore) {
+async function tryBattleBossPoolDrop(client, discordUser, internalId, region, tier, pityBefore, opts = {}) {
+  const doubleRoll = !!opts.doubleRoll;
   const template = await pickBattleBossDropTemplate(region, tier);
   if (!template) {
     return { granted: false, pityAfter: pityBefore + 1, reason: 'no_pool' };
@@ -213,9 +214,17 @@ async function tryBattleBossPoolDrop(client, discordUser, internalId, region, ti
 
   const owns = await userOwnsTemplate(internalId, template.card_id);
   const hardPity = pityBefore >= 10;
-  const roll = Math.random();
   const hitChance = owns ? 0.05 : 0.4;
-  if (!hardPity && roll >= hitChance) {
+  let hit = hardPity;
+  if (!hardPity) {
+    let roll = Math.random();
+    hit = roll < hitChance;
+    if (!hit && doubleRoll) {
+      roll = Math.random();
+      hit = roll < hitChance;
+    }
+  }
+  if (!hit) {
     return { granted: false, pityAfter: pityBefore + 1, reason: 'miss' };
   }
 
@@ -554,13 +563,19 @@ async function runPveFight(client, discordUser) {
 
     let bbPityAfter = Number(progress.pve_bb_pity) || 0;
     if (isBattleBoss) {
+      const wBb = await db.query('user_wallets').where({ user_id: internalId }).first();
+      const magnet = wBb && Number(wBb.tcg_bb_magnet_next) > 0;
+      const useDoubleDrop = wBb && Number(wBb.tcg_double_drop_charges) > 0;
+      let pityIn = bbPityAfter;
+      if (magnet) pityIn = Math.max(pityIn, 10);
       battleBossDrop = await tryBattleBossPoolDrop(
         client,
         discordUser,
         internalId,
         fightRegion,
         tier,
-        bbPityAfter,
+        pityIn,
+        { doubleRoll: useDoubleDrop },
       );
       bbPityAfter = battleBossDrop.pityAfter;
       bossMemberCapture = await tryBossMemberTemplateCapture(
@@ -574,6 +589,17 @@ async function runPveFight(client, discordUser) {
           diamonds: tier >= 10 ? 2 : 1,
           rubies: tier >= 10 ? 1 : 0,
         });
+      }
+      const tsW = nowUnix();
+      const wPatch = {};
+      if (magnet) wPatch.tcg_bb_magnet_next = 0;
+      if (useDoubleDrop) {
+        const cur = Math.max(0, Number(wBb.tcg_double_drop_charges) || 0);
+        wPatch.tcg_double_drop_charges = Math.max(0, cur - 1);
+      }
+      if (Object.keys(wPatch).length) {
+        wPatch.updated_at = tsW;
+        await db.query('user_wallets').where({ user_id: internalId }).update(wPatch);
       }
     }
 

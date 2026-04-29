@@ -537,4 +537,38 @@ const self = module.exports = {
       .update({ status, reviewed_by: reviewedBy });
   },
 
+  getImageTextBlacklistRows: async () => {
+    return db('image_text_blacklist').select('id', 'pattern', 'pattern_type').orderBy('id', 'asc');
+  },
+
+  getImageHashBlacklistRows: async () => {
+    return db('image_hash_blacklist').select('id', 'phash', 'description').orderBy('id', 'asc');
+  },
+
+  insertImageTextBlacklist: async ({ pattern, pattern_type, added_by }) => {
+    await db('image_text_blacklist').insert({
+      pattern,
+      pattern_type,
+      added_by: added_by || null,
+      added_at: db.fn.now(),
+    });
+  },
+
+  insertImageHashBlacklist: async ({ phash, description, added_by }) => {
+    await db.raw(
+      `INSERT INTO image_hash_blacklist (phash, description, added_by, added_at)
+       VALUES (?, ?, ?, NOW())
+       ON DUPLICATE KEY UPDATE description = VALUES(description), added_by = VALUES(added_by), added_at = NOW()`,
+      [phash, description || null, added_by || null],
+    );
+  },
+
+  listImageTextBlacklist: async (limit = 30) => {
+    return db('image_text_blacklist').select('*').orderBy('id', 'desc').limit(limit);
+  },
+
+  listImageHashBlacklist: async (limit = 30) => {
+    return db('image_hash_blacklist').select('*').orderBy('id', 'desc').limit(limit);
+  },
+
 };
