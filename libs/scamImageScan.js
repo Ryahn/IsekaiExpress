@@ -6,6 +6,7 @@ const { createWorker } = require('tesseract.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
 const { extractHttpUrls, getBlacklistedLinkHostsList, hostMatchesBlacklistedDomain } = require('./scamLinkPolicy');
 const { normalizeBlacklistedLinkHost } = require('./blacklistedLinkHostNormalize');
+const { withModLogRolePing } = require('./modLogNotify');
 
 const MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 20000;
@@ -278,10 +279,12 @@ async function enforceScamImage(client, message, staffRoleId, scanResult, attach
         guild.channels.cache.get(logChannelId) ||
         (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
-        await ch.send({
-          content: 'Staff posted scam-pattern image — no ban applied.',
-          embeds: [embed],
-        });
+        await ch.send(
+          withModLogRolePing(cfg, {
+            content: 'Staff posted scam-pattern image — no ban applied.',
+            embeds: [embed],
+          }),
+        );
       }
     }
     return;
@@ -299,7 +302,9 @@ async function enforceScamImage(client, message, staffRoleId, scanResult, attach
         guild.channels.cache.get(logChannelId) ||
         (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
-        await ch.send({ content: `Ban failed: ${e.message}`, embeds: [embed] }).catch(() => {});
+        await ch
+          .send(withModLogRolePing(cfg, { content: `Ban failed: ${e.message}`, embeds: [embed] }))
+          .catch(() => {});
       }
     }
     return;
@@ -309,7 +314,7 @@ async function enforceScamImage(client, message, staffRoleId, scanResult, attach
     const ch =
       guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
     if (ch && ch.isTextBased()) {
-      await ch.send({ embeds: [embed] }).catch(() => {});
+      await ch.send(withModLogRolePing(cfg, { embeds: [embed] })).catch(() => {});
     }
   }
 }

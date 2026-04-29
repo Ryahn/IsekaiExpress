@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
 const { normalizeBlacklistedLinkHost } = require('./blacklistedLinkHostNormalize');
+const { withModLogRolePing } = require('./modLogNotify');
 
 const URL_RE = /https?:\/\/[^\s<>"'`)]+/gi;
 const DEDUPE_MS = 5 * 60 * 1000;
@@ -107,10 +108,12 @@ async function enforceScamLink(client, message, matchedOn, staffRoleId) {
     if (logChannelId) {
       const ch = guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
-        await ch.send({
-          content: 'Staff posted a blacklisted link — no ban applied.',
-          embeds: [embed],
-        });
+        await ch.send(
+          withModLogRolePing(cfg, {
+            content: 'Staff posted a blacklisted link — no ban applied.',
+            embeds: [embed],
+          }),
+        );
       }
     }
     return;
@@ -135,7 +138,7 @@ async function enforceScamLink(client, message, matchedOn, staffRoleId) {
   if (logChannelId) {
     const ch = guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
     if (ch && ch.isTextBased()) {
-      await ch.send({ embeds: [embed] }).catch(() => {});
+      await ch.send(withModLogRolePing(cfg, { embeds: [embed] })).catch(() => {});
     }
   }
 }

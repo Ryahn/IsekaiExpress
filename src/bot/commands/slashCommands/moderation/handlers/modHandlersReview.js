@@ -29,6 +29,14 @@ async function reviewSetExecute(client, interaction) {
   const minMsg = interaction.options.getInteger('min_messages_for_image_trust');
   if (minMsg !== null) patch.min_messages_for_image_trust = minMsg;
 
+  const clearModLogPing = interaction.options.getBoolean('mod_log_ping_clear');
+  const modLogPingRole = interaction.options.getRole('mod_log_ping_role');
+  if (clearModLogPing === true) {
+    patch.mod_log_ping_role_id = null;
+  } else if (modLogPingRole) {
+    patch.mod_log_ping_role_id = modLogPingRole.id;
+  }
+
   if (!Object.keys(patch).length) {
     return interaction.editReply({ content: 'Provide at least one option to update.', ephemeral: true });
   }
@@ -47,6 +55,11 @@ async function reviewViewExecute(client, interaction) {
       { name: 'image_review_channel_id', value: row.image_review_channel_id || '—', inline: true },
       { name: 'invite_queue_channel_id', value: row.invite_queue_channel_id || '—', inline: true },
       { name: 'modLogId', value: row.modLogId || '—', inline: true },
+      {
+        name: 'mod_log_ping_role_id',
+        value: row.mod_log_ping_role_id ? `<@&${row.mod_log_ping_role_id}> (${row.mod_log_ping_role_id})` : '—',
+        inline: true,
+      },
       { name: 'min_account_age_days', value: String(row.min_account_age_days ?? '—'), inline: true },
       { name: 'min_join_age_days', value: String(row.min_join_age_days ?? '—'), inline: true },
       { name: 'min_messages_for_image_trust', value: String(row.min_messages_for_image_trust ?? '—'), inline: true },

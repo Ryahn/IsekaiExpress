@@ -158,6 +158,16 @@ async function buildModData(client) {
               .setName('min_messages_for_image_trust')
               .setDescription('Min messages in this server (required with age gates; all must pass to skip review)')
               .setMinValue(0),
+          )
+          .addRoleOption((o) =>
+            o
+              .setName('mod_log_ping_role')
+              .setDescription('Role to ping when posting to the mod log channel (blacklist / scam alerts)'),
+          )
+          .addBooleanOption((o) =>
+            o
+              .setName('mod_log_ping_clear')
+              .setDescription('Set true to stop pinging a role on mod log posts'),
           ),
       )
       .addSubcommand((s) => s.setName('view').setDescription('Show current review settings'))

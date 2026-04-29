@@ -5,6 +5,7 @@ const {
   ButtonStyle,
 } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
+const { withModLogRolePing } = require('./modLogNotify');
 
 const INVITE_REGEX =
   /(?:https?:\/\/)?(?:www\.)?(?:discord(?:app)?\.com\/invite\/|discord\.gg\/|dsc\.gg\/)([a-zA-Z0-9-]+)/gi;
@@ -145,10 +146,12 @@ async function enforceBlacklist(client, message, matchedOn, staffRoleId) {
     if (logChannelId) {
       const ch = guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
-        await ch.send({
-          content: 'Staff posted blacklisted invite — no ban applied.',
-          embeds: [embed],
-        });
+        await ch.send(
+          withModLogRolePing(cfg, {
+            content: 'Staff posted blacklisted invite — no ban applied.',
+            embeds: [embed],
+          }),
+        );
       }
     }
     return;
@@ -164,7 +167,9 @@ async function enforceBlacklist(client, message, matchedOn, staffRoleId) {
     if (logChannelId) {
       const ch = guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
-        await ch.send({ content: `Ban failed: ${e.message}`, embeds: [embed] }).catch(() => {});
+        await ch
+          .send(withModLogRolePing(cfg, { content: `Ban failed: ${e.message}`, embeds: [embed] }))
+          .catch(() => {});
       }
     }
     return;
@@ -173,7 +178,7 @@ async function enforceBlacklist(client, message, matchedOn, staffRoleId) {
   if (logChannelId) {
     const ch = guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
     if (ch && ch.isTextBased()) {
-      await ch.send({ embeds: [embed] }).catch(() => {});
+      await ch.send(withModLogRolePing(cfg, { embeds: [embed] })).catch(() => {});
     }
   }
 }
@@ -189,7 +194,9 @@ async function auditStaffInvite(client, message, code, resolved) {
   const extra = resolved.ok ? ` → ${resolved.guildName || '?'} (${resolved.guildId || '?'})` : ' (resolve failed)';
   await ch
     .send(
-      `[Invite audit] ${message.author.tag} in <#${message.channelId}> — code \`${code}\`${extra}`,
+      withModLogRolePing(cfg, {
+        content: `[Invite audit] ${message.author.tag} in <#${message.channelId}> — code \`${code}\`${extra}`,
+      }),
     )
     .catch(() => {});
 }
