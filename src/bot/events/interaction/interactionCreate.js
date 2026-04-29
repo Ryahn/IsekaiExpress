@@ -5,6 +5,7 @@ const { checkInteractionGlobalCommandLock } = require('../../middleware/globalCo
 const { assertSlashCommandChannel } = require('../../middleware/slashCommandChannel');
 const { modSlashLogicalKey } = require('../../../../libs/modSlashKey');
 const { handleModerationButton } = require('../../../../libs/moderationButtons');
+const { handleModUpdateCommandSettingsAutocomplete } = require('../../commands/slashCommands/moderation/handlers/updateCommandSettingsBuilder');
 
 module.exports = class InteractionEvent extends BaseEvent {
     constructor() {
@@ -12,6 +13,27 @@ module.exports = class InteractionEvent extends BaseEvent {
     }
     
     async run(client, interaction) {
+        if (interaction.isAutocomplete()) {
+            try {
+                if (interaction.commandName === 'mod') {
+                    const g = interaction.options.getSubcommandGroup(false);
+                    const sub = interaction.options.getSubcommand(false);
+                    if (g === 'server' && sub === 'update_command_settings') {
+                        const focused = interaction.options.getFocused(true);
+                        if (focused.name === 'command') {
+                            await handleModUpdateCommandSettingsAutocomplete(client, interaction);
+                            return;
+                        }
+                    }
+                }
+                await interaction.respond([]);
+            } catch (e) {
+                client.logger.error('Autocomplete error:', e);
+                await interaction.respond([]).catch(() => {});
+            }
+            return;
+        }
+
         if (interaction.isButton()) {
             try {
                 const handled = await handleModerationButton(client, interaction);

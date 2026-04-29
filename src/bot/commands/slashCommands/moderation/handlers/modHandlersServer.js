@@ -3,7 +3,6 @@ const moment = require('moment');
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../../../../utils/guildPrivileges');
 const {
-  fetchAndChunkChoices,
   augmentUpdateCommandSubcommand,
   updateCommandSettingsExecute,
 } = require('./updateCommandSettingsBuilder');
@@ -355,6 +354,4 @@ module.exports = {
   channelStatsExecute,
   copyChannelExecute,
   updateCommandSettingsExecute,
-  fetchAndChunkChoices,
-  augmentUpdateCommandSubcommand,
 };

@@ -357,10 +357,10 @@ const groups = [
         path: 'server update_command_settings',
         description: 'Set allowed channel for a command',
         details:
-          'Dynamically adds `commands_1`, `commands_2`, … (batches of 25) from the database command_settings list. Pick one command hash; requires Administrator in the handler (see handler).',
+          'Type to search `command_settings` (autocomplete). Pick a command, then set the channel. Requires Administrator.',
         options: [
           { name: 'channel', type: 'channel', required: true, description: 'Target channel' },
-          { name: 'commands_1, commands_2, …', type: 'string (choice batches)', required: false, description: 'One batch applies per registration build' },
+          { name: 'command', type: 'string', required: true, description: 'Autocomplete: search by command name or hash' },
         ],
       },
     ],

@@ -3,7 +3,6 @@ const path = require('path');
 const { ChannelType } = require('discord.js');
 const DOUBLE_XP_CHOICES = require('./xpDoubleXpChoices');
 const {
-  fetchAndChunkChoices,
   augmentUpdateCommandSubcommand,
   updateCommandSettingsExecute,
 } = require('./handlers/updateCommandSettingsBuilder');
@@ -49,8 +48,6 @@ const {
 const { helpDocsExecute } = require('./handlers/modHandlersHelp');
 
 async function buildModData(client) {
-  await fetchAndChunkChoices(client);
-
   const b = new SlashCommandBuilder()
     .setName('mod')
     .setDescription('Server moderation, invites, and review settings');

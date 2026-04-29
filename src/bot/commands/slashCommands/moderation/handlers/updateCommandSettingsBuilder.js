@@ -1,59 +1,54 @@
-let choices = [];
-let batches = [];
-
-async function getChoices(client) {
-  const fetchedChoices = await client.db.query('command_settings').select('name', 'hash').orderBy('name', 'asc');
-  return fetchedChoices.map((choice) => ({ name: choice.name, value: choice.hash }));
+function escapeLikeSegment(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
-function chunkArray(array, chunkSize) {
-  const chunks = [];
-  for (let i = 0; i < array.length; i += chunkSize) {
-    chunks.push(array.slice(i, i + chunkSize));
+/**
+ * @param {import('discord.js').Client} client
+ * @param {string} query
+ * @returns {Promise<{ name: string, value: string }[]>}
+ */
+async function getCommandAutocompleteChoices(client, query) {
+  const raw = String(query || '').trim().slice(0, 80);
+  const db = client.db.query;
+  let rows;
+  if (!raw) {
+    rows = await db('command_settings').select('name', 'hash').orderBy('name', 'asc').limit(25);
+  } else {
+    const safe = escapeLikeSegment(raw);
+    const pattern = `%${safe}%`;
+    rows = await db('command_settings')
+      .select('name', 'hash')
+      .where(function esc() {
+        this.where('name', 'like', pattern).orWhere('hash', 'like', pattern);
+      })
+      .orderBy('name', 'asc')
+      .limit(25);
   }
-  return chunks;
-}
-
-async function fetchAndChunkChoices(client) {
-  choices = await getChoices(client);
-  batches = chunkArray(choices, 25);
+  return rows.map((r) => ({
+    name: String(r.name).slice(0, 100),
+    value: String(r.hash),
+  }));
 }
 
 /**
  * @param {import('@discordjs/builders').SlashCommandSubcommandBuilder} sub
  */
 function augmentUpdateCommandSubcommand(sub) {
-  batches.forEach((batch, index) => {
-    sub.addStringOption((option) => {
-      option
-        .setName(`commands_${index + 1}`)
-        .setDescription(`Select a command from batch ${index + 1}`)
-        .setRequired(false)
-        .addChoices(...batch);
-      return option;
-    });
+  sub.addStringOption((option) => {
+    option
+      .setName('command')
+      .setDescription('Start typing to search commands')
+      .setRequired(true)
+      .setAutocomplete(true);
+    return option;
   });
 }
 
 async function updateCommandSettingsExecute(client, interaction) {
   try {
-    if (!choices.length) {
-      await fetchAndChunkChoices(client);
-    }
+    const selectedCommand = interaction.options.getString('command', true);
 
-    const selectedCommand =
-      interaction.options.getString('commands_1') ||
-      interaction.options.getString('commands_2') ||
-      interaction.options.getString('commands_3');
-
-    if (!selectedCommand) {
-      return interaction.editReply({
-        content: 'No command selected. Please select a command to set the channel for.',
-        ephemeral: true,
-      });
-    }
-
-    const channel = interaction.options.getChannel('channel');
+    const channel = interaction.options.getChannel('channel', true);
 
     if (!interaction.member.permissions.has('ADMINISTRATOR')) {
       return interaction.followUp('You do not have permission to use this command.');
@@ -75,8 +70,27 @@ async function updateCommandSettingsExecute(client, interaction) {
   }
 }
 
+/**
+ * @param {import('discord.js').AutocompleteInteraction} interaction
+ */
+async function handleModUpdateCommandSettingsAutocomplete(client, interaction) {
+  const focused = interaction.options.getFocused(true);
+  if (focused.type !== 3) {
+    await interaction.respond([]);
+    return;
+  }
+  try {
+    const choices = await getCommandAutocompleteChoices(client, focused.value);
+    await interaction.respond(choices);
+  } catch (e) {
+    client.logger.error('command_settings autocomplete failed:', e);
+    await interaction.respond([]).catch(() => {});
+  }
+}
+
 module.exports = {
-  fetchAndChunkChoices,
+  getCommandAutocompleteChoices,
   augmentUpdateCommandSubcommand,
   updateCommandSettingsExecute,
+  handleModUpdateCommandSettingsAutocomplete,
 };
