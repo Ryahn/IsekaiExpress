@@ -120,6 +120,35 @@ async function handleInviteQueueButton(client, interaction, action, pendingId) {
   }
 }
 
+function resolutionLabel(action) {
+  if (action === 'approve') return 'Approved';
+  if (action === 'ban') return 'Banned';
+  return 'Dismissed';
+}
+
+async function annotateQueueMessage(client, channel, queueMessageId, resolutionText) {
+  if (!queueMessageId || !channel) return;
+  let msg;
+  try {
+    msg = await channel.messages.fetch(queueMessageId);
+  } catch (e) {
+    client.logger.warn(
+      `imageReview: cannot fetch queue message ${queueMessageId} in channel ${channel.id} (code=${e?.code || 'unknown'}): ${e?.message || e}`,
+    );
+    return;
+  }
+  if (!msg) return;
+  const base = msg.embeds[0] ? EmbedBuilder.from(msg.embeds[0]) : new EmbedBuilder().setTitle('Image review');
+  base.addFields({ name: 'Resolution', value: resolutionText });
+  try {
+    await msg.edit({ embeds: [base], components: [] });
+  } catch (e) {
+    client.logger.warn(
+      `imageReview: cannot edit queue message ${queueMessageId} in channel ${channel.id} (code=${e?.code || 'unknown'}): ${e?.message || e}`,
+    );
+  }
+}
+
 async function handleImageReviewButton(client, interaction, action, pendingId) {
   const staffRoleId = client.config.roles.staff;
   const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
@@ -132,7 +161,8 @@ async function handleImageReviewButton(client, interaction, action, pendingId) {
     return denyButton(interaction, 'Invalid image review.');
   }
 
-  const nextStatus = action === 'approve' ? 'approved' : 'banned';
+  const nextStatus =
+    action === 'approve' ? 'approved' : action === 'ban' ? 'banned' : 'dismissed';
   const affected = await client.db.claimPendingImageReviewStatus(pendingId, nextStatus, interaction.user.id);
   if (affected !== 1) {
     await interaction.deferUpdate().catch(() => {});
@@ -147,27 +177,61 @@ async function handleImageReviewButton(client, interaction, action, pendingId) {
 
   if (action === 'approve') {
     await client.db.upsertImageReviewApproval(row.home_guild_id, row.author_id, interaction.user.id);
-  } else {
+  } else if (action === 'ban') {
     try {
       await interaction.guild.members.ban(row.author_id, {
         deleteMessageSeconds: 3600,
         reason: 'Image review: banned by moderator',
       });
     } catch (e) {
-      client.logger.error('image review ban failed', e);
+      client.logger.error(
+        `imageReview: ban of ${row.author_id} failed (code=${e?.code || 'unknown'}): ${e?.message || e}`,
+        e,
+      );
+      try {
+        await interaction.followUp({
+          content: `Ban failed: ${e?.message || 'unknown error'}`,
+          ephemeral: true,
+        });
+      } catch (_) { /* ignore */ }
     }
   }
 
-  if (row.queue_message_id) {
-    const msg = await interaction.channel.messages.fetch(row.queue_message_id).catch(() => null);
-    if (msg) {
-      const base = msg.embeds[0] ? EmbedBuilder.from(msg.embeds[0]) : new EmbedBuilder().setTitle('Image review');
-      base.addFields({
-        name: 'Resolution',
-        value: `${action === 'approve' ? 'Approved' : 'Banned'} by ${interaction.user.tag}`,
-      });
-      await msg.edit({ embeds: [base], components: [] }).catch(() => {});
+  // Cascade-resolve other pending entries for the same user when the action
+  // is a terminal one for that user (approved or banned). Dismiss only closes
+  // this single entry.
+  let cascaded = [];
+  if (action === 'approve' || action === 'ban') {
+    cascaded = await client.db.listOtherPendingImageReviewsByAuthor(
+      row.home_guild_id,
+      row.author_id,
+      pendingId,
+    );
+    if (cascaded.length) {
+      await client.db.resolveOtherPendingImageReviewsByAuthor(
+        row.home_guild_id,
+        row.author_id,
+        pendingId,
+        nextStatus,
+        interaction.user.id,
+      );
     }
+  }
+
+  const primaryResolution = `${resolutionLabel(action)} by ${interaction.user.tag}`;
+  await annotateQueueMessage(client, interaction.channel, row.queue_message_id, primaryResolution);
+
+  if (cascaded.length) {
+    const cascadeResolution = `Auto-${resolutionLabel(action).toLowerCase()} (resolved with review #${pendingId} by ${interaction.user.tag})`;
+    for (const other of cascaded) {
+      await annotateQueueMessage(client, interaction.channel, other.queue_message_id, cascadeResolution);
+    }
+    try {
+      await interaction.followUp({
+        content: `Also auto-resolved ${cascaded.length} other pending review(s) for the same user.`,
+        ephemeral: true,
+      });
+    } catch (_) { /* ignore */ }
   }
 }
 
@@ -184,7 +248,7 @@ async function handleModerationButton(client, interaction) {
   if (id.startsWith('imgrev:')) {
     const [, action, rawId] = id.split(':');
     const pendingId = parseInt(rawId, 10);
-    if (!pendingId || (action !== 'approve' && action !== 'ban')) return true;
+    if (!pendingId || (action !== 'approve' && action !== 'ban' && action !== 'dismiss')) return true;
     await handleImageReviewButton(client, interaction, action, pendingId);
     return true;
   }

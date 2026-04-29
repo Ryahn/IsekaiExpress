@@ -6,6 +6,12 @@ const {
 } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
 const { scanImageAttachment, enforceScamImage, buildScamImageEvidenceEmbed } = require('./scamImageScan');
+const { withModLogRolePing } = require('./modLogNotify');
+
+function describeChannel(ch, fallbackId) {
+  if (!ch) return `#${fallbackId}`;
+  return ch.name ? `#${ch.name} (${ch.id})` : `#${ch.id}`;
+}
 
 function pickImageAttachment(message) {
   for (const a of message.attachments.values()) {
@@ -86,6 +92,10 @@ function buildImageReviewComponents(pendingId) {
       .setCustomId(`imgrev:ban:${pendingId}`)
       .setLabel('Ban user')
       .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`imgrev:dismiss:${pendingId}`)
+      .setLabel('Dismiss')
+      .setStyle(ButtonStyle.Secondary),
   );
 }
 
@@ -152,19 +162,45 @@ async function queueImageReview(client, message, attachments, member, cfg, chId,
 
   try {
     await message.delete();
-  } catch (_) {
-    /* ignore */
+  } catch (e) {
+    const code = e && e.code;
+    client.logger.warn(
+      `imageReview: failed to delete original message in ${describeChannel(message.channel, message.channelId)}` +
+        ` (code=${code || 'unknown'}): ${e.message || e}`,
+    );
   }
 
-  const reviewCh =
-    message.guild.channels.cache.get(chId) || (await message.guild.channels.fetch(chId).catch(() => null));
-  if (!reviewCh || !reviewCh.isTextBased()) return;
+  let reviewCh = message.guild.channels.cache.get(chId) || null;
+  if (!reviewCh) {
+    try {
+      reviewCh = await message.guild.channels.fetch(chId);
+    } catch (e) {
+      client.logger.warn(
+        `imageReview: cannot fetch review channel ${chId} (code=${e?.code || 'unknown'}): ${e?.message || e}`,
+      );
+      reviewCh = null;
+    }
+  }
+  if (!reviewCh) {
+    client.logger.warn(`imageReview: review channel ${chId} not found in guild ${message.guild.id}`);
+    return;
+  }
+  if (!reviewCh.isTextBased()) {
+    client.logger.warn(
+      `imageReview: review channel ${describeChannel(reviewCh, chId)} is not text-based; cannot queue`,
+    );
+    return;
+  }
 
   const row = buildImageReviewComponents(pendingId);
-  const qMsg = await reviewCh.send({ embeds, components: [row] }).catch((e) => {
-    client.logger.error('imageReview queue send failed', e);
-    return null;
-  });
+  const qMsg = await reviewCh
+    .send(withModLogRolePing(cfg, { embeds, components: [row] }))
+    .catch((e) => {
+      client.logger.error(
+        `imageReview: send to review channel ${describeChannel(reviewCh, chId)} failed (code=${e?.code || 'unknown'}): ${e?.message || e}`,
+      );
+      return null;
+    });
   if (qMsg) {
     await client.db.updatePendingImageReviewQueueMessage(pendingId, qMsg.id);
   }

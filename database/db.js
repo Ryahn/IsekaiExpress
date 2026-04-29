@@ -537,6 +537,20 @@ const self = module.exports = {
       .update({ status, reviewed_by: reviewedBy });
   },
 
+  listOtherPendingImageReviewsByAuthor: async (homeGuildId, authorId, exceptId) => {
+    return db('pending_image_reviews')
+      .where({ home_guild_id: homeGuildId, author_id: authorId, status: 'pending' })
+      .andWhere('id', '!=', exceptId)
+      .select('id', 'queue_message_id');
+  },
+
+  resolveOtherPendingImageReviewsByAuthor: async (homeGuildId, authorId, exceptId, status, reviewedBy) => {
+    return db('pending_image_reviews')
+      .where({ home_guild_id: homeGuildId, author_id: authorId, status: 'pending' })
+      .andWhere('id', '!=', exceptId)
+      .update({ status, reviewed_by: reviewedBy });
+  },
+
   getImageTextBlacklistRows: async () => {
     return db('image_text_blacklist').select('id', 'pattern', 'pattern_type').orderBy('id', 'asc');
   },
