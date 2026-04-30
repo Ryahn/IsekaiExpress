@@ -267,7 +267,11 @@ async function processImageReview(client, message, staffRoleId) {
       }
       cleanScansCompleted += 1;
     } catch (e) {
-      client.logger.warn(`imageReview scam scan failed attachment ${i + 1}:`, e);
+      if (e?.code === 'OVERSIZE_IMAGE') {
+        client.logger.info(`imageReview attachment ${i + 1} skipped: ${e.message}`);
+      } else {
+        client.logger.warn(`imageReview scam scan failed attachment ${i + 1}:`, e);
+      }
     }
   }
 

@@ -8,9 +8,17 @@ const { extractHttpUrls, getBlacklistedLinkHostsList, hostMatchesBlacklistedDoma
 const { normalizeBlacklistedLinkHost } = require('./blacklistedLinkHostNormalize');
 const { withModLogRolePing } = require('./modLogNotify');
 
-const MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 20000;
 const SCAN_TIMEOUT_MS = 25000;
+
+class OversizeImageError extends Error {
+  constructor(size) {
+    super(`image exceeds ${MAX_DOWNLOAD_BYTES} byte download cap (size=${size || 'unknown'})`);
+    this.name = 'OversizeImageError';
+    this.code = 'OVERSIZE_IMAGE';
+  }
+}
 const OCR_MAX_EDGE = 1600;
 /** Below this, OCR text / hostname extraction is ignored (still run pHash). Reduces false bans on photos/noise. */
 const OCR_MIN_CONFIDENCE_FOR_TEXT = 60;
@@ -305,6 +313,10 @@ function withTimeout(promise, ms) {
  * @param {{ url: string }} attachment
  */
 async function scanImageAttachment(client, attachment) {
+  const size = typeof attachment?.size === 'number' ? attachment.size : null;
+  if (size != null && size > MAX_DOWNLOAD_BYTES) {
+    throw new OversizeImageError(size);
+  }
   return withTimeout(scanImageUrl(client, attachment.url), SCAN_TIMEOUT_MS);
 }
 
@@ -399,6 +411,8 @@ module.exports = {
   normalizeOcrText,
   keywordPatternMatchesNormalized,
   isLikelyOcrNoiseText,
+  OversizeImageError,
+  MAX_DOWNLOAD_BYTES,
   PHASH_BITS,
   PHASH_MAX_HAMMING,
   OCR_MIN_CONFIDENCE_FOR_TEXT,
