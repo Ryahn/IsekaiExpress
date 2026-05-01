@@ -89,6 +89,8 @@ function rowToUserFarm(row) {
 		inventory: parseJson(row.inventory, {}),
 		currentCrop: row.current_crop ? parseJson(row.current_crop, null) : null,
 		plantedAt: row.planted_at ? new Date(row.planted_at).toISOString() : null,
+		plantedCashPaid: row.planted_cash_paid != null ? Number(row.planted_cash_paid) : 0,
+		plantedSeedsFromInv: row.planted_seeds_from_inv != null ? Number(row.planted_seeds_from_inv) : 0,
 		lastLogin: row.last_login ? new Date(row.last_login).toISOString() : null,
 		maturityPinged: rowMaturityPinged(row.maturity_pinged),
 		lastFarmGuildId: row.last_farm_guild_id ? String(row.last_farm_guild_id) : null,
@@ -566,14 +568,19 @@ class FarmManager {
 			}
 			const nextMoney = userFarm.money - plan.cashCost;
 			const farmXp = userFarm.farmXp + 5;
-			await trx('farm_profiles').where({ discord_user_id: uid }).update({
+			const hasPlantedCash = await trx.schema.hasColumn('farm_profiles', 'planted_cash_paid');
+			const hasPlantedSeeds = await trx.schema.hasColumn('farm_profiles', 'planted_seeds_from_inv');
+			const plantUpdate = {
 				money: nextMoney,
 				inventory: serializeMysqlJson(inventory),
 				current_crop: serializeMysqlJson(crop),
 				planted_at: trx.fn.now(),
 				maturity_pinged: 0,
 				farm_xp: farmXp,
-			});
+			};
+			if (hasPlantedCash) plantUpdate.planted_cash_paid = plan.cashCost;
+			if (hasPlantedSeeds) plantUpdate.planted_seeds_from_inv = plan.fromInv;
+			await trx('farm_profiles').where({ discord_user_id: uid }).update(plantUpdate);
 			if (hasLog) {
 				await trx('farm_xp_log').insert({
 					discord_user_id: uid,
@@ -767,12 +774,17 @@ class FarmManager {
 			const inventory = { ...userFarm.inventory };
 			inventory[crop.name] = (inventory[crop.name] || 0) + actualYield;
 			const newFarmXp = userFarm.farmXp + farmXpGained;
-			await trx('farm_profiles').where({ discord_user_id: uid }).update({
+			const hasPlantedCash = await trx.schema.hasColumn('farm_profiles', 'planted_cash_paid');
+			const hasPlantedSeeds = await trx.schema.hasColumn('farm_profiles', 'planted_seeds_from_inv');
+			const harvestUpdate = {
 				inventory: serializeMysqlJson(inventory),
 				farm_xp: newFarmXp,
 				current_crop: null,
 				planted_at: null,
-			});
+			};
+			if (hasPlantedCash) harvestUpdate.planted_cash_paid = null;
+			if (hasPlantedSeeds) harvestUpdate.planted_seeds_from_inv = null;
+			await trx('farm_profiles').where({ discord_user_id: uid }).update(harvestUpdate);
 			if (hasLog) {
 				await trx('farm_xp_log').insert({
 					discord_user_id: uid,
@@ -784,6 +796,92 @@ class FarmManager {
 			}
 			await this._bumpFarmGlobalStats(trx, { harvestUnits: actualYield });
 			result = { crop, yield: actualYield, penalty, farmXpGained };
+		});
+		return result;
+	}
+
+	/**
+	 * Abort the currently planted crop, uprooting it and prorating refunds based on
+	 * how much growth time remains. If the crop is already mature (ready/overdue),
+	 * no refund is given. Atomic.
+	 *
+	 * @param {string} userId
+	 * @param {string} guildId
+	 * @returns {Promise<{
+	 *   ok: true,
+	 *   crop: object,
+	 *   refundFraction: number,
+	 *   cashRefunded: number,
+	 *   seedsRefunded: number,
+	 *   timeLeftMs: number,
+	 *   growthTimeMs: number,
+	 *   ready: boolean,
+	 *   remainingMoney: number,
+	 * } | { ok: false, reason: 'no_profile' | 'no_crop' }>}
+	 */
+	async abortCrop(userId, guildId) {
+		void guildId;
+		const uid = String(userId);
+		let result = { ok: false, reason: 'no_crop' };
+		await knex.transaction(async (trx) => {
+			const row = await trx('farm_profiles').where({ discord_user_id: uid }).forUpdate().first();
+			if (!row) {
+				result = { ok: false, reason: 'no_profile' };
+				return;
+			}
+			const userFarm = rowToUserFarm(row);
+			if (!userFarm.currentCrop || !userFarm.plantedAt) {
+				result = { ok: false, reason: 'no_crop' };
+				return;
+			}
+
+			const crop = userFarm.currentCrop;
+			const growthTimeMs = Number(crop.growthTime) || 0;
+			const plantedAtMs = new Date(userFarm.plantedAt).getTime();
+			const elapsed = Math.max(0, Date.now() - plantedAtMs);
+			const ready = growthTimeMs > 0 ? elapsed >= growthTimeMs : true;
+			const timeLeftMs = Math.max(0, growthTimeMs - elapsed);
+			const refundFraction = growthTimeMs > 0
+				? Math.max(0, Math.min(1, 1 - (elapsed / growthTimeMs)))
+				: 0;
+
+			const cashPaid = Number(userFarm.plantedCashPaid || 0);
+			const seedsStaked = Number(userFarm.plantedSeedsFromInv || 0);
+			const cashRefunded = Math.floor(cashPaid * refundFraction);
+			const seedsRefunded = Math.floor(seedsStaked * refundFraction);
+
+			const inventory = { ...userFarm.inventory };
+			if (seedsRefunded > 0) {
+				inventory[crop.name] = (inventory[crop.name] || 0) + seedsRefunded;
+			}
+			const newMoney = Number(userFarm.money) + cashRefunded;
+
+			const hasPlantedCash = await trx.schema.hasColumn('farm_profiles', 'planted_cash_paid');
+			const hasPlantedSeeds = await trx.schema.hasColumn('farm_profiles', 'planted_seeds_from_inv');
+
+			const update = {
+				current_crop: null,
+				planted_at: null,
+				maturity_pinged: 0,
+				money: newMoney,
+				inventory: serializeMysqlJson(inventory),
+			};
+			if (hasPlantedCash) update.planted_cash_paid = null;
+			if (hasPlantedSeeds) update.planted_seeds_from_inv = null;
+
+			await trx('farm_profiles').where({ discord_user_id: uid }).update(update);
+
+			result = {
+				ok: true,
+				crop,
+				refundFraction,
+				cashRefunded,
+				seedsRefunded,
+				timeLeftMs,
+				growthTimeMs,
+				ready,
+				remainingMoney: newMoney,
+			};
 		});
 		return result;
 	}

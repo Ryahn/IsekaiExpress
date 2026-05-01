@@ -7,6 +7,7 @@ const { handleFarmHarvest } = require('../../commands/chatCommands/farm/harvest'
 const { handleFarmInfo } = require('../../commands/chatCommands/farm/info');
 const { handleFarmSell } = require('../../commands/chatCommands/farm/sell');
 const { handleFarmExpand } = require('../../commands/chatCommands/farm/expand');
+const { handleFarmAbort } = require('../../commands/chatCommands/farm/abort');
 const { handleCropList } = require('../../commands/chatCommands/farm/cropList');
 const { handleFarmBuy } = require('../../commands/chatCommands/farm/buy');
 const { handleFarmXp } = require('../../commands/chatCommands/farm/farmXp');
@@ -78,7 +79,16 @@ async function handleFarmMessage(message) {
 
 		case 'harvest':
 		case 'reap':
+			if (args[0]?.toLowerCase() === 'reset') {
+				await handleFarmAbort(message, args.slice(1), { commandName: command });
+				return true;
+			}
 			await handleFarmHarvest(message);
+			return true;
+
+		case 'abort':
+		case 'uproot':
+			await handleFarmAbort(message, args, { commandName: command });
 			return true;
 
 		case 'crop':

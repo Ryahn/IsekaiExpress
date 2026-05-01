@@ -82,6 +82,14 @@ async function buildFarmHelpPages(guildId) {
 					+ 'If reminders are on, the bot may @mention you (or DM) when a crop matures.',
 				inline: false,
 			},
+			{
+				name: `🪓 \`${p}abort\` / \`${p}uproot\` / \`${p}harvest reset\``,
+				value:
+					'Uproot the current crop to free the land. **Refund scales with remaining growth time** '
+					+ '(full refund just after planting, none when mature). Requires `confirm` — e.g. '
+					+ `\`${p}abort confirm\` or \`${p}harvest reset confirm\`.`,
+				inline: false,
+			},
 		)
 		.setTimestamp();
 
