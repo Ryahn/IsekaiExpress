@@ -128,6 +128,30 @@ const crops = {
 		yield: 45,
 		growthTime: 1 * 60 * 60 * 1000,
 	},
+	catnip: {
+		name: 'Lerd0 Catnip',
+		displayName: '🌿 Lerd0 Catnip',
+		yield: 189,
+		growthTime: 12 * 60 * 60 * 1000,
+	},
+	birbfries: {
+		name: 'birb fries',
+		displayName: '🍟 birb fries',
+		yield: 270,
+		growthTime: 18 * 60 * 60 * 1000,
+	},
+	n7art: {
+		name: 'N7 2B Art',
+		displayName: '🎨 N7 2B Art',
+		yield: 300,
+		growthTime: 20 * 60 * 60 * 1000,
+	},
+	samai: {
+		name: 'Sam AI Training',
+		displayName: '🤖 Sam AI Training',
+		yield: 1700,
+		growthTime: 80 * 60 * 60 * 1000,
+	},
 };
 
 module.exports = { crops };
