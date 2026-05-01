@@ -10,14 +10,58 @@ async function assertStaff(interaction, client) {
   return true;
 }
 
+const SNOWFLAKE_RE = /^\d{17,20}$/;
+
+async function resolveGuildNameFromId(client, guildId) {
+  const cached = client.guilds.cache.get(guildId);
+  if (cached?.name) return cached.name;
+  try {
+    const fetched = await client.guilds.fetch(guildId);
+    return fetched?.name || null;
+  } catch {
+    return null;
+  }
+}
+
 async function blacklistAddGuildExecute(client, interaction) {
   if (!(await assertStaff(interaction, client))) return;
-  const inviteStr = interaction.options.getString('invite', true);
+  const inviteStr = interaction.options.getString('invite');
+  const guildIdInput = (interaction.options.getString('guild_id') || '').trim();
+  const explicitName = (interaction.options.getString('name') || '').trim() || null;
   const reason = interaction.options.getString('reason') || null;
+
+  if (!inviteStr && !guildIdInput) {
+    return interaction.editReply({
+      content: 'Provide either `invite` (URL/code) or `guild_id` (snowflake).',
+      ephemeral: true,
+    });
+  }
+
+  if (guildIdInput) {
+    if (!SNOWFLAKE_RE.test(guildIdInput)) {
+      return interaction.editReply({
+        content: `\`${guildIdInput}\` is not a valid Discord guild id (expected a 17-20 digit snowflake).`,
+        ephemeral: true,
+      });
+    }
+    const resolvedName = explicitName || (await resolveGuildNameFromId(client, guildIdInput));
+    await client.db.sql(
+      `INSERT INTO blacklisted_guilds (guild_id, guild_name, reason, added_by)
+       VALUES (?,?,?,?)
+       ON DUPLICATE KEY UPDATE guild_name = VALUES(guild_name), reason = VALUES(reason), added_by = VALUES(added_by)`,
+      [guildIdInput, resolvedName, reason, interaction.user.id],
+    );
+    return interaction.editReply(
+      `Blacklisted guild **${resolvedName || guildIdInput}** (\`${guildIdInput}\`)${
+        resolvedName ? '' : ' — name unknown (bot is not in the guild and no `name` was provided).'
+      }`,
+    );
+  }
+
   const code = parseInviteCodeFromUserInput(inviteStr);
   if (!code) {
     return interaction.editReply({
-      content: 'Could not parse an invite code from that input. Paste a discord.gg / discord.com/invite / discordapp.com link or the code alone.',
+      content: 'Could not parse an invite code from that input. Paste a discord.gg / discord.com/invite / discordapp.com link, the code alone, or use `guild_id` instead.',
       ephemeral: true,
     });
   }
@@ -27,17 +71,19 @@ async function blacklistAddGuildExecute(client, interaction) {
       resolved.unresolvable === 'unknown_invite' ||
       String(resolved.unresolvable || '').startsWith('api_');
     const body = isGone
-      ? 'Discord does not recognize this invite anymore (usually **expired**, **revoked**, or **max uses**). You can still block the **code** with `/mod blacklist add-invite` — that stores the code only; no server id until Discord can resolve it again.'
-      : 'Could not resolve this invite. Use `/mod blacklist add-invite` to block by code only.';
+      ? 'Discord does not recognize this invite anymore (usually **expired**, **revoked**, or **max uses**). Pass `guild_id` directly if you know it, or use `/mod blacklist add-invite` to block just the code.'
+      : 'Could not resolve this invite. Pass `guild_id` directly, or use `/mod blacklist add-invite` to block by code only.';
     return interaction.editReply({ content: body, ephemeral: true });
   }
   await client.db.sql(
     `INSERT INTO blacklisted_guilds (guild_id, guild_name, reason, added_by)
      VALUES (?,?,?,?)
      ON DUPLICATE KEY UPDATE guild_name = VALUES(guild_name), reason = VALUES(reason), added_by = VALUES(added_by)`,
-    [resolved.guildId, resolved.guildName, reason, interaction.user.id],
+    [resolved.guildId, explicitName || resolved.guildName, reason, interaction.user.id],
   );
-  await interaction.editReply(`Blacklisted guild **${resolved.guildName || resolved.guildId}** (\`${resolved.guildId}\`).`);
+  await interaction.editReply(
+    `Blacklisted guild **${explicitName || resolved.guildName || resolved.guildId}** (\`${resolved.guildId}\`).`,
+  );
 }
 
 async function blacklistAddInviteExecute(client, interaction) {

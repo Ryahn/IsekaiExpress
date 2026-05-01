@@ -61,10 +61,13 @@ const groups = [
       {
         name: 'add-guild',
         path: 'blacklist add-guild',
-        description: 'Resolve an invite URL and blacklist the target guild',
+        description: 'Blacklist a target guild by invite URL/code or by guild id',
+        details: 'Supply either `invite` (URL/code, which will be resolved to a guild id) or `guild_id` directly. `name` is only used as a fallback label when adding by id and the bot cannot resolve it.',
         staffGated: true,
         options: [
-          { name: 'invite', type: 'string', required: true, description: 'Invite URL or code' },
+          { name: 'invite', type: 'string', required: false, description: 'Invite URL or code (resolves the guild id)' },
+          { name: 'guild_id', type: 'string', required: false, description: 'Guild id (snowflake) to blacklist directly' },
+          { name: 'name', type: 'string', required: false, description: 'Optional guild name when adding by id' },
           { name: 'reason', type: 'string', required: false, description: 'Reason' },
         ],
       },

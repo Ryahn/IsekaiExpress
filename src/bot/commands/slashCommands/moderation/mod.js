@@ -70,8 +70,12 @@ async function buildModData(client) {
       .addSubcommand((s) =>
         s
           .setName('add-guild')
-          .setDescription('Resolve an invite URL and blacklist the target guild')
-          .addStringOption((o) => o.setName('invite').setDescription('Invite URL or code').setRequired(true))
+          .setDescription('Blacklist a target guild by invite URL/code or by guild id')
+          .addStringOption((o) => o.setName('invite').setDescription('Invite URL or code (resolves the guild id)'))
+          .addStringOption((o) => o.setName('guild_id').setDescription('Guild id (snowflake) to blacklist directly'))
+          .addStringOption((o) =>
+            o.setName('name').setDescription('Optional guild name (used when adding by id and bot cannot resolve)'),
+          )
           .addStringOption((o) => o.setName('reason').setDescription('Reason')),
       )
       .addSubcommand((s) =>
