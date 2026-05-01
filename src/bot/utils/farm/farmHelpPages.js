@@ -134,8 +134,8 @@ async function buildFarmHelpPages(guildId) {
 				inline: false,
 			},
 			{
-				name: `🏗️ \`${p}expand\``,
-				value: 'Buy more land (max **100** slots). **+100 Farm XP** per slot.',
+				name: `🏗️ \`${p}expand [amount|max]\``,
+				value: 'Buy more land (max **100** slots). `max` buys as many as you can afford. **+100 Farm XP** per slot.',
 				inline: false,
 			},
 		)

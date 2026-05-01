@@ -100,7 +100,7 @@ async function handleFarmMessage(message) {
 			return true;
 
 		case 'expand':
-			await handleFarmExpand(message);
+			await handleFarmExpand(message, args);
 			return true;
 
 		case 'xp':

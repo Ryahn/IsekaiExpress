@@ -422,8 +422,33 @@ class FarmManager {
 	 * @returns {Promise<{ ok: true, newSlots: number, remainingMoney: number, price: number } | { ok: false, reason: string }>}
 	 */
 	async purchaseLandSlot(userId, guildId) {
+		const bulk = await this.purchaseLandSlots(userId, guildId, 1);
+		if (!bulk.ok) return bulk;
+		return {
+			ok: true,
+			newSlots: bulk.newSlots,
+			remainingMoney: bulk.remainingMoney,
+			price: bulk.totalPrice,
+		};
+	}
+
+	/**
+	 * Buy multiple land slots with cash; awards +100 Farm XP per slot (atomic).
+	 * Pass a positive integer to buy that many, or 'max' to buy as many as affordable
+	 * (capped at 100 total slots).
+	 * @param {string} userId
+	 * @param {string} guildId
+	 * @param {number|'max'} countOrMax
+	 * @returns {Promise<{ ok: true, slotsBought: number, newSlots: number, remainingMoney: number, totalPrice: number, nextPrice: number } | { ok: false, reason: string, currentSlots?: number, money?: number, nextPrice?: number }>}
+	 */
+	async purchaseLandSlots(userId, guildId, countOrMax) {
 		void guildId;
 		const uid = String(userId);
+		const isMax = countOrMax === 'max';
+		const requested = isMax ? Infinity : Math.floor(Number(countOrMax));
+		if (!isMax && (!Number.isFinite(requested) || requested < 1)) {
+			return { ok: false, reason: 'invalid_count' };
+		}
 		const hasLog = await knex.schema.hasTable('farm_xp_log');
 		let result = { ok: false, reason: 'unknown' };
 		await knex.transaction(async (trx) => {
@@ -432,38 +457,63 @@ class FarmManager {
 				result = { ok: false, reason: 'no_profile' };
 				return;
 			}
-			const slots = Number(row.land_slots);
-			const money = Number(row.money);
-			if (slots >= 100) {
-				result = { ok: false, reason: 'max' };
+			const startingSlots = Number(row.land_slots);
+			let money = Number(row.money);
+			if (startingSlots >= 100) {
+				result = { ok: false, reason: 'max', currentSlots: startingSlots, money };
 				return;
 			}
-			const price = calculateSlotPrice(slots);
-			if (money < price) {
-				result = { ok: false, reason: 'funds' };
+			const maxBuyable = 100 - startingSlots;
+			const slotsRemainingCapacity = Math.min(requested, maxBuyable);
+
+			let slotsBought = 0;
+			let totalPrice = 0;
+			while (slotsBought < slotsRemainingCapacity) {
+				const nextSlotPrice = calculateSlotPrice(startingSlots + slotsBought);
+				if (money - totalPrice < nextSlotPrice) break;
+				totalPrice += nextSlotPrice;
+				slotsBought += 1;
+			}
+
+			if (slotsBought === 0) {
+				const nextPrice = calculateSlotPrice(startingSlots);
+				result = { ok: false, reason: 'funds', currentSlots: startingSlots, money, nextPrice };
 				return;
 			}
+
+			if (!isMax && slotsBought < requested) {
+				const nextPrice = calculateSlotPrice(startingSlots + slotsBought);
+				result = { ok: false, reason: 'funds', currentSlots: startingSlots, money, nextPrice };
+				return;
+			}
+
+			const newSlots = startingSlots + slotsBought;
+			const remainingMoney = money - totalPrice;
+			const xpGained = slotsBought * 100;
 			const farmXp = row.farm_xp != null ? Number(row.farm_xp) : 0;
 			await trx('farm_profiles').where({ discord_user_id: uid }).update({
-				land_slots: slots + 1,
-				money: money - price,
-				farm_xp: farmXp + 100,
+				land_slots: newSlots,
+				money: remainingMoney,
+				farm_xp: farmXp + xpGained,
 			});
 			if (hasLog) {
 				await trx('farm_xp_log').insert({
 					discord_user_id: uid,
 					event_type: 'earn',
-					amount: 100,
+					amount: xpGained,
 					source: 'expand',
 					gold_gained: null,
 				});
 			}
-			await this._bumpFarmGlobalStats(trx, { landExpansions: 1 });
+			await this._bumpFarmGlobalStats(trx, { landExpansions: slotsBought });
+			const nextPrice = newSlots < 100 ? calculateSlotPrice(newSlots) : 0;
 			result = {
 				ok: true,
-				newSlots: slots + 1,
-				remainingMoney: money - price,
-				price,
+				slotsBought,
+				newSlots,
+				remainingMoney,
+				totalPrice,
+				nextPrice,
 			};
 		});
 		return result;
