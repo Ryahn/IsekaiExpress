@@ -93,26 +93,38 @@ async function handleAttentionButton(client, interaction) {
     interaction.guild.channels.cache.get(queueChannelId) ||
     (await interaction.guild.channels.fetch(queueChannelId).catch(() => null));
 
-  if (queueChannel && queueChannel.isTextBased()) {
-    const word = statusPingWord(status);
-    const laneLabel = row.lane === 'mod' ? 'mod' : 'staff';
-    await queueChannel
-      .send({
-        content: `<@${row.author_id}> Your attention request (**${laneLabel}** queue) was **${word}** by ${interaction.user}.`,
-      })
-      .catch((e) => client.logger.warn(`attention: ping author failed: ${e?.message || e}`));
+  const pingChannelIdRaw =
+    row.source_channel_id != null && String(row.source_channel_id).trim() !== ''
+      ? String(row.source_channel_id).trim()
+      : queueChannelId;
+  const pingChannel =
+    interaction.guild.channels.cache.get(pingChannelIdRaw) ||
+    (await interaction.guild.channels.fetch(pingChannelIdRaw).catch(() => null));
 
-    if (row.queue_message_id) {
-      const msg = await queueChannel.messages.fetch(row.queue_message_id).catch(() => null);
-      if (msg && msg.embeds[0]) {
-        const embed = EmbedBuilder.from(msg.embeds[0]).addFields({
-          name: 'Resolution',
-          value: `${word} by ${interaction.user.tag}`,
-        });
-        await msg.edit({ embeds: [embed], components: [] }).catch((e) =>
-          client.logger.warn(`attention: edit queue message failed: ${e?.message || e}`),
-        );
-      }
+  const word = statusPingWord(status);
+  const laneLabel = row.lane === 'mod' ? 'mod' : 'staff';
+  const pingContent = `<@${row.author_id}> Your attention request (**${laneLabel}** queue) was **${word}** by ${interaction.user}.`;
+
+  if (pingChannel && pingChannel.isTextBased()) {
+    await pingChannel.send({ content: pingContent }).catch((e) =>
+      client.logger.warn(`attention: ping author in source channel failed: ${e?.message || e}`),
+    );
+  } else {
+    client.logger.warn(
+      `attention: could not resolve ping channel ${pingChannelIdRaw} for request ${id}; author may not be notified.`,
+    );
+  }
+
+  if (queueChannel && queueChannel.isTextBased() && row.queue_message_id) {
+    const msg = await queueChannel.messages.fetch(row.queue_message_id).catch(() => null);
+    if (msg && msg.embeds[0]) {
+      const embed = EmbedBuilder.from(msg.embeds[0]).addFields({
+        name: 'Resolution',
+        value: `${word} by ${interaction.user.tag}`,
+      });
+      await msg.edit({ embeds: [embed], components: [] }).catch((e) =>
+        client.logger.warn(`attention: edit queue message failed: ${e?.message || e}`),
+      );
     }
   }
 

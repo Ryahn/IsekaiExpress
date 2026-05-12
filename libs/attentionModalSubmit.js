@@ -89,6 +89,7 @@ async function handleAttentionModalSubmit(client, interaction) {
     profile_url: profileUrl,
     reason,
     status: 'pending',
+    source_channel_id: interaction.channelId ? String(interaction.channelId) : null,
   });
 
   const channel = await guild.channels.fetch(destId).catch(() => null);
