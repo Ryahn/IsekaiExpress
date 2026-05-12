@@ -3,10 +3,23 @@ const { modSlashLogicalKey } = require('../../../libs/modSlashKey');
 
 /**
  * Per-command `command_settings` channel check (moved from individual slash files).
+ * @param {{ undeferredReply?: boolean }} [options] When true and the interaction was not deferred, uses `reply` instead of `editReply` (needed for `/attention mod|staff` modals).
  * @returns {Promise<boolean>} true if execution should continue; false if an ephemeral reply was sent.
  */
-async function assertSlashCommandChannel(client, interaction) {
+async function assertSlashCommandChannel(client, interaction, options = {}) {
   if (!interaction.isChatInputCommand() || !interaction.inGuild()) return true;
+
+  const useReply = Boolean(
+    options.undeferredReply && !interaction.deferred && !interaction.replied,
+  );
+
+  const respond = async (payload) => {
+    if (useReply) {
+      await interaction.reply({ ...payload, ephemeral: true });
+    } else {
+      await interaction.editReply({ ...payload, ephemeral: true });
+    }
+  };
 
   const logical =
     interaction.commandName === 'mod' ? modSlashLogicalKey(interaction) : interaction.commandName;
@@ -19,9 +32,8 @@ async function assertSlashCommandChannel(client, interaction) {
     try {
       guild = await client.guilds.fetch(interaction.guildId);
     } catch {
-      await interaction.editReply({
+      await respond({
         content: 'Could not load this server. Please try again in a moment.',
-        ephemeral: true
       });
       return false;
     }
@@ -33,9 +45,8 @@ async function assertSlashCommandChannel(client, interaction) {
     allowedChannel.channel_id !== interaction.channelId
   ) {
     if (!roles.some((role) => client.allowed?.includes(role))) {
-      await interaction.editReply({
+      await respond({
         content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`,
-        ephemeral: true
       });
       return false;
     }

@@ -45,3 +45,7 @@ Do **not** do this before correctness fixes; order below is **suggested effort /
 8. **[Slash commands, optional later]** Many near-identical “fun” commands — consider a data-driven or generator approach when editing 40+ files gets painful; not a runtime priority.
 
 9. **Avoid for now** — deep DDD / many micro-packages for a single-guild bot; big renames of `src/bot` unless you are already changing those areas (e.g. d.js 14, env).
+
+# Blacklist Invites & Links System
+1. Need a command to pull server data by using server ID. Something like /mod blacklist server_whois serverID: ID
+-- This would return an embed about the server. 

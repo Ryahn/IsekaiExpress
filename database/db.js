@@ -537,6 +537,38 @@ const self = module.exports = {
       .update({ status, reviewed_by: reviewedBy });
   },
 
+  insertAttentionRequest: async (row) => {
+    const res = await db('attention_requests').insert(row);
+    const id = Array.isArray(res) ? res[0] : res;
+    if (id != null) return Number(id);
+    const r = await db.raw('SELECT LAST_INSERT_ID() AS id');
+    const row0 = r && r[0];
+    return Number((Array.isArray(row0) ? row0[0] : row0)?.id);
+  },
+
+  setAttentionRequestQueueMessage: async (id, queueMessageId, queueChannelId) => {
+    await db('attention_requests')
+      .where({ id })
+      .update({ queue_message_id: queueMessageId, queue_channel_id: queueChannelId });
+  },
+
+  getAttentionRequestById: async (id) => {
+    return db('attention_requests').where({ id }).first();
+  },
+
+  /**
+   * @returns {Promise<number>} affected rows (1 if claimed from pending)
+   */
+  claimAttentionRequestStatus: async (id, status, reviewedBy) => {
+    return db('attention_requests')
+      .where({ id, status: 'pending' })
+      .update({
+        status,
+        reviewed_by: reviewedBy,
+        resolved_at: db.fn.now(),
+      });
+  },
+
   listOtherPendingImageReviewsByAuthor: async (homeGuildId, authorId, exceptId) => {
     return db('pending_image_reviews')
       .where({ home_guild_id: homeGuildId, author_id: authorId, status: 'pending' })
