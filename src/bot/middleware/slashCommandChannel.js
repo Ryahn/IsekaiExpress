@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const crypto = require('crypto');
 const { modSlashLogicalKey } = require('../../../libs/modSlashKey');
 
@@ -15,9 +16,9 @@ async function assertSlashCommandChannel(client, interaction, options = {}) {
 
   const respond = async (payload) => {
     if (useReply) {
-      await interaction.reply({ ...payload, ephemeral: true });
+      await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
     } else {
-      await interaction.editReply({ ...payload, ephemeral: true });
+      await interaction.editReply({ ...payload, flags: MessageFlags.Ephemeral });
     }
   };
 

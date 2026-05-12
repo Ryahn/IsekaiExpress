@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ChannelType, EmbedBuilder } = require('discord.js');
+const { ChannelType, EmbedBuilder, MessageFlags, SlashCommandBuilder } = require('discord.js');
 const path = require('path');
 const config = require('../../../../../config');
 const { farmManager } = require('../../../utils/farm/farmManager');
@@ -14,7 +14,7 @@ async function farmHelpSlashCommand(interaction) {
 	if (!interaction.guild) {
 		await interaction.editReply({
 			content: 'Farm help can only be used in a server.',
-			ephemeral: true,
+			flags: MessageFlags.Ephemeral,
 		});
 		return;
 	}
@@ -51,7 +51,7 @@ async function farmEnableCommand(interaction, action) {
 
 	await interaction.editReply({
 		content: message,
-		ephemeral: true,
+		flags: MessageFlags.Ephemeral,
 	});
 }
 
@@ -61,7 +61,7 @@ async function farmServerMinigameCommand(interaction, enabled) {
 		await interaction.editReply({
 			content:
 				'Only server administrators or members with the configured staff role can enable or disable the farm minigame for the server.',
-			ephemeral: true,
+			flags: MessageFlags.Ephemeral,
 		});
 		return;
 	}
@@ -76,7 +76,7 @@ async function farmServerMinigameCommand(interaction, enabled) {
 
 	await interaction.editReply({
 		content: message,
-		ephemeral: true,
+		flags: MessageFlags.Ephemeral,
 	});
 }
 
@@ -86,7 +86,7 @@ async function farmServerLockChannelCommand(interaction) {
 		await interaction.editReply({
 			content:
 				'Only server administrators or members with the configured staff role can set the farm command channel.',
-			ephemeral: true,
+			flags: MessageFlags.Ephemeral,
 		});
 		return;
 	}
@@ -95,7 +95,7 @@ async function farmServerLockChannelCommand(interaction) {
 	if (!ch.isTextBased()) {
 		await interaction.editReply({
 			content: '❌ Choose a text channel in this server.',
-			ephemeral: true,
+			flags: MessageFlags.Ephemeral,
 		});
 		return;
 	}
@@ -104,7 +104,7 @@ async function farmServerLockChannelCommand(interaction) {
 	if (ch.guildId !== guildId) {
 		await interaction.editReply({
 			content: '❌ The channel must belong to this server.',
-			ephemeral: true,
+			flags: MessageFlags.Ephemeral,
 		});
 		return;
 	}
@@ -113,7 +113,7 @@ async function farmServerLockChannelCommand(interaction) {
 
 	await interaction.editReply({
 		content: `🔒 Farm gameplay commands are now **limited** to ${ch} (including \`/farm help\`, \`/farm enable\`, \`/farm prefix\`, and prefix commands). Staff can still use \`/farm server\` from any channel.`,
-		ephemeral: true,
+		flags: MessageFlags.Ephemeral,
 	});
 }
 
@@ -123,7 +123,7 @@ async function farmServerUnlockChannelCommand(interaction) {
 		await interaction.editReply({
 			content:
 				'Only server administrators or members with the configured staff role can clear the farm command channel.',
-			ephemeral: true,
+			flags: MessageFlags.Ephemeral,
 		});
 		return;
 	}
@@ -132,7 +132,7 @@ async function farmServerUnlockChannelCommand(interaction) {
 
 	await interaction.editReply({
 		content: '🔓 Farm commands can be used in **any channel** again (subject to the usual minigame and personal settings).',
-		ephemeral: true,
+		flags: MessageFlags.Ephemeral,
 	});
 }
 
@@ -149,7 +149,7 @@ async function assertLockedFarmChannelForGameplay(interaction) {
 	}
 	await interaction.editReply({
 		content: `❌ ${msg}`,
-		ephemeral: true,
+		flags: MessageFlags.Ephemeral,
 	});
 	return false;
 }
@@ -164,7 +164,7 @@ async function farmRemindersCommand(interaction) {
 		content: on
 			? `Harvest-ready pings are **on**. The bot can @mention you in a channel (or DM you) when a crop matures. Then use \`${prefix}harvest\`.`
 			: 'Harvest-ready pings are **off**. Turn them on anytime: `/farm reminders` and choose on.',
-		ephemeral: true,
+		flags: MessageFlags.Ephemeral,
 	});
 }
 
@@ -262,7 +262,7 @@ async function farmPrefixCommand(interaction) {
 	if (!newPrefix || newPrefix.length > 3 || /\s/.test(newPrefix)) {
 		await interaction.editReply({
 			content: '❌ Invalid prefix! Prefix must be 1-3 characters and contain no spaces.',
-			ephemeral: true,
+			flags: MessageFlags.Ephemeral,
 		});
 		return;
 	}
@@ -271,7 +271,7 @@ async function farmPrefixCommand(interaction) {
 
 	await interaction.editReply({
 		content: `✅ Farm command prefix changed to: \`${newPrefix}\`\nExample: \`/farm help\`, \`${newPrefix}help\`, \`${newPrefix}status\`, \`${newPrefix}grow tomato\``,
-		ephemeral: true,
+		flags: MessageFlags.Ephemeral,
 	});
 }
 
@@ -391,7 +391,7 @@ module.exports = {
 		if (!interaction.inGuild()) {
 			await interaction.editReply({
 				content: 'Farm commands can only be used in a server.',
-				ephemeral: true,
+				flags: MessageFlags.Ephemeral,
 			});
 			return;
 		}
@@ -406,7 +406,7 @@ module.exports = {
 			else {
 				await interaction.editReply({
 					content: 'Unknown farm server subcommand.',
-					ephemeral: true,
+					flags: MessageFlags.Ephemeral,
 				});
 			}
 			return;
@@ -426,7 +426,7 @@ module.exports = {
 				await farmXpConvertSlash(interaction);
 			}
 			else {
-				await interaction.editReply({ content: 'Unknown /farm xp subcommand.', ephemeral: true });
+				await interaction.editReply({ content: 'Unknown /farm xp subcommand.', flags: MessageFlags.Ephemeral });
 			}
 			return;
 		}
@@ -454,7 +454,7 @@ module.exports = {
 		default:
 			await interaction.editReply({
 				content: 'Unknown farm subcommand.',
-				ephemeral: true,
+				flags: MessageFlags.Ephemeral,
 			});
 		}
 	},

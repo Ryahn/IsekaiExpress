@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 /**
  * /mod help docs — link to the web mod command reference (ephemeral; site enforces Staff/Mod).
  */
@@ -9,7 +10,7 @@ async function helpDocsExecute(client, interaction) {
       `**Mod commands documentation (web)**\n<${href}>`,
       'Log in to the control panel with Discord. This page is only for users with the configured **Staff** or **Mod** role.',
     ].join('\n'),
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 

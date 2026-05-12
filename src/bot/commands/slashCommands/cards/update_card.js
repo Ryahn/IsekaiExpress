@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const path = require('path');
 const { formatCardImagePathLabel } = require('../../../../../libs/cardImageUrl');
 
@@ -27,12 +27,12 @@ module.exports = {
             const uuid = interaction.options.getString('uuid');
 			const description = interaction.options.getString('description');
 			if (!uuid || !description) {
-				return interaction.editReply({ content: 'Invalid card ID or description.', ephemeral: true });
+				return interaction.editReply({ content: 'Invalid card ID or description.', flags: MessageFlags.Ephemeral });
 			}
 
 			const checkCard = await client.db.query('card_data').where('uuid', uuid).first();
 			if (!checkCard) {
-				return interaction.editReply({ content: 'Card not found.', ephemeral: true });
+				return interaction.editReply({ content: 'Card not found.', flags: MessageFlags.Ephemeral });
 			}
 
 			const isOwner = String(checkCard.discord_id) === String(interaction.user.id);
@@ -42,13 +42,13 @@ module.exports = {
 				&& roleIds
 				&& roleIds.has(client.config.roles.staff);
 			if (!isOwner && !isStaff) {
-				return interaction.editReply({ content: `You are not allowed to update this card. Only the creator (or staff) can update it (<@${checkCard.discord_id}>).`, ephemeral: true });
+				return interaction.editReply({ content: `You are not allowed to update this card. Only the creator (or staff) can update it (<@${checkCard.discord_id}>).`, flags: MessageFlags.Ephemeral });
 			}
 
 			const card = await client.db.updateCardDescription(uuid, description);
 
 			if (!card) {
-				return interaction.editReply({ content: 'Card not found.', ephemeral: true });
+				return interaction.editReply({ content: 'Card not found.', flags: MessageFlags.Ephemeral });
 			}
 
 			const stars = '⭐️'.repeat(card.stars);
@@ -87,7 +87,7 @@ module.exports = {
 			await interaction.editReply({ embeds: [embed] });
         // } catch (error) {
         //     client.logger.error('Error:', error);
-        //     await interaction.editReply({ content: 'An error occurred while processing the command.', ephemeral: true });
+        //     await interaction.editReply({ content: 'An error occurred while processing the command.', flags: MessageFlags.Ephemeral });
         // }
     }
 };

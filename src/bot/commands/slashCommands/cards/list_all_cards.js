@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } = require('discord.js');
 const { formatCardImagePathLabel } = require('../../../../../libs/cardImageUrl');
 
 module.exports = {
@@ -80,7 +80,7 @@ module.exports = {
         if (!embed) {
             return interaction.editReply({
                 content: 'No cards found.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 

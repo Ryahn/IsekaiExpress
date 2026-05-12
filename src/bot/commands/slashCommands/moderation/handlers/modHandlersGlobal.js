@@ -1,14 +1,15 @@
+const { MessageFlags } = require('discord.js');
 const { parseWhitelistJson, updateGuildGlobalLockCache } = require('../../../../middleware/globalCommandLock');
 const { hasGuildAdminOrStaffRole } = require('../../../../utils/guildPrivileges');
 
 async function globalLockOnExecute(client, interaction) {
   if (!interaction.inGuild()) {
-    return interaction.editReply({ content: 'This command can only be used in a server.', ephemeral: true });
+    return interaction.editReply({ content: 'This command can only be used in a server.', flags: MessageFlags.Ephemeral });
   }
   if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
     return interaction.editReply({
       content: 'You need Administrator permission or the configured staff role.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -28,12 +29,12 @@ async function globalLockOnExecute(client, interaction) {
 
 async function globalLockOffExecute(client, interaction) {
   if (!interaction.inGuild()) {
-    return interaction.editReply({ content: 'This command can only be used in a server.', ephemeral: true });
+    return interaction.editReply({ content: 'This command can only be used in a server.', flags: MessageFlags.Ephemeral });
   }
   if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
     return interaction.editReply({
       content: 'You need Administrator permission or the configured staff role.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -44,7 +45,7 @@ async function globalLockOffExecute(client, interaction) {
     return interaction.editReply({
       content:
         'Set a whitelist first: `/mod global whitelist` with a channel, then run `/mod global lock_off` again.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   await client.db.updateGuildGlobalCommandLock(guildId, { locked: true, whitelistChannelIds: channelIds });
@@ -56,12 +57,12 @@ async function globalLockOffExecute(client, interaction) {
 
 async function globalWhitelistExecute(client, interaction) {
   if (!interaction.inGuild()) {
-    return interaction.editReply({ content: 'This command can only be used in a server.', ephemeral: true });
+    return interaction.editReply({ content: 'This command can only be used in a server.', flags: MessageFlags.Ephemeral });
   }
   if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
     return interaction.editReply({
       content: 'You need Administrator permission or the configured staff role.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 

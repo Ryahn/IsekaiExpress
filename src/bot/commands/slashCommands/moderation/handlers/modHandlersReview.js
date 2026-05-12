@@ -1,9 +1,9 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../../../../utils/guildPrivileges');
 
 async function assertStaff(interaction, client) {
   if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
-    await interaction.editReply({ content: 'You need the staff role or Administrator.', ephemeral: true });
+    await interaction.editReply({ content: 'You need the staff role or Administrator.', flags: MessageFlags.Ephemeral });
     return false;
   }
   return true;
@@ -38,7 +38,7 @@ async function reviewSetExecute(client, interaction) {
   }
 
   if (!Object.keys(patch).length) {
-    return interaction.editReply({ content: 'Provide at least one option to update.', ephemeral: true });
+    return interaction.editReply({ content: 'Provide at least one option to update.', flags: MessageFlags.Ephemeral });
   }
 
   await client.db.query('GuildConfigurable').where({ guildId }).update(patch);

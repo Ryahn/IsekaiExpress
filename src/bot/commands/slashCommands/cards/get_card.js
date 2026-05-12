@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const path = require('path');
 const { formatCardImagePathLabel } = require('../../../../../libs/cardImageUrl');
 const { DISPLAY_LABEL } = require('../../../tcg/elements');
@@ -24,13 +24,13 @@ module.exports = {
             const uuid = interaction.options.getString('uuid');
 
 			if (!uuid) {
-				return interaction.editReply({ content: 'Invalid card ID.', ephemeral: true });
+				return interaction.editReply({ content: 'Invalid card ID.', flags: MessageFlags.Ephemeral });
 			}
 
 			const card = await client.db.query('card_data').where('uuid', uuid).first();
 
 			if (!card) {
-				return interaction.editReply({ content: 'Card not found.', ephemeral: true });
+				return interaction.editReply({ content: 'Card not found.', flags: MessageFlags.Ephemeral });
 			}
 
 			const stars = '⭐️'.repeat(card.stars);
@@ -96,7 +96,7 @@ module.exports = {
 			await interaction.editReply({ embeds: [embed] });
         // } catch (error) {
         //     client.logger.error('Error:', error);
-        //     await interaction.editReply({ content: 'An error occurred while processing the command.', ephemeral: true });
+        //     await interaction.editReply({ content: 'An error occurred while processing the command.', flags: MessageFlags.Ephemeral });
         // }
     }
 };

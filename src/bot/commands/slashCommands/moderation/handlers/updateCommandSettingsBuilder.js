@@ -1,3 +1,6 @@
+const { MessageFlags } = require('discord.js');
+const { PermissionFlagsBits } = require('discord.js');
+
 function escapeLikeSegment(s) {
   return String(s).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
@@ -50,7 +53,7 @@ async function updateCommandSettingsExecute(client, interaction) {
 
     const channel = interaction.options.getChannel('channel', true);
 
-    if (!interaction.member.permissions.has('ADMINISTRATOR')) {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.followUp('You do not have permission to use this command.');
     }
 
@@ -59,7 +62,7 @@ async function updateCommandSettingsExecute(client, interaction) {
     if (!row) {
       return interaction.followUp({
         content: 'Updated channel, but could not reload command settings row.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 

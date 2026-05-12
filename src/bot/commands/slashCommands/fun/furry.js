@@ -1,4 +1,4 @@
-const { AttachmentBuilder } = require("discord.js");
+const { AttachmentBuilder, MessageFlags } = require('discord.js');
 const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
 const moment = require('moment');
 const crypto = require('crypto');
@@ -22,7 +22,7 @@ module.exports = {
         if (cooldownTime) {
             return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
-                ephemeral: true 
+                flags: MessageFlags.Ephemeral 
             });
         }
 

@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const path = require('path');
-const { ChannelType } = require('discord.js');
+const { ChannelType, MessageFlags } = require('discord.js');
 const DOUBLE_XP_CHOICES = require('./xpDoubleXpChoices');
 const {
   augmentUpdateCommandSubcommand,
@@ -460,7 +460,7 @@ async function execute(client, interaction) {
   const key = `${group}:${sub}`;
   const fn = dispatch[key];
   if (!fn) {
-    return interaction.editReply({ content: 'Unknown subcommand.', ephemeral: true });
+    return interaction.editReply({ content: 'Unknown subcommand.', flags: MessageFlags.Ephemeral });
   }
   return fn(client, interaction);
 }

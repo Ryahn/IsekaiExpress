@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
 const { enforceBlacklist } = require('./invitePolicy');
 
@@ -13,7 +13,7 @@ async function denyButton(interaction, text) {
     /* ignore */
   }
   try {
-    await interaction.followUp({ content: text, ephemeral: true });
+    await interaction.followUp({ content: text, flags: MessageFlags.Ephemeral });
   } catch (_) {
     /* ignore */
   }
@@ -35,7 +35,7 @@ async function handleInviteQueueButton(client, interaction, action, pendingId) {
   const affected = await client.db.claimPendingInviteStatus(pendingId, newStatus, interaction.user.id);
   if (affected !== 1) {
     await interaction.deferUpdate().catch(() => {});
-    return interaction.followUp({ content: 'This invite was already reviewed.', ephemeral: true }).catch(() => {});
+    return interaction.followUp({ content: 'This invite was already reviewed.', flags: MessageFlags.Ephemeral }).catch(() => {});
   }
 
   try {
@@ -166,7 +166,7 @@ async function handleImageReviewButton(client, interaction, action, pendingId) {
   const affected = await client.db.claimPendingImageReviewStatus(pendingId, nextStatus, interaction.user.id);
   if (affected !== 1) {
     await interaction.deferUpdate().catch(() => {});
-    return interaction.followUp({ content: 'Already reviewed.', ephemeral: true }).catch(() => {});
+    return interaction.followUp({ content: 'Already reviewed.', flags: MessageFlags.Ephemeral }).catch(() => {});
   }
 
   try {
@@ -191,7 +191,7 @@ async function handleImageReviewButton(client, interaction, action, pendingId) {
       try {
         await interaction.followUp({
           content: `Ban failed: ${e?.message || 'unknown error'}`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       } catch (_) { /* ignore */ }
     }
@@ -229,7 +229,7 @@ async function handleImageReviewButton(client, interaction, action, pendingId) {
     try {
       await interaction.followUp({
         content: `Also auto-resolved ${cascaded.length} other pending review(s) for the same user.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } catch (_) { /* ignore */ }
   }

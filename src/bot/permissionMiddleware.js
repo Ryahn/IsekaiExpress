@@ -1,3 +1,6 @@
+const crypto = require('crypto');
+const { MessageFlags } = require('discord.js');
+
 async function checkCommandPermissions(client, interaction, commandName) {
   const hash = crypto.createHash('md5').update(commandName).digest('hex');
   const allowedChannel = await client.db.getAllowedChannel(hash);
@@ -17,7 +20,7 @@ async function checkCommandPermissions(client, interaction, commandName) {
   if (!hasOverrideRole) {
     await interaction.reply({ 
       content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`, 
-      ephemeral: true 
+      flags: MessageFlags.Ephemeral 
     });
     return false;
   }

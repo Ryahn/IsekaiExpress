@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const BaseEvent = require('../../utils/structures/BaseEvent');
 const { checkCommandCooldown, setCooldown } = require('../../middleware/commandMiddleware');
 const { executeWithRateLimit } = require('../../middleware/apiMiddleware');
@@ -6,7 +7,7 @@ const { assertSlashCommandChannel } = require('../../middleware/slashCommandChan
 const { modSlashLogicalKey } = require('../../../../libs/modSlashKey');
 const { handleModerationButton } = require('../../../../libs/moderationButtons');
 const { handleAttentionButton } = require('../../../../libs/attentionButtons');
-const { handleAttentionModalSubmit } = require('../../../../libs/attentionModalSubmit');
+const { handleAttentionModalSubmit, handleAttentionTypeSelect } = require('../../../../libs/attentionFlow');
 const { handleModUpdateCommandSettingsAutocomplete } = require('../../commands/slashCommands/moderation/handlers/updateCommandSettingsBuilder');
 
 /**
@@ -14,7 +15,7 @@ const { handleModUpdateCommandSettingsAutocomplete } = require('../../commands/s
  * @param {string} content
  */
 async function replyOrEditEphemeral(interaction, content) {
-  const payload = { content, ephemeral: true };
+  const payload = { content, flags: MessageFlags.Ephemeral };
   try {
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply(payload);
@@ -58,7 +59,7 @@ module.exports = class InteractionEvent extends BaseEvent {
     }
 
     if (interaction.isModalSubmit()) {
-      if (interaction.customId === 'attention:form:mod' || interaction.customId === 'attention:form:staff') {
+      if (interaction.customId?.startsWith('attention:form:')) {
         try {
           await handleAttentionModalSubmit(client, interaction);
         } catch (e) {
@@ -67,18 +68,27 @@ module.exports = class InteractionEvent extends BaseEvent {
             if (interaction.deferred || interaction.replied) {
               await interaction.editReply({
                 content: 'An error occurred while submitting.',
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
               });
             } else {
               await interaction.reply({
                 content: 'An error occurred while submitting.',
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
               });
             }
           } catch (_) {
             /* ignore */
           }
         }
+      }
+      return;
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      try {
+        if (await handleAttentionTypeSelect(client, interaction)) return;
+      } catch (e) {
+        client.logger.error('Attention select menu error:', e);
       }
       return;
     }

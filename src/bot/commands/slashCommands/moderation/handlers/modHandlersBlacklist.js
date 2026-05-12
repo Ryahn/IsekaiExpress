@@ -1,10 +1,10 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../../../../utils/guildPrivileges');
 const { resolveInvite, parseInviteCodeFromUserInput } = require('../../../../../../libs/invitePolicy');
 
 async function assertStaff(interaction, client) {
   if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
-    await interaction.editReply({ content: 'You need the staff role or Administrator.', ephemeral: true });
+    await interaction.editReply({ content: 'You need the staff role or Administrator.', flags: MessageFlags.Ephemeral });
     return false;
   }
   return true;
@@ -33,7 +33,7 @@ async function blacklistAddGuildExecute(client, interaction) {
   if (!inviteStr && !guildIdInput) {
     return interaction.editReply({
       content: 'Provide either `invite` (URL/code) or `guild_id` (snowflake).',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -41,7 +41,7 @@ async function blacklistAddGuildExecute(client, interaction) {
     if (!SNOWFLAKE_RE.test(guildIdInput)) {
       return interaction.editReply({
         content: `\`${guildIdInput}\` is not a valid Discord guild id (expected a 17-20 digit snowflake).`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
     const resolvedName = explicitName || (await resolveGuildNameFromId(client, guildIdInput));
@@ -62,7 +62,7 @@ async function blacklistAddGuildExecute(client, interaction) {
   if (!code) {
     return interaction.editReply({
       content: 'Could not parse an invite code from that input. Paste a discord.gg / discord.com/invite / discordapp.com link, the code alone, or use `guild_id` instead.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   const resolved = await resolveInvite(client, code);
@@ -73,7 +73,7 @@ async function blacklistAddGuildExecute(client, interaction) {
     const body = isGone
       ? 'Discord does not recognize this invite anymore (usually **expired**, **revoked**, or **max uses**). Pass `guild_id` directly if you know it, or use `/mod blacklist add-invite` to block just the code.'
       : 'Could not resolve this invite. Pass `guild_id` directly, or use `/mod blacklist add-invite` to block by code only.';
-    return interaction.editReply({ content: body, ephemeral: true });
+    return interaction.editReply({ content: body, flags: MessageFlags.Ephemeral });
   }
   await client.db.sql(
     `INSERT INTO blacklisted_guilds (guild_id, guild_name, reason, added_by)
@@ -93,7 +93,7 @@ async function blacklistAddInviteExecute(client, interaction) {
   if (!code) {
     return interaction.editReply({
       content: 'Could not parse an invite code from that input. Paste a discord.gg / discord.com/invite / discordapp.com link or the code alone.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   const reason = interaction.options.getString('reason') || null;
@@ -131,7 +131,7 @@ async function blacklistRemoveExecute(client, interaction) {
   if (n2) {
     return interaction.editReply(`Removed blacklisted guild \`${value}\`.`);
   }
-  await interaction.editReply({ content: 'No matching blacklist row (try exact code or guild id).', ephemeral: true });
+  await interaction.editReply({ content: 'No matching blacklist row (try exact code or guild id).', flags: MessageFlags.Ephemeral });
 }
 
 async function blacklistListExecute(client, interaction) {
@@ -161,7 +161,7 @@ async function blacklistCheckExecute(client, interaction) {
   if (!code) {
     return interaction.editReply({
       content: 'Could not parse an invite code from that input.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   const resolved = await resolveInvite(client, code);
@@ -179,7 +179,7 @@ async function blacklistCheckExecute(client, interaction) {
     content: `Code \`${code}\`: ${hitCode ? '**BLACKLISTED (code)**' : 'not on code blacklist'} | Guild: ${
       hitGuild ? '**BLACKLISTED (guild)**' : 'not on guild blacklist'
     } | Resolved: ${resolvedLine}`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 

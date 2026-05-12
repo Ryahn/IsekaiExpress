@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
+const { AttachmentBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const canvacord = require("canvacord");
 const path = require('path');
 
@@ -18,7 +18,7 @@ module.exports = {
         if (cooldownTime) {
             return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
-                ephemeral: true 
+                flags: MessageFlags.Ephemeral 
             });
         }
 
@@ -90,9 +90,9 @@ module.exports = {
         } catch (error) {
             client.logger.error('Error executing the level command:', error);
             try {
-                await interaction.editReply({ content: 'Something went wrong.', ephemeral: true });
+                await interaction.editReply({ content: 'Something went wrong.', flags: MessageFlags.Ephemeral });
             } catch {
-                await interaction.followUp({ content: 'Something went wrong.', ephemeral: true }).catch(() => {});
+                await interaction.followUp({ content: 'Something went wrong.', flags: MessageFlags.Ephemeral }).catch(() => {});
             }
         }
     },

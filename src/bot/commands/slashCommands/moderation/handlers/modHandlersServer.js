@@ -1,4 +1,4 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const moment = require('moment');
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../../../../utils/guildPrivileges');
@@ -104,7 +104,7 @@ function createCommandSettingsEmbed(totalCommands, commands, currentPage, totalP
 
 async function channelSettingsExecute(client, interaction) {
   if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
-    return interaction.editReply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    return interaction.editReply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
   }
 
   const pageRequested = interaction.options.getInteger('page') || 1;
@@ -124,7 +124,7 @@ async function channelSettingsExecute(client, interaction) {
     await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     client.logger.error('Error:', error);
-    await interaction.editReply({ content: 'An error occurred while processing the command.', ephemeral: true });
+    await interaction.editReply({ content: 'An error occurred while processing the command.', flags: MessageFlags.Ephemeral });
   }
 }
 
@@ -255,12 +255,12 @@ async function channelStatsExecute(client, interaction) {
 
 async function copyChannelExecute(client, interaction) {
   if (!interaction.inGuild()) {
-    return interaction.editReply({ content: 'This command can only be used in a server.', ephemeral: true });
+    return interaction.editReply({ content: 'This command can only be used in a server.', flags: MessageFlags.Ephemeral });
   }
   if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
     return interaction.editReply({
       content: 'You need Administrator permission or the configured staff role.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -268,13 +268,13 @@ async function copyChannelExecute(client, interaction) {
   const newName = interaction.options.getString('new_name', true).trim();
 
   if (!newName) {
-    return interaction.editReply({ content: 'Channel name cannot be empty.', ephemeral: true });
+    return interaction.editReply({ content: 'Channel name cannot be empty.', flags: MessageFlags.Ephemeral });
   }
   if (source.isThread()) {
-    return interaction.editReply({ content: 'You can only copy server channels, not threads.', ephemeral: true });
+    return interaction.editReply({ content: 'You can only copy server channels, not threads.', flags: MessageFlags.Ephemeral });
   }
   if (source.guildId !== interaction.guildId) {
-    return interaction.editReply({ content: 'The channel must be in this server.', ephemeral: true });
+    return interaction.editReply({ content: 'The channel must be in this server.', flags: MessageFlags.Ephemeral });
   }
 
   const isVoice = source.type === ChannelType.GuildVoice || source.type === ChannelType.GuildStageVoice;
@@ -283,7 +283,7 @@ async function copyChannelExecute(client, interaction) {
   if (!perms) {
     return interaction.editReply({
       content: 'Could not read permissions for that channel. Ensure the bot is in the server.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   const required = isVoice
@@ -292,7 +292,7 @@ async function copyChannelExecute(client, interaction) {
   if (!perms.has(required)) {
     return interaction.editReply({
       content: `I need **Manage Channels** and **${isVoice ? 'Connect' : 'View Channel'}** on that channel to duplicate it.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -336,14 +336,14 @@ async function copyChannelExecute(client, interaction) {
     client.logger.error('copy_channel error:', err);
     const code = err?.code;
     if (code === 50013) {
-      return interaction.editReply({ content: 'I do not have permission to create or edit that channel.', ephemeral: true });
+      return interaction.editReply({ content: 'I do not have permission to create or edit that channel.', flags: MessageFlags.Ephemeral });
     }
     if (code === 30016) {
-      return interaction.editReply({ content: 'This server has reached the maximum number of channels.', ephemeral: true });
+      return interaction.editReply({ content: 'This server has reached the maximum number of channels.', flags: MessageFlags.Ephemeral });
     }
     return interaction.editReply({
       content: 'Failed to copy the channel. Check the bot can manage channels and the name is valid.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }

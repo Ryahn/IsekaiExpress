@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { fetchRandom } = require('nekos-best.js');
 const path = require('path');
 
@@ -21,7 +21,7 @@ module.exports = {
         if (cooldownTime) {
             return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
-                ephemeral: true 
+                flags: MessageFlags.Ephemeral 
             });
         }
 

@@ -1,9 +1,9 @@
-const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const moment = require('moment');
 
 async function cageApplyExecute(client, interaction) {
   if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
-    return interaction.editReply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    return interaction.editReply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
   }
 
   const userToCage = interaction.options.getUser('user');
@@ -13,25 +13,25 @@ async function cageApplyExecute(client, interaction) {
   const cageValue = interaction.options.getString('cage_type');
 
   if (!guildMember) {
-    return interaction.editReply({ content: 'User not found in this server.', ephemeral: true });
+    return interaction.editReply({ content: 'User not found in this server.', flags: MessageFlags.Ephemeral });
   }
 
   const cageRole = interaction.guild.roles.cache.find((role) => role.id === cageValue);
   if (!cageRole) {
-    return interaction.editReply({ content: `Cage role: ${cageValue} does not exist.`, ephemeral: true });
+    return interaction.editReply({ content: `Cage role: ${cageValue} does not exist.`, flags: MessageFlags.Ephemeral });
   }
 
   const cageName = interaction.guild.roles.cache.get(cageValue);
 
   if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-    return interaction.editReply({ content: 'I do not have permission to manage roles.', ephemeral: true });
+    return interaction.editReply({ content: 'I do not have permission to manage roles.', flags: MessageFlags.Ephemeral });
   }
 
   const botRole = interaction.guild.members.me.roles.highest;
   if (guildMember.roles.highest.position >= botRole.position) {
     return interaction.editReply({
       content: 'I cannot cage this user because their role is higher than or equal to mine.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -60,7 +60,7 @@ async function cageApplyExecute(client, interaction) {
     if (!durationInSeconds) {
       return interaction.editReply({
         content: 'Invalid duration format. Use something like 1h, 30m, or 1d.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
     expires = moment().unix() + durationInSeconds;
@@ -109,19 +109,19 @@ async function cageRemoveExecute(client, interaction) {
   const cageRoleId = await client.db.getCageRoleId(userToUncage.id);
   const cageRole = interaction.guild.roles.cache.find((role) => role.id === cageRoleId);
   if (!cageRole) {
-    return interaction.editReply({ content: 'Caged role does not exist.', ephemeral: true });
+    return interaction.editReply({ content: 'Caged role does not exist.', flags: MessageFlags.Ephemeral });
   }
 
   const cagedUser = await client.db.getCage(userToUncage.id);
 
   if (!cagedUser) {
-    return interaction.editReply({ content: 'This user is not currently caged.', ephemeral: true });
+    return interaction.editReply({ content: 'This user is not currently caged.', flags: MessageFlags.Ephemeral });
   }
 
   const guildMember = await interaction.guild.members.fetch(userToUncage.id);
 
   if (!guildMember) {
-    return interaction.editReply({ content: 'User not found in the guild.', ephemeral: true });
+    return interaction.editReply({ content: 'User not found in the guild.', flags: MessageFlags.Ephemeral });
   }
 
   await client.db.removeCage(userToUncage.id);

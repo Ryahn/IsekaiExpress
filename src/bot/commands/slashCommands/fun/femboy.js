@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const fetch = require('node-fetch');
 const path = require('path');
 
@@ -21,7 +21,7 @@ module.exports = {
         if (cooldownTime) {
             return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
-                ephemeral: true 
+                flags: MessageFlags.Ephemeral 
             });
         }
     
@@ -32,10 +32,10 @@ module.exports = {
 		const response = await client.rateLimitHandler.executeWithRateLimit('gelbooru-api', async () => {
 			return await fetch(api);
 		});
-		if (!response.ok) return interaction.editReply({ content: 'No results found', ephemeral: true });
+		if (!response.ok) return interaction.editReply({ content: 'No results found', flags: MessageFlags.Ephemeral });
 
 		const data = await response.json();
-		if (!data.post || data.post.length <= 0) return interaction.editReply({ content: 'No results found', ephemeral: true });
+		if (!data.post || data.post.length <= 0) return interaction.editReply({ content: 'No results found', flags: MessageFlags.Ephemeral });
 
 		const index = Math.floor(Math.random() * data.post.length);
 		

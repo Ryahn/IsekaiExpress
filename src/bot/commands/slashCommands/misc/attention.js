@@ -1,14 +1,8 @@
 const path = require('path');
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const {
-  ChannelType,
-  PermissionFlagsBits,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  ActionRowBuilder,
-} = require('discord.js');
+const { ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../../../utils/guildPrivileges');
+const { buildAttentionTypeSelectRows } = require('../../../../../libs/attentionFlow');
 
 function canOpenModModal(member, client) {
   if (!member) return false;
@@ -21,39 +15,17 @@ function canOpenModModal(member, client) {
   return false;
 }
 
-function buildAttentionModal(lane) {
+function typePickerEmbed(lane) {
   const title = lane === 'mod' ? 'Attention (mod queue)' : 'Attention (staff queue)';
-  const thread = new TextInputBuilder()
-    .setCustomId('attention_thread')
-    .setLabel('Thread URL')
-    .setStyle(TextInputStyle.Paragraph)
-    .setMinLength(4)
-    .setMaxLength(2000)
-    .setRequired(true);
-
-  const profile = new TextInputBuilder()
-    .setCustomId('attention_profile')
-    .setLabel('Member profile URL')
-    .setStyle(TextInputStyle.Paragraph)
-    .setMinLength(4)
-    .setMaxLength(2000)
-    .setRequired(true);
-
-  const reason = new TextInputBuilder()
-    .setCustomId('attention_reason')
-    .setLabel('Reason')
-    .setStyle(TextInputStyle.Paragraph)
-    .setMinLength(1)
-    .setMaxLength(4000)
-    .setRequired(true);
-
-  return new ModalBuilder()
-    .setCustomId(`attention:form:${lane}`)
+  return new EmbedBuilder()
     .setTitle(title)
-    .addComponents(
-      new ActionRowBuilder().addComponents(thread),
-      new ActionRowBuilder().addComponents(profile),
-      new ActionRowBuilder().addComponents(reason),
+    .setDescription(
+      [
+        '**1.** Choose a **request type** below.',
+        '**2.** A form opens with the fields that match your choice.',
+        '',
+        'There is no real checkbox in Discord — if you need an **extra text box** at the bottom of the form, pick an option that says **+ optional notes**.',
+      ].join('\n'),
     );
 }
 
@@ -64,10 +36,10 @@ module.exports = {
     .setName('attention')
     .setDescription('Submit or configure attention requests for mod or staff')
     .addSubcommand((sub) =>
-      sub.setName('mod').setDescription('Open the attention form (mod queue; mods and uploaders)'),
+      sub.setName('mod').setDescription('Start an attention request (mod queue; mods and uploaders)'),
     )
     .addSubcommand((sub) =>
-      sub.setName('staff').setDescription('Open the attention form (staff queue; staff only)'),
+      sub.setName('staff').setDescription('Start an attention request (staff queue; staff only)'),
     )
     .addSubcommand((sub) =>
       sub
@@ -94,13 +66,13 @@ module.exports = {
       if (!hasGuildAdminOrStaffRole(member, client.config.roles.staff)) {
         return interaction.editReply({
           content: 'You need the staff role or Administrator to configure the attention channel.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
       const ch = interaction.options.getChannel('channel', true);
       if (!ch.isTextBased()) {
-        return interaction.editReply({ content: 'Pick a text-based channel.', ephemeral: true });
+        return interaction.editReply({ content: 'Pick a text-based channel.', flags: MessageFlags.Ephemeral });
       }
 
       await client.db.query
@@ -110,7 +82,7 @@ module.exports = {
 
       return interaction.editReply({
         content: `Attention queue channel set to ${ch}.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -120,20 +92,28 @@ module.exports = {
       if (!canOpenModModal(member, client)) {
         return interaction.reply({
           content: 'You need the mod role, uploader role, or Administrator to use the mod queue.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
-      return interaction.showModal(buildAttentionModal('mod'));
+      return interaction.reply({
+        embeds: [typePickerEmbed('mod')],
+        components: buildAttentionTypeSelectRows('mod'),
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     if (sub === 'staff') {
       if (!hasGuildAdminOrStaffRole(member, client.config.roles.staff)) {
         return interaction.reply({
           content: 'You need the staff role or Administrator to use the staff queue.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
-      return interaction.showModal(buildAttentionModal('staff'));
+      return interaction.reply({
+        embeds: [typePickerEmbed('staff')],
+        components: buildAttentionTypeSelectRows('staff'),
+        flags: MessageFlags.Ephemeral,
+      });
     }
   },
 };

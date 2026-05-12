@@ -1,10 +1,10 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../../../../utils/guildPrivileges');
 const { bustScamBlacklistCache, PHASH_BITS } = require('../../../../../../libs/scamImageScan');
 
 async function assertStaff(interaction, client) {
   if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
-    await interaction.editReply({ content: 'You need the staff role or Administrator.', ephemeral: true });
+    await interaction.editReply({ content: 'You need the staff role or Administrator.', flags: MessageFlags.Ephemeral });
     return false;
   }
   return true;
@@ -15,16 +15,16 @@ async function blacklistAddImageTextExecute(client, interaction) {
   const pattern = interaction.options.getString('pattern', true).trim();
   const type = interaction.options.getString('type', true);
   if (!pattern) {
-    return interaction.editReply({ content: 'Pattern required.', ephemeral: true });
+    return interaction.editReply({ content: 'Pattern required.', flags: MessageFlags.Ephemeral });
   }
   if (!['keyword', 'domain', 'regex'].includes(type)) {
-    return interaction.editReply({ content: 'Invalid type.', ephemeral: true });
+    return interaction.editReply({ content: 'Invalid type.', flags: MessageFlags.Ephemeral });
   }
   if (type === 'regex') {
     try {
       new RegExp(pattern, 'i');
     } catch {
-      return interaction.editReply({ content: 'Invalid regex.', ephemeral: true });
+      return interaction.editReply({ content: 'Invalid regex.', flags: MessageFlags.Ephemeral });
     }
   }
   try {
@@ -35,7 +35,7 @@ async function blacklistAddImageTextExecute(client, interaction) {
     });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY' || e.errno === 1062) {
-      return interaction.editReply({ content: 'That pattern + type already exists.', ephemeral: true });
+      return interaction.editReply({ content: 'That pattern + type already exists.', flags: MessageFlags.Ephemeral });
     }
     throw e;
   }
@@ -51,7 +51,7 @@ async function blacklistAddImageHashExecute(client, interaction) {
   const name = (att.name || '').toLowerCase();
   const okMime = ct.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(name);
   if (!okMime) {
-    return interaction.editReply({ content: 'Attach a PNG, JPEG, or WebP image.', ephemeral: true });
+    return interaction.editReply({ content: 'Attach a PNG, JPEG, or WebP image.', flags: MessageFlags.Ephemeral });
   }
   const imghash = require('imghash');
   const axios = require('axios');
@@ -60,13 +60,13 @@ async function blacklistAddImageHashExecute(client, interaction) {
     const res = await axios.get(att.url, { responseType: 'arraybuffer', timeout: 25000, maxContentLength: 12 * 1024 * 1024 });
     buf = Buffer.from(res.data);
   } catch (e) {
-    return interaction.editReply({ content: `Could not download attachment: ${e.message}`, ephemeral: true });
+    return interaction.editReply({ content: `Could not download attachment: ${e.message}`, flags: MessageFlags.Ephemeral });
   }
   let phash;
   try {
     phash = await imghash.hash(buf, PHASH_BITS);
   } catch (e) {
-    return interaction.editReply({ content: `Could not hash image: ${e.message}`, ephemeral: true });
+    return interaction.editReply({ content: `Could not hash image: ${e.message}`, flags: MessageFlags.Ephemeral });
   }
   await client.db.insertImageHashBlacklist({
     phash,

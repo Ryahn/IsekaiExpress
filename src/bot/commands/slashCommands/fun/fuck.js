@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const fetch = require('node-fetch');
 const path = require('path');
 const config = require('../../../../../config');
@@ -31,7 +31,7 @@ module.exports = {
         if (cooldownTime) {
             return interaction.editReply({ 
                 content: `You're on cooldown! Please wait ${cooldownTime.toFixed(1)} more seconds.`, 
-                ephemeral: true 
+                flags: MessageFlags.Ephemeral 
             });
         }
         
@@ -49,7 +49,7 @@ module.exports = {
                 if (!config.fluxpointApiKey) {
                     return interaction.editReply({
                         content: 'This command needs `FLUXPOINT_API_KEY` in the environment.',
-                        ephemeral: true,
+                        flags: MessageFlags.Ephemeral,
                     });
                 }
 
@@ -93,7 +93,7 @@ module.exports = {
             client.logger.error(`Error executing the fuck command: ${errText}`);
             const payload = {
                 content: 'Could not load the image (the external API may be down or changed).',
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             };
             try {
                 await interaction.editReply(payload);

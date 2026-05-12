@@ -1,12 +1,12 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const Tesseract = require('tesseract.js');
 const axios = require('axios');
 const fs = require('fs');
 const sharp = require('sharp');
 
 async function xpSettingsExecute(client, interaction) {
-  if (!interaction.member.permissions.has('ADMINISTRATOR')) {
-    return interaction.editReply({ content: 'You do not have permission to change XP settings.', ephemeral: true });
+  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    return interaction.editReply({ content: 'You do not have permission to change XP settings.', flags: MessageFlags.Ephemeral });
   }
 
   const { getRandomColor } = client.utils;
@@ -80,7 +80,7 @@ async function xpUserExecute(client, interaction) {
   const amount = interaction.options.getInteger('amount');
 
   if (!user || amount == null) {
-    return interaction.editReply({ content: 'User and amount are required.', ephemeral: true });
+    return interaction.editReply({ content: 'User and amount are required.', flags: MessageFlags.Ephemeral });
   }
 
   try {
@@ -111,7 +111,7 @@ async function xpUserExecute(client, interaction) {
         level = amount;
         break;
       default:
-        return interaction.editReply({ content: 'Invalid option.', ephemeral: true });
+        return interaction.editReply({ content: 'Invalid option.', flags: MessageFlags.Ephemeral });
     }
 
     await client.db.updateUserXPAndLevel(user.id, xp, level, msgCount);
@@ -133,7 +133,7 @@ async function xpUserExecute(client, interaction) {
 
 async function xpDoubleExecute(client, interaction) {
   try {
-    if (!interaction.member.permissions.has('ADMINISTRATOR')) {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.followUp('You do not have permission to enable double XP.');
     }
 
@@ -153,7 +153,7 @@ async function xpDoubleExecute(client, interaction) {
 
 async function xpImportRankExecute(client, interaction) {
   try {
-    if (!interaction.member.permissions.has('ADMINISTRATOR')) {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       await interaction.editReply('You do not have permission to use this command.');
       return;
     }

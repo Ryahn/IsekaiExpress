@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags, SlashCommandBuilder } = require('discord.js');
 const path = require('path');
 const tcgEconomy = require('../../../../../libs/tcgEconomy');
 const tcgInventory = require('../../../../../libs/tcgInventory');
@@ -641,7 +641,7 @@ module.exports = {
           useTradeLicense: useLicense,
         });
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         const exp = `<t:${Math.floor(Number(result.expiresAt))}:R>`;
         const goldNote =
@@ -652,40 +652,40 @@ module.exports = {
             : '';
         return interaction.editReply({
           content: `Trade **#${result.tradeId}** proposed${goldNote}. ${partner}, use \`/tcg trade list\` then \`/tcg trade accept\`. Expires ${exp}.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'accept') {
         const tradeId = interaction.options.getInteger('trade_id', true);
         const result = await tcgTrade.acceptTradeOffer(client, discordUser, tradeId);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `Trade **#${result.tradeId}** completed — copies swapped. Gold used **3%** tax on each side’s outgoing amount unless the offer used a **Trade License**.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'cancel') {
         const tradeId = interaction.options.getInteger('trade_id', true);
         const result = await tcgTrade.cancelTradeOffer(client, discordUser, tradeId);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `Trade **#${result.tradeId}** cancelled.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'list') {
         const out = await tcgTrade.listMyTradeOffers(client, discordUser);
         if (!out.ok) {
-          return interaction.editReply({ content: out.error, ephemeral: true });
+          return interaction.editReply({ content: out.error, flags: MessageFlags.Ephemeral });
         }
         if (!out.rows.length) {
           return interaction.editReply({
             content: `No pending trades. Max **${tcgTrade.MAX_OPEN_TRADES_PER_USER}** open offers per player; offers expire in **24h** ([CardSystem.md]).`,
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
         const lines = out.rows.map((r) => {
@@ -704,10 +704,10 @@ module.exports = {
         });
         return interaction.editReply({
           content: `${lines.join('\n')}`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
-      return interaction.editReply({ content: 'Unknown trade subcommand.', ephemeral: true });
+      return interaction.editReply({ content: 'Unknown trade subcommand.', flags: MessageFlags.Ephemeral });
     }
 
     if (subcommandGroup === 'lend') {
@@ -726,38 +726,38 @@ module.exports = {
           hours,
           maxBattles,
         );
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         const exp = `<t:${Math.floor(Number(r.offerExpiresAt))}:R>`;
         return interaction.editReply({
           content: `Lend **#${r.lendId}** proposed to ${borrower}. They \`/tcg lend accept lend_id:${r.lendId}\`. Offer expires ${exp}.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'accept') {
         const lendId = interaction.options.getInteger('lend_id', true);
         const r = await tcgLend.acceptLendOffer(client, discordUser, lendId);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         return interaction.editReply({
           content: `Lend **#${lendId}** active — your temp copy is **#${r.borrowerCopyId}** (equip for PvE). Ends <t:${r.loanEndAt}:R>.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'return') {
         const lendId = interaction.options.getInteger('lend_id', true);
         const r = await tcgLend.returnBorrowedCard(client, discordUser, lendId);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
-        return interaction.editReply({ content: `Lend **#${lendId}** — card returned to owner.`, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ content: `Lend **#${lendId}** — card returned to owner.`, flags: MessageFlags.Ephemeral });
       }
       if (sub === 'recall') {
         const lendId = interaction.options.getInteger('lend_id', true);
         const r = await tcgLend.recallLendWithToken(client, discordUser, lendId);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
-        return interaction.editReply({ content: `Recall Token used — lend **#${lendId}** ended.`, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ content: `Recall Token used — lend **#${lendId}** ended.`, flags: MessageFlags.Ephemeral });
       }
       if (sub === 'list') {
         const out = await tcgLend.listMyLends(client, discordUser);
         if (!out.rows.length) {
-          return interaction.editReply({ content: 'No pending or active lends.', ephemeral: true });
+          return interaction.editReply({ content: 'No pending or active lends.', flags: MessageFlags.Ephemeral });
         }
         const lines = out.rows.map((row) => {
           const st = row.status;
@@ -772,9 +772,9 @@ module.exports = {
               : '';
           return `**#${row.lend_id}** ${who} **${row.card_name}** (${row.rarity}) · **${st}**${cap}${end}`;
         });
-        return interaction.editReply({ content: lines.join('\n'), ephemeral: true });
+        return interaction.editReply({ content: lines.join('\n'), flags: MessageFlags.Ephemeral });
       }
-      return interaction.editReply({ content: 'Unknown lend subcommand.', ephemeral: true });
+      return interaction.editReply({ content: 'Unknown lend subcommand.', flags: MessageFlags.Ephemeral });
     }
 
     if (subcommandGroup === 'expedition') {
@@ -783,23 +783,23 @@ module.exports = {
         const region = interaction.options.getInteger('region', true);
         const type = interaction.options.getString('type', true);
         const r = await tcgExpeditions.sendExpedition(client, discordUser, instance, region, type);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         return interaction.editReply({
           content: `Expedition **#${r.expeditionId}** started — returns <t:${r.returnsAt}:R> (~${formatDuration(r.durationSec)}).`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'list') {
         const r = await tcgExpeditions.listExpeditions(client, discordUser);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         if (!r.rows.length) {
-          return interaction.editReply({ content: 'No active expeditions.', ephemeral: true });
+          return interaction.editReply({ content: 'No active expeditions.', flags: MessageFlags.Ephemeral });
         }
         const lines = r.rows.map((x) => {
           const back = Number(x.returns_at) <= Math.floor(Date.now() / 1000) ? ' **READY**' : '';
           return `**#${x.expedition_id}** · ${x.name} (${x.rarity}) · R${x.region} · ${x.expedition_type} · <t:${x.returns_at}:R>${back}`;
         });
-        return interaction.editReply({ content: lines.join('\n'), ephemeral: true });
+        return interaction.editReply({ content: lines.join('\n'), flags: MessageFlags.Ephemeral });
       }
       if (sub === 'claim') {
         const idOpt = interaction.options.getInteger('id');
@@ -807,19 +807,19 @@ module.exports = {
         if (exId == null) {
           const r0 = await tcgExpeditions.listExpeditions(client, discordUser);
           if (!r0.ok || !r0.rows.length) {
-            return interaction.editReply({ content: 'No expedition to claim.', ephemeral: true });
+            return interaction.editReply({ content: 'No expedition to claim.', flags: MessageFlags.Ephemeral });
           }
           exId = r0.rows[0].expedition_id;
         }
         const r = await tcgExpeditions.claimExpedition(client, discordUser, exId);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         const parts = [`**+${r.gold}**g`, `**+${r.xp}** XP`];
         if (r.shards) parts.push(`**+${r.shards}** shards`);
         if (r.diamonds) parts.push(`**+${r.diamonds}** diamonds`);
         if (r.rubies) parts.push(`**+${r.rubies}** rubies`);
-        return interaction.editReply({ content: `Claimed: ${parts.join(' · ')}.`, ephemeral: true });
+        return interaction.editReply({ content: `Claimed: ${parts.join(' · ')}.`, flags: MessageFlags.Ephemeral });
       }
-      return interaction.editReply({ content: 'Unknown expedition subcommand.', ephemeral: true });
+      return interaction.editReply({ content: 'Unknown expedition subcommand.', flags: MessageFlags.Ephemeral });
     }
 
     if (subcommandGroup === 'craft') {
@@ -831,7 +831,7 @@ module.exports = {
           fusionCatalyst: useCatalyst,
         });
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         let extra = '';
         if (result.rarityDust?.upgraded) {
@@ -844,7 +844,7 @@ module.exports = {
         }
         return interaction.editReply({
           content: `Fused into one **Lv${result.newLevel}** copy (**#${result.userCardId}**).${extra}`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'rarity_fuse') {
@@ -854,18 +854,18 @@ module.exports = {
           interaction.options.getInteger('third'),
         ].filter((n) => n != null && n > 0);
         const r = await tcgFusion.attemptRarityFusion(client, discordUser, ids);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         if (!r.success) {
           return interaction.editReply({
             content: `${r.message} Pity **${r.attemptsNow} / ${tcgFusion.FUSION_PITY_FORCE}**.`,
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
         const t = r.template;
         const el = t.element ? DISPLAY_LABEL[t.element] || t.element : '—';
         return interaction.editReply({
           content: `**Rarity fuse success**${r.forcedPity ? ' _(pity)_' : ''}! **${t.name}** · ${t.rarity} · ${el} · copy **#${r.userCardId}**`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'forge') {
@@ -876,88 +876,88 @@ module.exports = {
           .map((s) => Number(s.trim()))
           .filter((n) => Number.isFinite(n) && n > 0);
         const r = await tcgForge.forgeCards(client, discordUser, ids, mode);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
-        return interaction.editReply({ content: r.summary, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ content: r.summary, flags: MessageFlags.Ephemeral });
       }
       if (sub === 'regrade') {
         const instanceId = interaction.options.getInteger('instance', true);
         const fb = interaction.options.getBoolean('shard_fallback') ?? false;
         const r = await tcgRegrade.attemptRegrade(client, discordUser, instanceId, fb);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         if (!r.success) {
           return interaction.editReply({
             content: `Regrade **failed**. Pity **${r.pityNow} / ${tcgRegrade.PITY_FORCE}**. Resources spent.`,
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
         return interaction.editReply({
           content: `**Grade → ${r.newGrade}**! (paid shards **${r.paid.shards}** · diamonds **${r.paid.diamonds}** · rubies **${r.paid.rubies}**)`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'breakdown') {
         const instanceId = interaction.options.getInteger('instance', true);
         const result = await tcgInventory.breakdownInstance(client, discordUser, instanceId);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `Breakdown **${result.templateName}**: **+${result.gold}**g (total **${result.newGold.toLocaleString()}**g).`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'seal') {
         const instanceId = interaction.options.getInteger('instance', true);
         const result = await tcgInventory.applyPreservationSeal(client, discordUser, instanceId);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `Preservation Seal applied to **#${instanceId}**. **${result.sealsLeft}** seal charge(s) left.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'reroll') {
         const instanceId = interaction.options.getInteger('instance', true);
         const result = await tcgInventory.rerollElement(client, discordUser, instanceId);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `Paid **${result.cost}**g → new element **${result.elementLabel}**. Remaining gold: **${result.newGold.toLocaleString()}**g.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'anchor') {
         const instanceId = interaction.options.getInteger('instance', true);
         const result = await tcgInventory.applyElementAnchor(client, discordUser, instanceId);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `**Element locked** on **#${instanceId}**. Anchor charges left: **${result.chargesLeft}**.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'frame') {
         const instanceId = interaction.options.getInteger('instance', true);
         const result = await tcgInventory.applyGoldenFrame(client, discordUser, instanceId);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `**Golden frame** applied to **#${instanceId}**. Frame charges left: **${result.chargesLeft}**.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
-      return interaction.editReply({ content: 'Unknown craft subcommand.', ephemeral: true });
+      return interaction.editReply({ content: 'Unknown craft subcommand.', flags: MessageFlags.Ephemeral });
     }
 
     if (subcommandGroup === 'account') {
       if (sub === 'balance') {
         const bal = await tcgEconomy.getTcgBalance(client, discordUser);
         if (!bal) {
-          return interaction.editReply({ content: 'Could not load your profile.', ephemeral: true });
+          return interaction.editReply({ content: 'Could not load your profile.', flags: MessageFlags.Ephemeral });
         }
         const owned = await tcgInventory.countInventoryForDiscordUser(client, discordUser);
         const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
@@ -1091,17 +1091,17 @@ module.exports = {
             { name: 'Status', value: dailyLine, inline: false },
           )
           .setColor(0x5865f2);
-        return interaction.editReply({ embeds: [embed], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
       if (sub === 'convert') {
         const xp = interaction.options.getInteger('xp', true);
         const result = await tcgEconomy.convertXpToGold(client, discordUser, xp);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `Converted **${xp}** XP → **${result.goldGained}**g. You now have **${result.newGold.toLocaleString()}**g and **${result.newXp}** XP.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'daily') {
@@ -1110,25 +1110,25 @@ module.exports = {
           if (result.error === 'cooldown') {
             return interaction.editReply({
               content: `Daily already claimed. Try again in **${formatDuration(result.remainingSec)}**.`,
-              ephemeral: true,
+              flags: MessageFlags.Ephemeral,
             });
           }
-          return interaction.editReply({ content: result.error || 'Could not claim daily.', ephemeral: true });
+          return interaction.editReply({ content: result.error || 'Could not claim daily.', flags: MessageFlags.Ephemeral });
         }
         const bal = await tcgEconomy.getTcgBalance(client, discordUser);
         return interaction.editReply({
           content: `**+${result.xpGained}** daily login XP. You now have **${bal.xp}** XP.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
-      return interaction.editReply({ content: 'Unknown account subcommand.', ephemeral: true });
+      return interaction.editReply({ content: 'Unknown account subcommand.', flags: MessageFlags.Ephemeral });
     }
 
     if (subcommandGroup === 'squad') {
       if (sub === 'show') {
         const detail = await tcgLoadout.getLoadoutDetail(client, discordUser);
         if (!detail) {
-          return interaction.editReply({ content: 'Could not load loadout.', ephemeral: true });
+          return interaction.editReply({ content: 'Could not load loadout.', flags: MessageFlags.Ephemeral });
         }
         const fmt = (c, label, rawId) => {
           if (rawId && !c) {
@@ -1153,7 +1153,7 @@ module.exports = {
           )
           .setFooter({ text: '/tcg squad synergy — optional enemy_element for Counter Build' })
           .setColor(0x9b59b6);
-        return interaction.editReply({ embeds: [embed], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
       if (sub === 'synergy') {
         const enemyOpt = interaction.options.getString('enemy_element');
@@ -1163,13 +1163,13 @@ module.exports = {
         if (!detail || !detail.row.main_user_card_id) {
           return interaction.editReply({
             content: 'Equip a **main** card first (`/tcg squad equip`).',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
 
         const summary = await tcgPve.getProgressSummary(client, discordUser);
         if (!summary) {
-          return interaction.editReply({ content: 'Could not load PvE progress.', ephemeral: true });
+          return interaction.editReply({ content: 'Could not load PvE progress.', flags: MessageFlags.Ephemeral });
         }
 
         const loadout = {
@@ -1211,29 +1211,29 @@ module.exports = {
           )
           .setFooter({ text: '/tcg pve fight uses the PvE column; /tcg pve spar uses the Spar column.' })
           .setColor(0x9b59b6);
-        return interaction.editReply({ embeds: [embed], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
       if (sub === 'equip') {
         const slot = interaction.options.getString('slot', true);
         const instanceId = interaction.options.getInteger('instance', true);
         const result = await tcgLoadout.setLoadoutSlot(client, discordUser, slot, instanceId);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `Equipped copy **#${instanceId}** as **${slot}**.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'unequip') {
         const slot = interaction.options.getString('slot', true);
         const result = await tcgLoadout.setLoadoutSlot(client, discordUser, slot, null);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
-        return interaction.editReply({ content: `Cleared **${slot}**.`, ephemeral: true });
+        return interaction.editReply({ content: `Cleared **${slot}**.`, flags: MessageFlags.Ephemeral });
       }
-      return interaction.editReply({ content: 'Unknown squad subcommand.', ephemeral: true });
+      return interaction.editReply({ content: 'Unknown squad subcommand.', flags: MessageFlags.Ephemeral });
     }
 
     if (subcommandGroup === 'pvp') {
@@ -1241,21 +1241,21 @@ module.exports = {
         const opponent = interaction.options.getUser('opponent', true);
         const wager = interaction.options.getInteger('wager') ?? 0;
         const r = await tcgPvp.createChallenge(client, discordUser, opponent, wager);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         const exp = `<t:${Math.floor(Number(r.acceptDeadline))}:R>`;
         return interaction.editReply({
           content: `PvP **#${r.sessionId}** — **${wager}**g wager. ${opponent}: \`/tcg pvp accept session_id:${r.sessionId}\`. Expires ${exp}.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'accept') {
         const sessionId = interaction.options.getInteger('session_id', true);
         const r = await tcgPvp.acceptChallenge(client, discordUser, sessionId);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         const pd = `<t:${Math.floor(Number(r.pickDeadline))}:R>`;
         return interaction.editReply({
           content: `Accepted — both stakes locked. Pick **ephemerally**: \`/tcg pvp pick session_id:${sessionId} instance:<your copy>\`. Deadline ${pd}.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'pick') {
@@ -1263,9 +1263,9 @@ module.exports = {
         const sessionId = interaction.options.getInteger('session_id', true);
         const instance = interaction.options.getInteger('instance', true);
         const r = await tcgPvp.submitPick(client, discordUser, sessionId, instance);
-        if (!r.ok) return interaction.editReply({ content: r.error, ephemeral: true });
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         if (r.waitingForOpponent) {
-          return interaction.editReply({ content: 'Pick locked — waiting for opponent.', ephemeral: true });
+          return interaction.editReply({ content: 'Pick locked — waiting for opponent.', flags: MessageFlags.Ephemeral });
         }
         const sim = r.sim;
         const logText = sim.log.slice(0, 14).join('\n') || '—';
@@ -1291,12 +1291,12 @@ module.exports = {
             `**${r.challengerLabel}** vs **${r.targetLabel}**\n${sim.elementSummary}\n\n${logText}${sim.log.length > 14 ? '\n…' : ''}\n\n${potLine}`,
           )
           .setColor(color);
-        return interaction.editReply({ embeds: [embed], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
       if (sub === 'list') {
         const rows = await tcgPvp.listMyPendingPvp(client, discordUser);
         if (!rows.length) {
-          return interaction.editReply({ content: 'No pending PvP sessions.', ephemeral: true });
+          return interaction.editReply({ content: 'No pending PvP sessions.', flags: MessageFlags.Ephemeral });
         }
         const uid = await tcgEconomy.getInternalUserId(discordUser.id);
         const lines = await Promise.all(
@@ -1312,16 +1312,16 @@ module.exports = {
             return `**#${s.session_id}** · **${w}**g · pick phase · <t:${s.pick_deadline}:R>`;
           }),
         );
-        return interaction.editReply({ content: lines.join('\n'), ephemeral: true });
+        return interaction.editReply({ content: lines.join('\n'), flags: MessageFlags.Ephemeral });
       }
-      return interaction.editReply({ content: 'Unknown pvp subcommand.', ephemeral: true });
+      return interaction.editReply({ content: 'Unknown pvp subcommand.', flags: MessageFlags.Ephemeral });
     }
 
     if (subcommandGroup === 'staff') {
       if (!isStaff(client, interaction)) {
         return interaction.editReply({
           content: 'Only staff can use **`/tcg staff`** commands.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'grant') {
@@ -1329,11 +1329,11 @@ module.exports = {
         const uuid = interaction.options.getString('uuid', true);
         const result = await tcgInventory.grantCardToPlayer(client, target, { uuid });
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `Granted **${result.template.name}** (${result.template.rarity}, ${result.template.element || '—'}) to ${target} — copy **#${result.userCardId}**, ability **${result.ability_key}**.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'set_signature') {
@@ -1344,21 +1344,21 @@ module.exports = {
           out = await tcgSetProgress.upsertCatalogSignature(trx, memberDid, abilityKey);
         });
         if (!out.ok) {
-          return interaction.editReply({ content: out.error, ephemeral: true });
+          return interaction.editReply({ content: out.error, flags: MessageFlags.Ephemeral });
         }
         return interaction.editReply({
           content: `Catalog **6/6** signature for member \`${out.member_discord_id}\`: **${out.ability_key}** (Mythic battles use this before random Tier 4).`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
-      return interaction.editReply({ content: 'Unknown staff subcommand.', ephemeral: true });
+      return interaction.editReply({ content: 'Unknown staff subcommand.', flags: MessageFlags.Ephemeral });
     }
 
     if (subcommandGroup === 'pve') {
       if (sub === 'progress') {
         const s = await tcgPve.getProgressSummary(client, discordUser);
         if (!s) {
-          return interaction.editReply({ content: 'Could not load PvE progress.', ephemeral: true });
+          return interaction.editReply({ content: 'Could not load PvE progress.', flags: MessageFlags.Ephemeral });
         }
         const need = s.battlesRequired;
         const wins = Number(s.wins_in_tier);
@@ -1380,14 +1380,14 @@ module.exports = {
             text: 'Battle boss wins can drop a random pool card (40% / 5% dupe; 11th forces). Tier-boss fights later.',
           })
           .setColor(0x3498db);
-        return interaction.editReply({ embeds: [embed], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
       if (sub === 'travel') {
         const region = interaction.options.getInteger('region', true);
         const tierOpt = interaction.options.getInteger('tier');
         const t = await tcgPve.travelTo(client, discordUser, { region, tier: tierOpt });
         if (!t.ok) {
-          return interaction.editReply({ content: t.error, ephemeral: true });
+          return interaction.editReply({ content: t.error, flags: MessageFlags.Ephemeral });
         }
         const need = battlesRequiredForTier(t.progress.current_tier);
         const embed = new EmbedBuilder()
@@ -1398,12 +1398,12 @@ module.exports = {
               + 'Win streak was reset. Use `/tcg pve fight` to continue.',
           )
           .setColor(0x3498db);
-        return interaction.editReply({ embeds: [embed], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
       if (sub === 'fight') {
         const result = await tcgPve.runPveFight(client, discordUser);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         const {
           sim,
@@ -1538,12 +1538,12 @@ module.exports = {
                 : []),
           )
           .setColor(won ? 0x57f287 : 0xed4245);
-        return interaction.editReply({ embeds: [embed], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
       if (sub === 'spar') {
         const result = await tcgSpar.runSpar(client, discordUser);
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
         const {
           sim,
@@ -1591,9 +1591,9 @@ module.exports = {
                 : []),
           )
           .setColor(won ? 0x57f287 : 0xed4245);
-        return interaction.editReply({ embeds: [embed], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
-      return interaction.editReply({ content: 'Unknown pve subcommand.', ephemeral: true });
+      return interaction.editReply({ content: 'Unknown pve subcommand.', flags: MessageFlags.Ephemeral });
     }
 
     if (subcommandGroup === 'store') {
@@ -1610,14 +1610,14 @@ module.exports = {
             return interaction.editReply({
               content:
                 '**Region pack:** set **region** to **1–6** (Home Turf — matches catalog `tcg_region`).',
-              ephemeral: true,
+              flags: MessageFlags.Ephemeral,
             });
           }
           result = await tcgPacks.buyRegionPack(client, discordUser, region);
-        } else return interaction.editReply({ content: 'Unknown pack type.', ephemeral: true });
+        } else return interaction.editReply({ content: 'Unknown pack type.', flags: MessageFlags.Ephemeral });
 
         if (!result.ok) {
-          return interaction.editReply({ content: result.error, ephemeral: true });
+          return interaction.editReply({ content: result.error, flags: MessageFlags.Ephemeral });
         }
 
         const lines = formatTcgPullLines(result.pulls);
@@ -1721,7 +1721,7 @@ module.exports = {
           )
           .setFooter({ text: footer })
           .setColor(color);
-        return interaction.editReply({ embeds: [embed], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
 
       if (sub === 'card') {
@@ -1737,7 +1737,7 @@ module.exports = {
           elementOpt,
         );
         if (!directResult.ok) {
-          return interaction.editReply({ content: directResult.error, ephemeral: true });
+          return interaction.editReply({ content: directResult.error, flags: MessageFlags.Ephemeral });
         }
         const g = directResult.grant;
         const meta = g.template;
@@ -1748,7 +1748,7 @@ module.exports = {
             : '';
         return interaction.editReply({
           content: `**−${directResult.cost}**g · **${directResult.newGold.toLocaleString()}**g remaining\n**${meta.name}** · ${meta.rarity} · ${el} · copy **#${g.userCardId}**${poolHint}`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -1770,14 +1770,14 @@ module.exports = {
           .setDescription(`${lines.join('\n\n')}\n\n${featBlock}\n\nRotating items: \`/tcg store buy\`.`)
           .setFooter({ text: `UTC date: ${snap.dayUtc} · Resets midnight UTC · [CardSystem.md] Item Shop` })
           .setColor(0x3498db);
-        return interaction.editReply({ embeds: [embed], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
 
       if (sub === 'buy') {
         const item = interaction.options.getString('item', true);
         const buyResult = await tcgShop.buyShopItem(client, discordUser, item);
         if (!buyResult.ok) {
-          return interaction.editReply({ content: buyResult.error, ephemeral: true });
+          return interaction.editReply({ content: buyResult.error, flags: MessageFlags.Ephemeral });
         }
         const bonusLine =
           buyResult.bonusSlotsAdded > 0
@@ -1796,7 +1796,7 @@ module.exports = {
             : '';
         return interaction.editReply({
           content: `**${buyResult.label}** — **−${buyResult.cost}**g · **${buyResult.newGold.toLocaleString()}**g remaining${bonusLine}${chargeLine}${dustLine}${xpLine}`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -1804,7 +1804,7 @@ module.exports = {
         const metaKey = client.config.tcg?.metaSeasonKey || 's0';
         const r = await tcgFeaturedShop.buyFeaturedOffer(client, discordUser, metaKey);
         if (!r.ok) {
-          return interaction.editReply({ content: r.error, ephemeral: true });
+          return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         }
         const disc = r.pool === 'A' && r.discount != null ? ` (**${r.discount}%** off)` : '';
         const ex =
@@ -1813,11 +1813,11 @@ module.exports = {
             : '';
         return interaction.editReply({
           content: `**${r.label}**${disc} — **−${r.cost}**g · **${r.newGold.toLocaleString()}**g remaining.${ex}`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
-      return interaction.editReply({ content: 'Unknown store subcommand.', ephemeral: true });
+      return interaction.editReply({ content: 'Unknown store subcommand.', flags: MessageFlags.Ephemeral });
     }
 
     if (sub === 'inventory') {
@@ -1831,7 +1831,7 @@ module.exports = {
       if (!total) {
         return interaction.editReply({
           content: `No cards yet. Open a **Basic Pack** with \`/tcg store pack\` or ask staff for \`/tcg staff grant\`.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       const lines = rows.map((r) => {
@@ -1847,14 +1847,14 @@ module.exports = {
         .setDescription(`${total} copies total\n\n${lines.join('\n')}`)
         .setFooter({ text: 'Use /tcg view instance:<id> for details' })
         .setColor(0x57f287);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
+      return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     }
 
     if (sub === 'view') {
       const instanceId = interaction.options.getInteger('instance', true);
       const row = await tcgInventory.getInstanceDetailForOwner(client, discordUser, instanceId);
       if (!row) {
-        return interaction.editReply({ content: 'Copy not found (wrong ID or not yours).', ephemeral: true });
+        return interaction.editReply({ content: 'Copy not found (wrong ID or not yours).', flags: MessageFlags.Ephemeral });
       }
       const el = row.element ? (DISPLAY_LABEL[row.element] || row.element) : 'N/A';
       const ab = row.ability_key ? String(row.ability_key).replace(/_/g, ' ') : 'N/A';
@@ -1902,14 +1902,14 @@ module.exports = {
         )
         .setImage(row.image_url || null)
         .setColor(goldenFrame ? 0xf1c40f : 0x5865f2);
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
+      return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     }
 
     if (sub === 'titles') {
       await client.db.checkUser(discordUser);
       const internalId = await tcgEconomy.getInternalUserId(discordUser.id);
       if (!internalId) {
-        return interaction.editReply({ content: 'Profile not found.', ephemeral: true });
+        return interaction.editReply({ content: 'Profile not found.', flags: MessageFlags.Ephemeral });
       }
       await tcgSetProgress.syncTitleUnlocks(db.query, internalId);
       const rows = await tcgSetProgress.listUnlockedTitles(internalId);
@@ -1917,17 +1917,17 @@ module.exports = {
         return interaction.editReply({
           content:
             'No set titles yet. Own **3+ different rarities** of the same member to unlock a cosmetic title ([CardSystem.md] Set Collection).',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       const lines = rows.slice(0, 35).map((r) => `• **${r.display_title}**`);
       const more = rows.length > 35 ? `\n_…and ${rows.length - 35} more._` : '';
       return interaction.editReply({
         content: `**Set titles** (${rows.length})\n${lines.join('\n')}${more}`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
-    return interaction.editReply({ content: 'Unknown subcommand.', ephemeral: true });
+    return interaction.editReply({ content: 'Unknown subcommand.', flags: MessageFlags.Ephemeral });
   },
 };

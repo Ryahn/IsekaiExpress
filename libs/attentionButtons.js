@@ -1,4 +1,4 @@
-const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
 
 async function denyButton(interaction, text) {
@@ -8,7 +8,7 @@ async function denyButton(interaction, text) {
     /* ignore */
   }
   try {
-    await interaction.followUp({ content: text, ephemeral: true });
+    await interaction.followUp({ content: text, flags: MessageFlags.Ephemeral });
   } catch (_) {
     /* ignore */
   }
@@ -78,7 +78,7 @@ async function handleAttentionButton(client, interaction) {
   const affected = await client.db.claimAttentionRequestStatus(id, status, interaction.user.id);
   if (affected !== 1) {
     await interaction.deferUpdate().catch(() => {});
-    await interaction.followUp({ content: 'This request was already resolved.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'This request was already resolved.', flags: MessageFlags.Ephemeral }).catch(() => {});
     return true;
   }
 
