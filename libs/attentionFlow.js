@@ -11,6 +11,8 @@ const {
   PermissionFlagsBits,
 } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
+const { shortenAttentionUrls } = require('./zurlShorten');
+const { normalizeF95AttentionUrl, validateAttentionHttpUrls } = require('./f95UrlNormalize');
 
 const MAX_URL = 2000;
 const MAX_TEXT = 4000;
@@ -136,6 +138,7 @@ function buildAttentionModal(lane, requestType, includeExtra) {
         new TextInputBuilder()
           .setCustomId('attention_thread')
           .setLabel('Thread URL')
+          .setPlaceholder('https://... or e.g. /threads/game.thread/')
           .setStyle(TextInputStyle.Paragraph)
           .setMinLength(4)
           .setMaxLength(MAX_URL)
@@ -147,6 +150,7 @@ function buildAttentionModal(lane, requestType, includeExtra) {
         new TextInputBuilder()
           .setCustomId('attention_ticket')
           .setLabel('Ticket URL')
+          .setPlaceholder('https://... or e.g. /tickets/xx.xx/')
           .setStyle(TextInputStyle.Paragraph)
           .setMinLength(4)
           .setMaxLength(MAX_URL)
@@ -159,6 +163,7 @@ function buildAttentionModal(lane, requestType, includeExtra) {
         new TextInputBuilder()
           .setCustomId('attention_thread')
           .setLabel('Thread URL')
+          .setPlaceholder('https://... or e.g. /threads/game.thread/')
           .setStyle(TextInputStyle.Paragraph)
           .setMinLength(4)
           .setMaxLength(MAX_URL)
@@ -171,6 +176,7 @@ function buildAttentionModal(lane, requestType, includeExtra) {
         new TextInputBuilder()
           .setCustomId('attention_member')
           .setLabel('Member profile URL')
+          .setPlaceholder('https://... or e.g. /members/user.member/')
           .setStyle(TextInputStyle.Paragraph)
           .setMinLength(4)
           .setMaxLength(MAX_URL)
@@ -359,6 +365,20 @@ async function handleAttentionModalSubmit(client, interaction) {
   } else {
     return interaction.editReply({ content: 'Unknown request type.' });
   }
+
+  if (threadUrl) threadUrl = normalizeF95AttentionUrl(threadUrl);
+  if (ticketUrl) ticketUrl = normalizeF95AttentionUrl(ticketUrl);
+  if (profileUrl) profileUrl = normalizeF95AttentionUrl(profileUrl);
+
+  const urlValidationError = validateAttentionHttpUrls(requestType, { threadUrl, ticketUrl, profileUrl });
+  if (urlValidationError) {
+    return interaction.editReply({ content: urlValidationError });
+  }
+
+  const shortened = await shortenAttentionUrls(client, { threadUrl, ticketUrl, profileUrl });
+  threadUrl = shortened.threadUrl;
+  ticketUrl = shortened.ticketUrl;
+  profileUrl = shortened.profileUrl;
 
   const cfg = await client.db.getGuildConfigurable(interaction.guildId);
   const destId = cfg?.attention_channel_id != null ? String(cfg.attention_channel_id).trim() : '';

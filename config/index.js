@@ -155,6 +155,11 @@ module.exports = {
     trialmod: str('ROLE_TRIALMOD', ''),
   },
 
+  /** zurl.zonies.xyz — shortens /attention thread, ticket, and member profile URLs when set. */
+  zurl: {
+    apiKey: str('ZONIE_API_KEY', ''),
+  },
+
   emojis: {
     type: str('EMOJI_TYPE', '🃏'),
     level: str('EMOJI_LEVEL', '⭐'),
