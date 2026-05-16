@@ -4,7 +4,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
-const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
+const { hasGuildAdminOrStaffRole, hasGuildAdminOrModRole } = require('../src/bot/utils/guildPrivileges');
 const { withModLogRolePing } = require('./modLogNotify');
 
 const INVITE_REGEX =
@@ -133,22 +133,23 @@ function buildEvidenceEmbed(message, matchedOn) {
     .setTimestamp();
 }
 
-async function enforceBlacklist(client, message, matchedOn, staffRoleId) {
+async function enforceBlacklist(client, message, matchedOn, staffRoleId, modRoleId) {
   const guild = message.guild;
   const cfg = await client.db.getGuildConfigurable(guild.id);
   const logChannelId = cfg?.modLogId;
   const member = await guild.members.fetch(message.author.id).catch(() => null);
   const isStaff = hasGuildAdminOrStaffRole(member, staffRoleId);
+  const isMod = hasGuildAdminOrModRole(member, staffRoleId, modRoleId);
 
   const embed = buildEvidenceEmbed(message, matchedOn);
 
-  if (isStaff) {
+  if (isStaff || isMod) {
     if (logChannelId) {
       const ch = guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
         await ch.send(
           withModLogRolePing(cfg, {
-            content: 'Staff posted blacklisted invite — no ban applied.',
+            content: 'Staff/mod posted blacklisted invite — no ban applied.',
             embeds: [embed],
           }),
         );
@@ -249,7 +250,7 @@ function buildQueueEmbed({
  * @param {import('discord.js').Message<boolean>} message
  * @param {string} staffRoleId
  */
-async function processMemberMessageInvites(client, message, staffRoleId) {
+async function processMemberMessageInvites(client, message, staffRoleId, modRoleId) {
   const codes = extractInviteCodes(message.content);
   if (!codes.length) return;
 
@@ -263,7 +264,7 @@ async function processMemberMessageInvites(client, message, staffRoleId) {
     return;
   }
 
-  if (hasGuildAdminOrStaffRole(member, staffRoleId)) {
+  if (hasGuildAdminOrStaffRole(member, staffRoleId) || hasGuildAdminOrModRole(member, staffRoleId, modRoleId)) {
     for (const code of codes) {
       const resolved = await resolveInvite(client, code);
       await auditStaffInvite(client, message, code, resolved);
@@ -279,11 +280,11 @@ async function processMemberMessageInvites(client, message, staffRoleId) {
 
   for (const { code, resolved } of resolvedList) {
     if (await isBlacklistedCode(db, code)) {
-      await enforceBlacklist(client, message, `code:${code}`, staffRoleId);
+      await enforceBlacklist(client, message, `code:${code}`, staffRoleId, modRoleId);
       return;
     }
     if (resolved.guildId && (await isBlacklistedGuild(db, resolved.guildId))) {
-      await enforceBlacklist(client, message, `guild:${resolved.guildId}`, staffRoleId);
+      await enforceBlacklist(client, message, `guild:${resolved.guildId}`, staffRoleId, modRoleId);
       return;
     }
   }

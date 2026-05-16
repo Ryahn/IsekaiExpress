@@ -3,7 +3,7 @@ const axios = require('axios');
 const sharp = require('sharp');
 const imghash = require('imghash');
 const { createWorker } = require('tesseract.js');
-const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
+const { hasGuildAdminOrStaffRole, hasGuildAdminOrModRole } = require('../src/bot/utils/guildPrivileges');
 const { extractHttpUrls, getBlacklistedLinkHostsList, hostMatchesBlacklistedDomain } = require('./scamLinkPolicy');
 const { normalizeBlacklistedLinkHost } = require('./blacklistedLinkHostNormalize');
 const { withModLogRolePing } = require('./modLogNotify');
@@ -346,17 +346,18 @@ function buildScamImageEvidenceEmbed(message, scanResult, attachmentIndex, attac
 /**
  * Ban + mod log (staff: log only), mirroring invite enforceBlacklist.
  */
-async function enforceScamImage(client, message, staffRoleId, scanResult, attachmentIndex, attachmentUrl) {
+async function enforceScamImage(client, message, staffRoleId, modRoleId, scanResult, attachmentIndex, attachmentUrl) {
   const guild = message.guild;
   if (!guild) return;
   const cfg = await client.db.getGuildConfigurable(guild.id);
   const logChannelId = cfg?.modLogId;
   const member = await guild.members.fetch(message.author.id).catch(() => null);
   const isStaff = hasGuildAdminOrStaffRole(member, staffRoleId);
+  const isMod = hasGuildAdminOrModRole(member, staffRoleId, modRoleId);
 
   const embed = buildScamImageEvidenceEmbed(message, scanResult, attachmentIndex, attachmentUrl);
 
-  if (isStaff) {
+  if (isStaff || isMod) {
     if (logChannelId) {
       const ch =
         guild.channels.cache.get(logChannelId) ||
@@ -364,7 +365,7 @@ async function enforceScamImage(client, message, staffRoleId, scanResult, attach
       if (ch && ch.isTextBased()) {
         await ch.send(
           withModLogRolePing(cfg, {
-            content: 'Staff posted scam-pattern image — no ban applied.',
+            content: 'Staff/mod posted scam-pattern image — no ban applied.',
             embeds: [embed],
           }),
         );

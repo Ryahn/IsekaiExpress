@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
+const { hasGuildAdminOrStaffRole, hasGuildAdminOrModRole } = require('../src/bot/utils/guildPrivileges');
 const { normalizeBlacklistedLinkHost } = require('./blacklistedLinkHostNormalize');
 const { withModLogRolePing } = require('./modLogNotify');
 
@@ -94,23 +94,24 @@ function buildLinkEvidenceEmbed(message, matchedOn) {
  * @param {import('discord.js').Message} message
  * @param {string} staffRoleId
  */
-async function enforceScamLink(client, message, matchedOn, staffRoleId) {
+async function enforceScamLink(client, message, matchedOn, staffRoleId, modRoleId) {
   const guild = message.guild;
   if (!guild) return;
   const cfg = await client.db.getGuildConfigurable(guild.id);
   const logChannelId = cfg?.modLogId;
   const member = await guild.members.fetch(message.author.id).catch(() => null);
   const isStaff = hasGuildAdminOrStaffRole(member, staffRoleId);
+  const isMod = hasGuildAdminOrModRole(member, staffRoleId, modRoleId);
 
   const embed = buildLinkEvidenceEmbed(message, matchedOn);
 
-  if (isStaff) {
+  if (isStaff || isMod) {
     if (logChannelId) {
       const ch = guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
         await ch.send(
           withModLogRolePing(cfg, {
-            content: 'Staff posted a blacklisted link — no ban applied.',
+            content: 'Staff/mod posted a blacklisted link — no ban applied.',
             embeds: [embed],
           }),
         );
@@ -148,7 +149,7 @@ async function enforceScamLink(client, message, matchedOn, staffRoleId) {
  * @param {import('discord.js').Message<boolean>} message
  * @param {string} staffRoleId
  */
-async function processMemberMessageScamLinks(client, message, staffRoleId) {
+async function processMemberMessageScamLinks(client, message, staffRoleId, modRoleId) {
   const urls = extractHttpUrls(message.content);
   if (!urls.length) return;
 
@@ -168,7 +169,7 @@ async function processMemberMessageScamLinks(client, message, staffRoleId) {
 
     if (shouldSkipLinkDedupe(message.guild.id, message.author.id, `link:${matched}`)) return;
 
-    await enforceScamLink(client, message, `url blocked (${matched})`, staffRoleId);
+    await enforceScamLink(client, message, `url blocked (${matched})`, staffRoleId, modRoleId);
     return;
   }
 }

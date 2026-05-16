@@ -4,7 +4,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
-const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
+const { hasGuildAdminOrStaffRole, hasGuildAdminOrModRole } = require('../src/bot/utils/guildPrivileges');
 const { scanImageAttachment, enforceScamImage, buildScamImageEvidenceEmbed } = require('./scamImageScan');
 const { withModLogRolePing } = require('./modLogNotify');
 
@@ -141,6 +141,7 @@ async function queueImageReview(client, message, attachments, member, cfg, chId,
           ? 'Scam-scan hit — staff review required'
           : 'Image flagged for review'
         : `Attachment ${i + 1} / ${attachments.length}`;
+    const userFieldValue = message.author.tag + " (`" + message.author.id + "`)";
     const embed = new EmbedBuilder()
       .setTitle(title)
       .setColor(hasScan ? 0xff4500 : 0xffa500)
@@ -148,7 +149,7 @@ async function queueImageReview(client, message, attachments, member, cfg, chId,
       .setTimestamp();
     if (i === 0) {
       embed.addFields(
-        { name: 'User', value: `${message.author.tag} (${message.author.id})` },
+        { name: 'User', value: userFieldValue },
         { name: 'Channel', value: `<#${message.channelId}>` },
         { name: 'Account age (days)', value: String(accountAgeDays) },
         { name: 'Join age (days)', value: String(joinAgeDays) },
@@ -218,7 +219,7 @@ async function queueImageReview(client, message, attachments, member, cfg, chId,
  * If every image scans clean and the user is low-trust but at least one scan failed
  * (timeout/error), queue without scan evidence so staff can sanity-check the gap.
  */
-async function processImageReview(client, message, staffRoleId) {
+async function processImageReview(client, message, staffRoleId, modRoleId) {
   const attachments = listImageAttachments(message);
   if (!attachments.length) return;
 
@@ -226,9 +227,10 @@ async function processImageReview(client, message, staffRoleId) {
   if (!member) return;
 
   const isStaff = hasGuildAdminOrStaffRole(member, staffRoleId);
+  const isMod = hasGuildAdminOrModRole(member, staffRoleId, modRoleId);
   const needsQueue = await shouldFlagImageForReview(client, message, staffRoleId);
 
-  if (!needsQueue && !isStaff) {
+  if (!needsQueue && !isStaff && !isMod) {
     return;
   }
 
@@ -247,8 +249,8 @@ async function processImageReview(client, message, staffRoleId) {
     try {
       const scan = await scanImageAttachment(client, att);
       if (scan.hit) {
-        if (isStaff) {
-          await enforceScamImage(client, message, staffRoleId, scan, i, att.url);
+        if (isStaff || isMod) {
+          await enforceScamImage(client, message, staffRoleId, modRoleId, scan, i, att.url);
           return;
         }
         const shouldQueue = needsQueue || scan.severity === 'review';
@@ -262,7 +264,7 @@ async function processImageReview(client, message, staffRoleId) {
           await queueImageReview(client, message, attachments, member, cfg, chId, { scan, scanIndex: i });
           return;
         }
-        await enforceScamImage(client, message, staffRoleId, scan, i, att.url);
+        await enforceScamImage(client, message, staffRoleId, modRoleId, scan, i, att.url);
         return;
       }
       cleanScansCompleted += 1;

@@ -45,18 +45,19 @@ module.exports = class MessageEvent extends BaseEvent {
             }
 
             const staffRoleId = client.config.roles.staff;
+            const modRoleId = client.config.roles.mod;
             try {
-                await processMemberMessageInvites(client, message, staffRoleId);
+                await processMemberMessageInvites(client, message, staffRoleId, modRoleId);
             } catch (e) {
                 client.logger.error('invitePolicy:', e);
             }
             try {
-                await processMemberMessageScamLinks(client, message, staffRoleId);
+                await processMemberMessageScamLinks(client, message, staffRoleId, modRoleId);
             } catch (e) {
                 client.logger.error('scamLinkPolicy:', e);
             }
             try {
-                await processImageReview(client, message, staffRoleId);
+                await processImageReview(client, message, staffRoleId, modRoleId);
             } catch (e) {
                 client.logger.error('imageReview:', e);
             }
