@@ -1,9 +1,9 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } = require('discord.js');
-const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
+const { hasGuildAdminOrModRole } = require('../src/bot/utils/guildPrivileges');
 const { enforceBlacklist } = require('./invitePolicy');
 
-function isModMember(member, staffRoleId) {
-  return hasGuildAdminOrStaffRole(member, staffRoleId);
+function canModerateQueue(member, staffRoleId, modRoleId) {
+  return hasGuildAdminOrModRole(member, staffRoleId, modRoleId);
 }
 
 async function denyButton(interaction, text) {
@@ -21,8 +21,9 @@ async function denyButton(interaction, text) {
 
 async function handleInviteQueueButton(client, interaction, action, pendingId) {
   const staffRoleId = client.config.roles.staff;
+  const modRoleId = client.config.roles.mod;
   const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-  if (!member || !isModMember(member, staffRoleId)) {
+  if (!member || !canModerateQueue(member, staffRoleId, modRoleId)) {
     return denyButton(interaction, 'You do not have permission to use this action.');
   }
 
@@ -103,7 +104,7 @@ async function handleInviteQueueButton(client, interaction, action, pendingId) {
       channelId: row.channel_id,
       content: row.invite_code,
     };
-    await enforceBlacklist(client, pseudoMessage, `queue blacklist ${row.invite_code}`, staffRoleId);
+    await enforceBlacklist(client, pseudoMessage, `queue blacklist ${row.invite_code}`, staffRoleId, modRoleId);
   }
 
   if (row.queue_message_id) {
@@ -151,8 +152,9 @@ async function annotateQueueMessage(client, channel, queueMessageId, resolutionT
 
 async function handleImageReviewButton(client, interaction, action, pendingId) {
   const staffRoleId = client.config.roles.staff;
+  const modRoleId = client.config.roles.mod;
   const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-  if (!member || !isModMember(member, staffRoleId)) {
+  if (!member || !canModerateQueue(member, staffRoleId, modRoleId)) {
     return denyButton(interaction, 'You do not have permission to use this action.');
   }
 
