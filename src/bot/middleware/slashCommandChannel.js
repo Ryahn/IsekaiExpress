@@ -39,18 +39,20 @@ async function assertSlashCommandChannel(client, interaction, options = {}) {
       return false;
     }
   }
-  const member = await guild.members.fetch(interaction.user.id);
-  const roles = member.roles.cache.map((role) => role.id);
   if (
     allowedChannel.channel_id === 'all' ||
-    allowedChannel.channel_id !== interaction.channelId
+    allowedChannel.channel_id === interaction.channelId
   ) {
-    if (!roles.some((role) => client.allowed?.includes(role))) {
-      await respond({
-        content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`,
-      });
-      return false;
-    }
+    return true;
+  }
+
+  const member = await guild.members.fetch(interaction.user.id);
+  const hasOverrideRole = member.roles.cache.some((role) => client.allowed?.includes(role.id));
+  if (!hasOverrideRole) {
+    await respond({
+      content: `This command is not allowed in this channel. Please use in <#${allowedChannel.channel_id}>`,
+    });
+    return false;
   }
   return true;
 }

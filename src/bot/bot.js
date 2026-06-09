@@ -91,13 +91,17 @@ const client = new BotClient({
 		allowedRoles: new Map(),
 		allowedUsers: new Map(),
 	};
+	const trimRoleId = (id) => (typeof id === 'string' ? id.trim() : '');
 	client.allowed = [
 		config.discord.ownerId,
 		config.roles.mod,
 		config.roles.uploader,
 		config.roles.staff,
 		config.roles.user,
-	];
+		config.roles.trialmod,
+	]
+		.map(trimRoleId)
+		.filter(Boolean);
 	client.guildGlobalLock = new Map();
 	client.customCommandsByHash = new Map();
 	client.customCommandsRevision = 0;

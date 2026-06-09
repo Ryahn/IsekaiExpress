@@ -1,19 +1,12 @@
 const path = require('path');
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
-const { hasGuildAdminOrStaffRole } = require('../../../utils/guildPrivileges');
+const { ChannelType, EmbedBuilder, MessageFlags } = require('discord.js');
+const {
+  canUseAttentionModLane,
+  canUseAttentionStaffLane,
+  hasGuildAdminOrStaffRole,
+} = require('../../../utils/guildPrivileges');
 const { buildAttentionTypeSelectRows } = require('../../../../../libs/attentionFlow');
-
-function canOpenModModal(member, client) {
-  if (!member) return false;
-  if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
-  const mod = typeof client.config?.roles?.mod === 'string' ? client.config.roles.mod.trim() : '';
-  const up =
-    typeof client.config?.roles?.uploader === 'string' ? client.config.roles.uploader.trim() : '';
-  if (mod && member.roles.cache.has(mod)) return true;
-  if (up && member.roles.cache.has(up)) return true;
-  return false;
-}
 
 function typePickerEmbed(lane) {
   const title = lane === 'mod' ? 'Attention (mod queue)' : 'Attention (staff queue)';
@@ -36,10 +29,12 @@ module.exports = {
     .setName('attention')
     .setDescription('Submit or configure attention requests for mod or staff')
     .addSubcommand((sub) =>
-      sub.setName('mod').setDescription('Start an attention request (mod queue; mods and uploaders)'),
+      sub.setName('mod').setDescription('Start an attention request (mod queue; uploaders and trial mods)'),
     )
     .addSubcommand((sub) =>
-      sub.setName('staff').setDescription('Start an attention request (staff queue; staff only)'),
+      sub
+        .setName('staff')
+        .setDescription('Start an attention request (staff queue; staff, mods, uploaders, trial mods)'),
     )
     .addSubcommand((sub) =>
       sub
@@ -89,9 +84,9 @@ module.exports = {
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
 
     if (sub === 'mod') {
-      if (!canOpenModModal(member, client)) {
+      if (!canUseAttentionModLane(member, client.config?.roles)) {
         return interaction.reply({
-          content: 'You need the mod role, uploader role, or Administrator to use the mod queue.',
+          content: 'You need the uploader role, trial mod role, or Administrator to use the mod queue.',
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -103,9 +98,10 @@ module.exports = {
     }
 
     if (sub === 'staff') {
-      if (!hasGuildAdminOrStaffRole(member, client.config.roles.staff)) {
+      if (!canUseAttentionStaffLane(member, client.config?.roles)) {
         return interaction.reply({
-          content: 'You need the staff role or Administrator to use the staff queue.',
+          content:
+            'You need the staff role, mod role, uploader role, trial mod role, or Administrator to use the staff queue.',
           flags: MessageFlags.Ephemeral,
         });
       }

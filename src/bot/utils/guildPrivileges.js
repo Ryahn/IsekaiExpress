@@ -28,4 +28,44 @@ function hasGuildAdminOrModRole(member, staffRoleId, modRoleId) {
   return member.roles.cache.has(modId);
 }
 
-module.exports = { hasGuildAdminOrStaffRole, hasGuildAdminOrModRole };
+function normalizedRoleId(roleId) {
+  return typeof roleId === 'string' ? roleId.trim() : '';
+}
+
+function hasConfiguredGuildRole(member, roleId) {
+  if (!member) return false;
+  const id = normalizedRoleId(roleId);
+  return Boolean(id && member.roles.cache.has(id));
+}
+
+/** /attention mod — uploaders or trial mod (plus Administrator). Mods use the staff queue. */
+function canUseAttentionModLane(member, roles) {
+  if (!member) return false;
+  if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
+  if (!roles) return false;
+  return (
+    hasConfiguredGuildRole(member, roles.uploader) ||
+    hasConfiguredGuildRole(member, roles.trialmod)
+  );
+}
+
+/** /attention staff — staff, mod, uploader, or trial mod (plus Administrator). */
+function canUseAttentionStaffLane(member, roles) {
+  if (!member) return false;
+  if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
+  if (!roles) return false;
+  return (
+    hasConfiguredGuildRole(member, roles.staff) ||
+    hasConfiguredGuildRole(member, roles.mod) ||
+    hasConfiguredGuildRole(member, roles.uploader) ||
+    hasConfiguredGuildRole(member, roles.trialmod)
+  );
+}
+
+module.exports = {
+  hasGuildAdminOrStaffRole,
+  hasGuildAdminOrModRole,
+  hasConfiguredGuildRole,
+  canUseAttentionModLane,
+  canUseAttentionStaffLane,
+};

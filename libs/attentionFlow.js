@@ -8,9 +8,11 @@ const {
   StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
-  PermissionFlagsBits,
 } = require('discord.js');
-const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
+const {
+  canUseAttentionModLane,
+  canUseAttentionStaffLane,
+} = require('../src/bot/utils/guildPrivileges');
 const { shortenAttentionUrls } = require('./zurlShorten');
 const { normalizeF95AttentionUrl, validateAttentionHttpUrls } = require('./f95UrlNormalize');
 
@@ -58,22 +60,6 @@ function truncate(s, max) {
   if (!t) return '';
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1)}…`;
-}
-
-function canSubmitModLane(member, client) {
-  if (!member) return false;
-  if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
-  const mod = typeof client.config?.roles?.mod === 'string' ? client.config.roles.mod.trim() : '';
-  const up =
-    typeof client.config?.roles?.uploader === 'string' ? client.config.roles.uploader.trim() : '';
-  if (mod && member.roles.cache.has(mod)) return true;
-  if (up && member.roles.cache.has(up)) return true;
-  return false;
-}
-
-function canSubmitStaffLane(member, client) {
-  if (!member) return false;
-  return hasGuildAdminOrStaffRole(member, client.config?.roles?.staff);
 }
 
 /**
@@ -240,16 +226,17 @@ async function handleAttentionTypeSelect(client, interaction) {
   }
 
   const member = await guild.members.fetch(interaction.user.id).catch(() => null);
-  if (lane === 'mod' && !canSubmitModLane(member, client)) {
+  if (lane === 'mod' && !canUseAttentionModLane(member, client.config?.roles)) {
     await interaction.reply({
-      content: 'You need the mod role, uploader role, or Administrator for the mod queue.',
+      content: 'You need the uploader role, trial mod role, or Administrator for the mod queue.',
       flags: MessageFlags.Ephemeral,
     });
     return true;
   }
-  if (lane === 'staff' && !canSubmitStaffLane(member, client)) {
+  if (lane === 'staff' && !canUseAttentionStaffLane(member, client.config?.roles)) {
     await interaction.reply({
-      content: 'You need the staff role or Administrator for the staff queue.',
+      content:
+        'You need the staff role, mod role, uploader role, trial mod role, or Administrator for the staff queue.',
       flags: MessageFlags.Ephemeral,
     });
     return true;
@@ -321,14 +308,15 @@ async function handleAttentionModalSubmit(client, interaction) {
     return interaction.editReply({ content: 'Could not load your member profile.' });
   }
 
-  if (lane === 'mod' && !canSubmitModLane(member, client)) {
+  if (lane === 'mod' && !canUseAttentionModLane(member, client.config?.roles)) {
     return interaction.editReply({
-      content: 'You need the mod role, uploader role, or Administrator to use the mod queue.',
+      content: 'You need the uploader role, trial mod role, or Administrator to use the mod queue.',
     });
   }
-  if (lane === 'staff' && !canSubmitStaffLane(member, client)) {
+  if (lane === 'staff' && !canUseAttentionStaffLane(member, client.config?.roles)) {
     return interaction.editReply({
-      content: 'You need the staff role or Administrator to use the staff queue.',
+      content:
+        'You need the staff role, mod role, uploader role, trial mod role, or Administrator to use the staff queue.',
     });
   }
 

@@ -146,13 +146,13 @@ module.exports = {
   },
 
   roles: {
-    staff: str('ROLE_STAFF', str('DISCORD_STAFF_ROLE_ID', '')),
-    mod: str('ROLE_MOD', ''),
-    uploader: str('ROLE_UPLOADER', ''),
-    user: str('ROLE_USER', ''),
-    retired: str('ROLE_RETIRED', ''),
-    respected: str('ROLE_RESPECTED', ''),
-    trialmod: str('ROLE_TRIALMOD', ''),
+    staff: str('ROLE_STAFF', str('DISCORD_STAFF_ROLE_ID', '')).trim(),
+    mod: str('ROLE_MOD', '').trim(),
+    uploader: str('ROLE_UPLOADER', '').trim(),
+    user: str('ROLE_USER', '').trim(),
+    retired: str('ROLE_RETIRED', '').trim(),
+    respected: str('ROLE_RESPECTED', '').trim(),
+    trialmod: str('ROLE_TRIALMOD', '').trim(),
   },
 
   /** zurl.zonies.xyz — shortens /attention thread, ticket, and member profile URLs when set. */
