@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const { farmManager } = require('../../../utils/farm/farmManager');
+const { applyLimitNotesToEmbed } = require('../../../utils/farm/farmLimits');
 
 async function handleFarmLogin(message) {
 	const userId = message.author.id;
@@ -33,12 +34,14 @@ async function handleFarmLogin(message) {
 		return;
 	}
 
+	const limitWarnings = await farmManager.getFarmLimitWarnings(userId, guildId);
 	const embed = new EmbedBuilder()
 		.setColor(0x00ff00)
 		.setTitle('🎉 Login Successful!')
 		.setDescription('You received **$10,000** and **+50 Farm XP**!')
 		.setFooter({ text: 'Come back tomorrow for more rewards' })
 		.setTimestamp();
+	applyLimitNotesToEmbed(embed, { warnings: limitWarnings, mitigation: [] });
 	await message.reply({ embeds: [embed] });
 }
 

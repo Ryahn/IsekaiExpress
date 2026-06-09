@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { farmManager } = require('../../../utils/farm/farmManager');
 const { formatTime } = require('../../../utils/farm/cropManager');
+const { applyLimitNotesToEmbed } = require('../../../utils/farm/farmLimits');
 
 function isConfirmToken(arg) {
 	if (!arg) return false;
@@ -102,6 +103,7 @@ async function handleFarmAbort(message, args = [], { commandName = 'abort' } = {
 		)
 		.setFooter({ text: `Use ${prefix}grow <crop name> to plant again.` })
 		.setTimestamp();
+	applyLimitNotesToEmbed(embed, result.limitMeta);
 	await message.reply({ embeds: [embed] });
 }
 

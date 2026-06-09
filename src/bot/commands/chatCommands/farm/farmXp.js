@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 const config = require('../../../../../config');
 const { farmManager } = require('../../../utils/farm/farmManager');
 const { convertFarmXpToGold, FARM_XP_PER_GOLD } = require('../../../utils/farm/farmXpConvert');
+const { applyLimitNotesToEmbed } = require('../../../utils/farm/farmLimits');
 
 /**
  * @param {{ createdAt: Date, eventType: string, amount: number, source: string, goldGained: number | null }} e
@@ -28,6 +29,7 @@ async function handleFarmXp(message, args) {
 
 	if (!sub) {
 		const userFarm = await farmManager.getUserFarm(userId, guildId);
+		const limitWarnings = await farmManager.getFarmLimitWarnings(userId, guildId);
 		const remaining = Math.max(0, dailyCap - userFarm.farmXpConvertedToday);
 		const goldEq = Math.floor(userFarm.farmXp / FARM_XP_PER_GOLD);
 		const embed = new EmbedBuilder()
@@ -41,6 +43,7 @@ async function handleFarmXp(message, args) {
 			)
 			.setFooter({ text: `${prefix}xp convert <n> · ${prefix}xp convert all · ${prefix}xp history` })
 			.setTimestamp();
+		applyLimitNotesToEmbed(embed, { warnings: limitWarnings, mitigation: [] });
 		await message.reply({ embeds: [embed] });
 		return;
 	}

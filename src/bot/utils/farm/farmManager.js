@@ -2,6 +2,13 @@ const knex = require('../../../../database/db').query;
 const { getDailyBuyPrice, getDailySellPrice, calculateSlotPrice } = require('./cropManager');
 const logger = require('../../../../libs/logger');
 const { utc7CalendarDateKey, nextUtc7MidnightAfter } = require('./farmUtc7');
+const { collectLimitWarnings } = require('./farmLimits');
+const {
+	applyInventoryAddWithMitigation,
+	applyMoneyMitigation,
+	applyFarmXpGainWithMitigation,
+	mergeLimitMeta,
+} = require('./farmMitigation');
 
 function defaultFarmState() {
 	return {
@@ -327,6 +334,20 @@ class FarmManager {
 		return rs;
 	}
 
+	/**
+	 * @param {string} userId
+	 * @param {string} guildId
+	 * @returns {Promise<string[]>}
+	 */
+	async getFarmLimitWarnings(userId, guildId) {
+		const userFarm = await this.getUserFarm(userId, guildId);
+		return collectLimitWarnings({
+			money: userFarm.money,
+			farmXp: userFarm.farmXp,
+			inventory: userFarm.inventory,
+		});
+	}
+
 	async canLogin(userId, guildId) {
 		const userFarm = await this.getUserFarm(userId, guildId);
 		if (!userFarm.lastLogin) {
@@ -359,21 +380,37 @@ class FarmManager {
 				}
 			}
 			const farmXp = row.farm_xp != null ? Number(row.farm_xp) : 0;
-			await trx('farm_profiles').where({ discord_user_id: uid }).update({
-				money: Number(row.money) + 10000,
-				last_login: trx.fn.now(),
-				farm_xp: farmXp + 50,
+			const inventory = parseJson(row.inventory, {});
+			const moneyAfter = applyMoneyMitigation(Number(row.money) + 10000, inventory);
+			const xpResult = applyFarmXpGainWithMitigation(farmXp, 50);
+			const limitMeta = mergeLimitMeta(
+				{ mitigation: moneyAfter.mitigation, warnings: [] },
+				{ mitigation: xpResult.mitigation, warnings: [] },
+			);
+			limitMeta.warnings = collectLimitWarnings({
+				money: moneyAfter.money,
+				farmXp: xpResult.farmXp,
+				inventory: moneyAfter.inventory,
 			});
-			if (hasLog) {
+			await trx('farm_profiles').where({ discord_user_id: uid }).update({
+				money: moneyAfter.money,
+				inventory: serializeMysqlJson(moneyAfter.inventory),
+				last_login: trx.fn.now(),
+				farm_xp: xpResult.farmXp,
+			});
+			if (hasLog && xpResult.gainApplied > 0) {
 				await trx('farm_xp_log').insert({
 					discord_user_id: uid,
 					event_type: 'earn',
-					amount: 50,
+					amount: xpResult.gainApplied,
 					source: 'login',
 					gold_gained: null,
 				});
 			}
 			claimed = true;
+			if (limitMeta.mitigation.length) {
+				logger.info(`[FARM-LIMITS] login ${uid}`, limitMeta);
+			}
 		});
 		return claimed;
 	}
@@ -490,23 +527,36 @@ class FarmManager {
 			}
 
 			const newSlots = startingSlots + slotsBought;
-			const remainingMoney = money - totalPrice;
+			const inventory = parseJson(row.inventory, {});
+			const moneyAfter = applyMoneyMitigation(money - totalPrice, inventory);
 			const xpGained = slotsBought * 100;
 			const farmXp = row.farm_xp != null ? Number(row.farm_xp) : 0;
+			const xpResult = applyFarmXpGainWithMitigation(farmXp, xpGained);
 			await trx('farm_profiles').where({ discord_user_id: uid }).update({
 				land_slots: newSlots,
-				money: remainingMoney,
-				farm_xp: farmXp + xpGained,
+				money: moneyAfter.money,
+				inventory: serializeMysqlJson(moneyAfter.inventory),
+				farm_xp: xpResult.farmXp,
 			});
-			if (hasLog) {
+			if (hasLog && xpResult.gainApplied > 0) {
 				await trx('farm_xp_log').insert({
 					discord_user_id: uid,
 					event_type: 'earn',
-					amount: xpGained,
+					amount: xpResult.gainApplied,
 					source: 'expand',
 					gold_gained: null,
 				});
 			}
+			const remainingMoney = moneyAfter.money;
+			const limitMeta = mergeLimitMeta(
+				{ mitigation: moneyAfter.mitigation, warnings: [] },
+				{ mitigation: xpResult.mitigation, warnings: [] },
+			);
+			limitMeta.warnings = collectLimitWarnings({
+				money: remainingMoney,
+				farmXp: xpResult.farmXp,
+				inventory: moneyAfter.inventory,
+			});
 			await this._bumpFarmGlobalStats(trx, { landExpansions: slotsBought });
 			const nextPrice = newSlots < 100 ? calculateSlotPrice(newSlots) : 0;
 			result = {
@@ -516,6 +566,7 @@ class FarmManager {
 				remainingMoney,
 				totalPrice,
 				nextPrice,
+				limitMeta,
 			};
 		});
 		return result;
@@ -566,13 +617,16 @@ class FarmManager {
 					inventory[crop.name] = next;
 				}
 			}
-			const nextMoney = userFarm.money - plan.cashCost;
-			const farmXp = userFarm.farmXp + 5;
+			const inventoryAfterSpend = { ...inventory };
+			const moneyAfterSpend = applyMoneyMitigation(userFarm.money - plan.cashCost, inventoryAfterSpend);
+			const nextMoney = moneyAfterSpend.money;
+			const xpResult = applyFarmXpGainWithMitigation(userFarm.farmXp, 5);
+			const farmXp = xpResult.farmXp;
 			const hasPlantedCash = await trx.schema.hasColumn('farm_profiles', 'planted_cash_paid');
 			const hasPlantedSeeds = await trx.schema.hasColumn('farm_profiles', 'planted_seeds_from_inv');
 			const plantUpdate = {
 				money: nextMoney,
-				inventory: serializeMysqlJson(inventory),
+				inventory: serializeMysqlJson(moneyAfterSpend.inventory),
 				current_crop: serializeMysqlJson(crop),
 				planted_at: trx.fn.now(),
 				maturity_pinged: 0,
@@ -581,11 +635,11 @@ class FarmManager {
 			if (hasPlantedCash) plantUpdate.planted_cash_paid = plan.cashCost;
 			if (hasPlantedSeeds) plantUpdate.planted_seeds_from_inv = plan.fromInv;
 			await trx('farm_profiles').where({ discord_user_id: uid }).update(plantUpdate);
-			if (hasLog) {
+			if (hasLog && xpResult.gainApplied > 0) {
 				await trx('farm_xp_log').insert({
 					discord_user_id: uid,
 					event_type: 'earn',
-					amount: 5,
+					amount: xpResult.gainApplied,
 					source: 'plant',
 					gold_gained: null,
 				});
@@ -594,7 +648,16 @@ class FarmManager {
 				plantActions: 1,
 				plantBuyUnits: plan.cashSlots,
 			});
-			out = { success: true, fromInventory: plan.fromInv, cashPaid: plan.cashCost };
+			const limitMeta = mergeLimitMeta(
+				{ mitigation: moneyAfterSpend.mitigation, warnings: [] },
+				{ mitigation: xpResult.mitigation, warnings: [] },
+			);
+			limitMeta.warnings = collectLimitWarnings({
+				money: nextMoney,
+				farmXp,
+				inventory: moneyAfterSpend.inventory,
+			});
+			out = { success: true, fromInventory: plan.fromInv, cashPaid: plan.cashCost, limitMeta };
 		});
 		return out;
 	}
@@ -770,14 +833,32 @@ class FarmManager {
 			const penalty = this.calculateYieldPenalty(cropStatus.overdue);
 			const baseYield = crop.yield * userFarm.landSlots;
 			const actualYield = Math.floor(baseYield * penalty);
-			const farmXpGained = actualYield;
-			const inventory = { ...userFarm.inventory };
-			inventory[crop.name] = (inventory[crop.name] || 0) + actualYield;
-			const newFarmXp = userFarm.farmXp + farmXpGained;
+			const invResult = applyInventoryAddWithMitigation(
+				userFarm.inventory,
+				crop.name,
+				actualYield,
+				userFarm.money,
+			);
+			const actualYieldStored = invResult.cappedUnits;
+			const farmXpGained = actualYieldStored;
+			const xpResult = applyFarmXpGainWithMitigation(userFarm.farmXp, farmXpGained);
+			const newFarmXp = xpResult.farmXp;
+			const moneyAfter = applyMoneyMitigation(invResult.money, invResult.inventory);
+			const limitMeta = mergeLimitMeta(
+				{ mitigation: invResult.mitigation, warnings: [] },
+				{ mitigation: xpResult.mitigation, warnings: [] },
+				{ mitigation: moneyAfter.mitigation, warnings: [] },
+			);
+			limitMeta.warnings = collectLimitWarnings({
+				money: moneyAfter.money,
+				farmXp: newFarmXp,
+				inventory: moneyAfter.inventory,
+			});
 			const hasPlantedCash = await trx.schema.hasColumn('farm_profiles', 'planted_cash_paid');
 			const hasPlantedSeeds = await trx.schema.hasColumn('farm_profiles', 'planted_seeds_from_inv');
 			const harvestUpdate = {
-				inventory: serializeMysqlJson(inventory),
+				money: moneyAfter.money,
+				inventory: serializeMysqlJson(moneyAfter.inventory),
 				farm_xp: newFarmXp,
 				current_crop: null,
 				planted_at: null,
@@ -785,17 +866,24 @@ class FarmManager {
 			if (hasPlantedCash) harvestUpdate.planted_cash_paid = null;
 			if (hasPlantedSeeds) harvestUpdate.planted_seeds_from_inv = null;
 			await trx('farm_profiles').where({ discord_user_id: uid }).update(harvestUpdate);
-			if (hasLog) {
+			if (hasLog && xpResult.gainApplied > 0) {
 				await trx('farm_xp_log').insert({
 					discord_user_id: uid,
 					event_type: 'earn',
-					amount: farmXpGained,
+					amount: xpResult.gainApplied,
 					source: 'harvest',
 					gold_gained: null,
 				});
 			}
-			await this._bumpFarmGlobalStats(trx, { harvestUnits: actualYield });
-			result = { crop, yield: actualYield, penalty, farmXpGained };
+			await this._bumpFarmGlobalStats(trx, { harvestUnits: actualYieldStored });
+			result = {
+				crop,
+				yield: actualYieldStored,
+				yieldRequested: actualYield,
+				penalty,
+				farmXpGained: xpResult.gainApplied,
+				limitMeta,
+			};
 		});
 		return result;
 	}
@@ -850,11 +938,25 @@ class FarmManager {
 			const cashRefunded = Math.floor(cashPaid * refundFraction);
 			const seedsRefunded = Math.floor(seedsStaked * refundFraction);
 
-			const inventory = { ...userFarm.inventory };
+			let inventory = { ...userFarm.inventory };
+			let newMoney = Number(userFarm.money) + cashRefunded;
+			const limitMetas = [];
 			if (seedsRefunded > 0) {
-				inventory[crop.name] = (inventory[crop.name] || 0) + seedsRefunded;
+				const invResult = applyInventoryAddWithMitigation(inventory, crop.name, seedsRefunded, newMoney);
+				inventory = invResult.inventory;
+				newMoney = invResult.money;
+				limitMetas.push({ mitigation: invResult.mitigation, warnings: [] });
 			}
-			const newMoney = Number(userFarm.money) + cashRefunded;
+			const moneyAfter = applyMoneyMitigation(newMoney, inventory);
+			newMoney = moneyAfter.money;
+			inventory = moneyAfter.inventory;
+			limitMetas.push({ mitigation: moneyAfter.mitigation, warnings: [] });
+			const limitMeta = mergeLimitMeta(...limitMetas);
+			limitMeta.warnings = collectLimitWarnings({
+				money: newMoney,
+				farmXp: userFarm.farmXp,
+				inventory,
+			});
 
 			const hasPlantedCash = await trx.schema.hasColumn('farm_profiles', 'planted_cash_paid');
 			const hasPlantedSeeds = await trx.schema.hasColumn('farm_profiles', 'planted_seeds_from_inv');
@@ -881,6 +983,7 @@ class FarmManager {
 				growthTimeMs,
 				ready,
 				remainingMoney: newMoney,
+				limitMeta,
 			};
 		});
 		return result;
@@ -919,19 +1022,32 @@ class FarmManager {
 				out = { ok: false, reason: 'funds' };
 				return;
 			}
-			const inventory = { ...userFarm.inventory };
-			inventory[crop.name] = (inventory[crop.name] || 0) + qty;
-			await trx('farm_profiles').where({ discord_user_id: uid }).update({
-				money: userFarm.money - totalCost,
-				inventory: serializeMysqlJson(inventory),
+			const invResult = applyInventoryAddWithMitigation(
+				userFarm.inventory,
+				crop.name,
+				qty,
+				userFarm.money - totalCost,
+			);
+			const limitMeta = mergeLimitMeta({ mitigation: invResult.mitigation, warnings: [] });
+			limitMeta.warnings = collectLimitWarnings({
+				money: invResult.money,
+				farmXp: userFarm.farmXp,
+				inventory: invResult.inventory,
 			});
-			await this._bumpFarmGlobalStats(trx, { shopSeedUnits: qty });
+			await trx('farm_profiles').where({ discord_user_id: uid }).update({
+				money: invResult.money,
+				inventory: serializeMysqlJson(invResult.inventory),
+			});
+			const actualQty = invResult.cappedUnits;
+			const actualCost = Math.floor(buyPrice * actualQty);
+			await this._bumpFarmGlobalStats(trx, { shopSeedUnits: actualQty });
 			out = {
 				ok: true,
-				buyQuantity: qty,
-				totalCost,
+				buyQuantity: actualQty,
+				totalCost: actualCost,
 				dailyPrice: buyPrice,
-				remainingMoney: userFarm.money - totalCost,
+				remainingMoney: invResult.money,
+				limitMeta,
 			};
 		});
 		return out;
@@ -961,23 +1077,33 @@ class FarmManager {
 				if (totalAmount === 0) {
 					return;
 				}
-				const newFarmXp = userFarm.farmXp + 10;
-				await trx('farm_profiles').where({ discord_user_id: uid }).update({
-					money: userFarm.money + totalPrice,
-					inventory: serializeMysqlJson({}),
-					farm_xp: newFarmXp,
+				const xpResult = applyFarmXpGainWithMitigation(userFarm.farmXp, 10);
+				const moneyAfter = applyMoneyMitigation(userFarm.money + totalPrice, {});
+				const limitMeta = mergeLimitMeta(
+					{ mitigation: moneyAfter.mitigation, warnings: [] },
+					{ mitigation: xpResult.mitigation, warnings: [] },
+				);
+				limitMeta.warnings = collectLimitWarnings({
+					money: moneyAfter.money,
+					farmXp: xpResult.farmXp,
+					inventory: moneyAfter.inventory,
 				});
-				if (hasLog) {
+				await trx('farm_profiles').where({ discord_user_id: uid }).update({
+					money: moneyAfter.money,
+					inventory: serializeMysqlJson(moneyAfter.inventory),
+					farm_xp: xpResult.farmXp,
+				});
+				if (hasLog && xpResult.gainApplied > 0) {
 					await trx('farm_xp_log').insert({
 						discord_user_id: uid,
 						event_type: 'earn',
-						amount: 10,
+						amount: xpResult.gainApplied,
 						source: 'sell',
 						gold_gained: null,
 					});
 				}
 				await this._bumpFarmGlobalStats(trx, { soldUnits: totalAmount });
-				result = { amount: totalAmount, totalPrice, cropName: 'all' };
+				result = { amount: totalAmount, totalPrice, cropName: 'all', limitMeta, remainingMoney: moneyAfter.money };
 				return;
 			}
 			const availableAmount = inventory[cropName] || 0;
@@ -998,23 +1124,39 @@ class FarmManager {
 			const dailyPrice = getDailySellPrice(cropName);
 			const totalPrice = sellAmount * dailyPrice;
 			inventory[cropName] = availableAmount - sellAmount;
-			const newFarmXp = userFarm.farmXp + 10;
-			await trx('farm_profiles').where({ discord_user_id: uid }).update({
-				money: userFarm.money + totalPrice,
-				inventory: serializeMysqlJson(inventory),
-				farm_xp: newFarmXp,
+			const xpResult = applyFarmXpGainWithMitigation(userFarm.farmXp, 10);
+			const moneyAfter = applyMoneyMitigation(userFarm.money + totalPrice, inventory);
+			const limitMeta = mergeLimitMeta(
+				{ mitigation: moneyAfter.mitigation, warnings: [] },
+				{ mitigation: xpResult.mitigation, warnings: [] },
+			);
+			limitMeta.warnings = collectLimitWarnings({
+				money: moneyAfter.money,
+				farmXp: xpResult.farmXp,
+				inventory: moneyAfter.inventory,
 			});
-			if (hasLog) {
+			await trx('farm_profiles').where({ discord_user_id: uid }).update({
+				money: moneyAfter.money,
+				inventory: serializeMysqlJson(moneyAfter.inventory),
+				farm_xp: xpResult.farmXp,
+			});
+			if (hasLog && xpResult.gainApplied > 0) {
 				await trx('farm_xp_log').insert({
 					discord_user_id: uid,
 					event_type: 'earn',
-					amount: 10,
+					amount: xpResult.gainApplied,
 					source: 'sell',
 					gold_gained: null,
 				});
 			}
 			await this._bumpFarmGlobalStats(trx, { soldUnits: sellAmount });
-			result = { amount: sellAmount, totalPrice, cropName };
+			result = {
+				amount: sellAmount,
+				totalPrice,
+				cropName,
+				limitMeta,
+				remainingMoney: moneyAfter.money,
+			};
 		});
 		return result;
 	}

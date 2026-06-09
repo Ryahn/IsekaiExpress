@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { farmManager } = require('../../../utils/farm/farmManager');
 const { getCrop, getDailyBuyPrice } = require('../../../utils/farm/cropManager');
+const { applyLimitNotesToEmbed } = require('../../../utils/farm/farmLimits');
 
 async function handleFarmBuy(message, args) {
 	const userId = message.author.id;
@@ -122,6 +123,7 @@ async function handleFarmBuy(message, args) {
 		)
 		.setFooter({ text: 'Today\'s market price' })
 		.setTimestamp();
+	applyLimitNotesToEmbed(embed, purchase.limitMeta);
 	await message.reply({ embeds: [embed] });
 }
 

@@ -12,6 +12,7 @@
     "import:chatdump": "node scripts/importChatdump.js",
     "tcg:batch": "node master.js",
     "migrate": "npx knex migrate:latest",
+    "farm:limits-sanity": "node scripts/farmLimitsSanity.js",
     "seed:scam-phash": "node scripts/seed-scam-image-phash.js",
     "docker:up": "docker compose up -d --build",
     "docker:web": "docker compose --profile web up -d --build"

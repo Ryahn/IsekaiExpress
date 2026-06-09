@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { farmManager } = require('../../../utils/farm/farmManager');
 const { formatTime } = require('../../../utils/farm/cropManager');
+const { applyLimitNotesToEmbed } = require('../../../utils/farm/farmLimits');
 
 async function handleFarmStatus(message, args) {
 	const guildId = message.guild.id;
@@ -54,6 +55,7 @@ async function handleFarmStatus(message, args) {
 
 	const userFarm = await farmManager.getUserFarm(userId, guildId);
 	const cropStatus = await farmManager.getCropStatus(userId, guildId);
+	const limitWarnings = await farmManager.getFarmLimitWarnings(userId, guildId);
 
 	let inventoryDisplay = '';
 	if (Object.keys(userFarm.inventory).length === 0 || Object.values(userFarm.inventory).every((v) => v === 0)) {
@@ -122,6 +124,10 @@ async function handleFarmStatus(message, args) {
 			},
 		)
 		.setTimestamp();
+
+	if (limitWarnings.length) {
+		applyLimitNotesToEmbed(embed, { warnings: limitWarnings, mitigation: [] });
+	}
 
 	await message.reply({ embeds: [embed] });
 }

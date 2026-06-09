@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { farmManager } = require('../../../utils/farm/farmManager');
 const { getCrop } = require('../../../utils/farm/cropManager');
+const { applyLimitNotesToEmbed } = require('../../../utils/farm/farmLimits');
 
 async function handleFarmSell(message, args) {
 	const userId = message.author.id;
@@ -51,9 +52,10 @@ async function handleFarmSell(message, args) {
 			.addFields(
 				{ name: '📦 Total Amount', value: `${result.amount} units`, inline: true },
 				{ name: '💰 Money Received', value: `$${result.totalPrice.toLocaleString()}`, inline: true },
-				{ name: '💵 Current Balance', value: `$${(userFarm.money + result.totalPrice).toLocaleString()}`, inline: true },
+				{ name: '💵 Current Balance', value: `$${(result.remainingMoney ?? userFarm.money + result.totalPrice).toLocaleString()}`, inline: true },
 			)
 			.setTimestamp();
+		applyLimitNotesToEmbed(embed, result.limitMeta);
 		await message.reply({ embeds: [embed] });
 		return;
 	}
@@ -123,9 +125,10 @@ async function handleFarmSell(message, args) {
 		.addFields(
 			{ name: '📦 Amount', value: `${result.amount} units`, inline: true },
 			{ name: '💰 Money Received', value: `$${result.totalPrice.toLocaleString()}`, inline: true },
-			{ name: '💵 Current Balance', value: `$${(userFarm.money + result.totalPrice).toLocaleString()}`, inline: true },
+			{ name: '💵 Current Balance', value: `$${(result.remainingMoney ?? userFarm.money + result.totalPrice).toLocaleString()}`, inline: true },
 		)
 		.setTimestamp();
+	applyLimitNotesToEmbed(embed, result.limitMeta);
 	await message.reply({ embeds: [embed] });
 }
 

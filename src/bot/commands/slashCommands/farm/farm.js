@@ -9,6 +9,7 @@ const {
 	buildFarmHelpPaginationRow,
 } = require('../../../utils/farm/farmHelpPages');
 const { hasGuildAdminOrStaffRole } = require('../../../utils/guildPrivileges');
+const { applyLimitNotesToEmbed } = require('../../../utils/farm/farmLimits');
 
 async function farmHelpSlashCommand(interaction) {
 	if (!interaction.guild) {
@@ -182,6 +183,7 @@ async function farmXpShowSlash(interaction) {
 	const dailyCap = config.farm?.xpDailyConvertCap ?? 500;
 	const prefix = await farmManager.getServerPrefix(guildId);
 	const userFarm = await farmManager.getUserFarm(userId, guildId);
+	const limitWarnings = await farmManager.getFarmLimitWarnings(userId, guildId);
 	const remaining = Math.max(0, dailyCap - userFarm.farmXpConvertedToday);
 	const goldEq = Math.floor(userFarm.farmXp / FARM_XP_PER_GOLD);
 	const embed = new EmbedBuilder()
@@ -195,6 +197,7 @@ async function farmXpShowSlash(interaction) {
 		)
 		.setFooter({ text: `Prefix: ${prefix}xp · ${prefix}xp convert · ${prefix}xp history` })
 		.setTimestamp();
+	applyLimitNotesToEmbed(embed, { warnings: limitWarnings, mitigation: [] });
 	await interaction.editReply({ embeds: [embed] });
 }
 

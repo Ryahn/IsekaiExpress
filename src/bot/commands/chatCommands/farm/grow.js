@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { farmManager, getPlantingPlan } = require('../../../utils/farm/farmManager');
 const { getCrop, formatTime, getDailySellPrice } = require('../../../utils/farm/cropManager');
+const { applyLimitNotesToEmbed } = require('../../../utils/farm/farmLimits');
 
 async function handleFarmGrow(message, args) {
 	const userId = message.author.id;
@@ -106,6 +107,7 @@ async function handleFarmGrow(message, args) {
 		)
 		.setFooter({ text: '+5 Farm XP · ⚠️ 10% yield loss per hour overdue!' })
 		.setTimestamp();
+	applyLimitNotesToEmbed(embed, result.limitMeta);
 	await message.reply({ embeds: [embed] });
 }
 

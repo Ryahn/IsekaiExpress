@@ -200,33 +200,84 @@ async function matchPhash(client, imageBuffer) {
 }
 
 async function downloadImageBuffer(url) {
-  const res = await axios.get(url, {
+  const opts = {
     responseType: 'arraybuffer',
     timeout: DOWNLOAD_TIMEOUT_MS,
     maxContentLength: MAX_DOWNLOAD_BYTES,
     maxBodyLength: MAX_DOWNLOAD_BYTES,
     validateStatus: (s) => s >= 200 && s < 400,
-  });
-  const buf = Buffer.from(res.data);
-  if (buf.length > MAX_DOWNLOAD_BYTES) {
-    throw new Error('image too large');
+  };
+
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await axios.get(url, opts);
+      const buf = Buffer.from(res.data);
+      if (buf.length > MAX_DOWNLOAD_BYTES) {
+        throw new Error('image too large');
+      }
+      const expected = Number(res.headers['content-length']);
+      if (expected > 0 && buf.length < expected) {
+        throw new Error(`truncated download (${buf.length}/${expected} bytes)`);
+      }
+      return buf;
+    } catch (e) {
+      lastErr = e;
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
   }
-  return buf;
+  throw lastErr;
 }
 
-async function preprocessForScan(inputBuffer) {
-  const meta = await sharp(inputBuffer).metadata();
+async function sharpPngForScan(inputBuffer, sharpOptions = {}) {
+  const instance = sharp(inputBuffer, { failOn: 'none', ...sharpOptions });
+  const meta = await instance.metadata();
   if (!meta.width || !meta.height) {
     throw new Error('not an image');
   }
-  const pipeline = sharp(inputBuffer).rotate().greyscale();
+  const pipeline = sharp(inputBuffer, { failOn: 'none', ...sharpOptions }).rotate().greyscale();
   const maxEdge = Math.max(meta.width, meta.height);
   const resized =
     maxEdge > OCR_MAX_EDGE
       ? pipeline.resize(OCR_MAX_EDGE, OCR_MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
       : pipeline;
-  const pngBuf = await resized.png().toBuffer();
-  return pngBuf;
+  return resized.png().toBuffer();
+}
+
+/**
+ * Discord sometimes serves HEIF/AVIF or truncated CDN payloads that confuse libvips on the
+ * first decode pass. Try plain decode, then sequential read, then a JPEG-only reread.
+ */
+async function preprocessForScan(inputBuffer) {
+  const attempts = [
+    () => sharpPngForScan(inputBuffer),
+    () => sharpPngForScan(inputBuffer, { sequentialRead: true }),
+    () => sharpPngForScan(inputBuffer, { limitInputPixels: false }),
+    () => sharpPngForScan(inputBuffer, { pages: 1 }),
+  ];
+
+  let lastErr;
+  for (const attempt of attempts) {
+    try {
+      return await attempt();
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+
+  const head = inputBuffer.slice(0, 16);
+  const looksJpeg = head[0] === 0xff && head[1] === 0xd8;
+  if (looksJpeg) {
+    try {
+      return await sharpPngForScan(inputBuffer, { failOn: 'none', page: 0 });
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error('image decode failed');
 }
 
 /**

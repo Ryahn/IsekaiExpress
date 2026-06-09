@@ -4,7 +4,8 @@
  *
  * Usage (from repo root):
  *   node scripts/seed-scam-image-phash.js
- *   node scripts/seed-scam-image-phash.js --dir tools/mrbeast
+ *   node scripts/seed-scam-image-phash.js --dir tools/spam_images/mrbeast
+ *   node scripts/seed-scam-image-phash.js --dir tools/spam_images/tate
  *
  * Requires: migration 20260701120000_scam_image_blacklist applied; MySQL from .env.
  */
@@ -18,7 +19,7 @@ const APP_ROOT = path.join(__dirname, '..');
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  let dir = path.join(APP_ROOT, 'tools', 'mrbeast');
+  let dir = path.join(APP_ROOT, 'tools', 'spam_images', 'mrbeast');
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--dir' && args[i + 1]) {
       const raw = args[i + 1];

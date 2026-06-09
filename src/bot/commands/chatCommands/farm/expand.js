@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { farmManager } = require('../../../utils/farm/farmManager');
 const { calculateSlotPrice } = require('../../../utils/farm/cropManager');
+const { applyLimitNotesToEmbed } = require('../../../utils/farm/farmLimits');
 
 function parseExpandArg(args) {
 	const raw = (args?.[0] ?? '').toString().trim().toLowerCase();
@@ -103,6 +104,7 @@ async function handleFarmExpand(message, args = []) {
 	}
 
 	embed.setTimestamp();
+	applyLimitNotesToEmbed(embed, purchase.limitMeta);
 	await message.reply({ embeds: [embed] });
 }
 

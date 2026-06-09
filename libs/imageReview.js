@@ -216,8 +216,8 @@ async function queueImageReview(client, message, attachments, member, cfg, chId,
  *   - Trusted users + severity 'review' (pHash-only) → staff review.
  *   - Trusted users + severity 'auto' (text/link keyword) → ban via enforceScamImage.
  *
- * If every image scans clean and the user is low-trust but at least one scan failed
- * (timeout/error), queue without scan evidence so staff can sanity-check the gap.
+ * If at least one scan failed (timeout/decode error) and not every attachment scanned
+ * clean, queue without scan evidence so staff can sanity-check the gap.
  */
 async function processImageReview(client, message, staffRoleId, modRoleId) {
   const attachments = listImageAttachments(message);
@@ -229,10 +229,6 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
   const isStaff = hasGuildAdminOrStaffRole(member, staffRoleId);
   const isMod = hasGuildAdminOrModRole(member, staffRoleId, modRoleId);
   const needsQueue = await shouldFlagImageForReview(client, message, staffRoleId);
-
-  if (!needsQueue && !isStaff && !isMod) {
-    return;
-  }
 
   const gid = message.guild.id;
   const cfg = await client.db.getGuildConfigurable(gid);
@@ -277,11 +273,18 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
     }
   }
 
-  if (!needsQueue) {
+  if (cleanScansCompleted === attachments.length) {
     return;
   }
 
-  if (cleanScansCompleted === attachments.length) {
+  if (isStaff || isMod) {
+    return;
+  }
+
+  if (!chId) {
+    client.logger.warn(
+      `imageReview: ${attachments.length - cleanScansCompleted} attachment scan(s) failed but no review channel`,
+    );
     return;
   }
 
