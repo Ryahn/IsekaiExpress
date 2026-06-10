@@ -25,10 +25,9 @@ module.exports = {
         }
         try {
 
-            const response = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
+            const data = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
                 return await fetchRandom('laugh');
             });
-            const data = await response.json();
 
             const img = data.results[0].url;
 

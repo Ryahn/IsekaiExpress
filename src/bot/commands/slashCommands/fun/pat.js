@@ -20,10 +20,9 @@ module.exports = {
             let target = interaction.options.getUser('target') || interaction.user;
             const avatar = target.displayAvatarURL({ size: 512, format: 'jpg', dynamic: false });
 
-            const response = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
+            const data = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
                 return await fetchRandom('pat');
             });
-            const data = await response.json();
 
             const img = data.results[0].url;
 

@@ -28,10 +28,9 @@ module.exports = {
 
             let targetUser = interaction.options.getUser('target');
 
-            const response = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
+            const data = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
                 return await fetchRandom('stare');
             });
-            const data = await response.json();
             const img = data.results[0].url;
 
             let people = [

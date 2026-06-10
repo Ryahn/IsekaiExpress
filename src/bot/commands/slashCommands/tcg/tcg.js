@@ -552,24 +552,34 @@ module.exports = {
     .addSubcommandGroup((group) =>
       group
         .setName('pvp')
-        .setDescription(`Wager duels — max **${tcgPvp.MAX_GOLD_WAGER}**g stake (5% house on pot)`)
+        .setDescription('Wager duels — 5% house tax on gold pot (RP system active)')
         .addSubcommand((sub) =>
           sub
             .setName('challenge')
             .setDescription('Challenge someone (they /tcg pvp accept)')
             .addUserOption((o) => o.setName('opponent').setDescription('Target').setRequired(true))
             .addIntegerOption((o) =>
-              o
-                .setName('wager')
-                .setDescription(`Gold each player puts in (0–${tcgPvp.MAX_GOLD_WAGER})`)
-                .setMinValue(0)
-                .setMaxValue(tcgPvp.MAX_GOLD_WAGER),
+              o.setName('wager').setDescription('Gold each player puts in').setMinValue(0),
+            )
+            .addIntegerOption((o) =>
+              o.setName('card_wager').setDescription('Copy ID of card you are wagering (optional)').setMinValue(1),
             ),
         )
         .addSubcommand((sub) =>
           sub
             .setName('accept')
             .setDescription('Accept a pending challenge')
+            .addIntegerOption((o) =>
+              o.setName('session_id').setDescription('From /tcg pvp list').setRequired(true).setMinValue(1),
+            )
+            .addIntegerOption((o) =>
+              o.setName('card_wager').setDescription('Copy ID of card you are wagering in return (optional)').setMinValue(1),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('decline')
+            .setDescription('Decline a pending challenge')
             .addIntegerOption((o) =>
               o.setName('session_id').setDescription('From /tcg pvp list').setRequired(true).setMinValue(1),
             ),
@@ -619,7 +629,63 @@ module.exports = {
                 .setDescription('Tier 4 ability_key (e.g. eternal_flame, void_touch)')
                 .setRequired(true),
             ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('set_tier_boss')
+            .setDescription('Assign the Tier Boss for a region/tier slot this season')
+            .addIntegerOption((o) =>
+              o.setName('region').setDescription('Region 1–6').setRequired(true).setMinValue(1).setMaxValue(6),
+            )
+            .addIntegerOption((o) =>
+              o.setName('tier').setDescription('Tier 1–10').setRequired(true).setMinValue(1).setMaxValue(10),
+            )
+            .addStringOption((o) =>
+              o.setName('member_discord_id').setDescription('card_data.discord_id of the boss member').setRequired(true),
+            )
+            .addStringOption((o) =>
+              o
+                .setName('card_rarity')
+                .setDescription('Rarity abbreviation (SR, SSR, UR, M…)')
+                .setRequired(true),
+            ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName('set_season')
+            .setDescription('Force-activate a season by key (testing/emergency)')
+            .addStringOption((o) =>
+              o.setName('season_key').setDescription('Season key to activate (e.g. winter_2026)').setRequired(true),
+            )
+            .addStringOption((o) =>
+              o.setName('season_name').setDescription('Display name for the season').setRequired(false),
+            )
+            .addIntegerOption((o) =>
+              o.setName('duration_days').setDescription('Season duration in days (default 90)').setRequired(false),
+            ),
         ),
+    )
+    .addSubcommandGroup((group) =>
+      group
+        .setName('leaderboard')
+        .setDescription('TCG leaderboards')
+        .addSubcommand((sub) => sub.setName('season').setDescription('Top 20 by RP this season'))
+        .addSubcommand((sub) => sub.setName('alltime').setDescription('Top 20 all-time PvP wins'))
+        .addSubcommand((sub) =>
+          sub
+            .setName('region')
+            .setDescription('Top 20 PvE clears in a region')
+            .addIntegerOption((o) =>
+              o.setName('region').setDescription('Region 1–6').setRequired(true).setMinValue(1).setMaxValue(6),
+            ),
+        )
+        .addSubcommand((sub) => sub.setName('gold').setDescription('Top 20 gold holders')),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('rank')
+        .setDescription('Your PvP rank and RP (optionally check another player)')
+        .addUserOption((o) => o.setName('user').setDescription('Player to look up').setRequired(false)),
     ),
 
   async execute(client, interaction) {
@@ -1240,23 +1306,33 @@ module.exports = {
       if (sub === 'challenge') {
         const opponent = interaction.options.getUser('opponent', true);
         const wager = interaction.options.getInteger('wager') ?? 0;
-        const r = await tcgPvp.createChallenge(client, discordUser, opponent, wager);
+        const cardWager = interaction.options.getInteger('card_wager') ?? null;
+        const r = await tcgPvp.createChallenge(client, discordUser, opponent, wager, cardWager);
         if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         const exp = `<t:${Math.floor(Number(r.acceptDeadline))}:R>`;
+        const cardNote = r.challengerCardWagerId ? ` · card **#${r.challengerCardWagerId}** escrowed` : '';
         return interaction.editReply({
-          content: `PvP **#${r.sessionId}** — **${wager}**g wager. ${opponent}: \`/tcg pvp accept session_id:${r.sessionId}\`. Expires ${exp}.`,
+          content: `PvP **#${r.sessionId}** — **${wager}**g wager${cardNote}. ${opponent}: \`/tcg pvp accept session_id:${r.sessionId}\` or \`/tcg pvp decline\`. Expires ${exp}.`,
           flags: MessageFlags.Ephemeral,
         });
       }
       if (sub === 'accept') {
         const sessionId = interaction.options.getInteger('session_id', true);
-        const r = await tcgPvp.acceptChallenge(client, discordUser, sessionId);
+        const cardWager = interaction.options.getInteger('card_wager') ?? null;
+        const r = await tcgPvp.acceptChallenge(client, discordUser, sessionId, cardWager);
         if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
         const pd = `<t:${Math.floor(Number(r.pickDeadline))}:R>`;
+        const cardNote = cardWager ? ` · your card **#${cardWager}** escrowed` : '';
         return interaction.editReply({
-          content: `Accepted — both stakes locked. Pick **ephemerally**: \`/tcg pvp pick session_id:${sessionId} instance:<your copy>\`. Deadline ${pd}.`,
+          content: `Accepted${cardNote} — stakes locked. Pick ephemerally: \`/tcg pvp pick session_id:${sessionId} instance:<your copy>\`. Deadline ${pd}.`,
           flags: MessageFlags.Ephemeral,
         });
+      }
+      if (sub === 'decline') {
+        const sessionId = interaction.options.getInteger('session_id', true);
+        const r = await tcgPvp.declineChallenge(client, discordUser, sessionId);
+        if (!r.ok) return interaction.editReply({ content: r.error, flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ content: `Challenge **#${sessionId}** declined. Challenger's escrow released.`, flags: MessageFlags.Ephemeral });
       }
       if (sub === 'pick') {
         const myId = await tcgEconomy.getInternalUserId(discordUser.id);
@@ -1285,12 +1361,49 @@ module.exports = {
         if (r.winnerUserId != null) {
           color = r.winnerUserId === myId ? 0x57f287 : 0xed4245;
         }
+
+        // Synergy reveal (hidden during pick phase, shown now)
+        const synLine = [
+          r.synCh && r.synCh.length ? `_Challenger synergy:_ ${r.synCh.join(' · ')}` : null,
+          r.synTg && r.synTg.length ? `_Opponent synergy:_ ${r.synTg.join(' · ')}` : null,
+        ].filter(Boolean).join('\n');
+
+        // RP line
+        let rpLine = '';
+        if (r.rpResult && r.winnerUserId != null) {
+          const isWinner = r.winnerUserId === myId;
+          const delta = isWinner ? r.rpResult.winnerDelta : r.rpResult.loserDelta;
+          const tier = isWinner ? r.rpResult.winnerTier : r.rpResult.loserTier;
+          const rp = isWinner ? r.rpResult.winnerRpAfter : r.rpResult.loserRpAfter;
+          rpLine = `\nRP: **${delta >= 0 ? '+' : ''}${delta}** → **${rp}** · ${tier}`;
+        }
+
+        // Card wager note
+        const cardTransferLine = r.cardWagerTransfer && r.cardWagerTransfer.won
+          ? `\nCard wager **#${r.cardWagerTransfer.won}** transferred to winner.`
+          : '';
+
         const embed = new EmbedBuilder()
           .setTitle(title)
           .setDescription(
-            `**${r.challengerLabel}** vs **${r.targetLabel}**\n${sim.elementSummary}\n\n${logText}${sim.log.length > 14 ? '\n…' : ''}\n\n${potLine}`,
+            `**${r.challengerLabel}** vs **${r.targetLabel}**\n${sim.elementSummary}\n\n${logText}${sim.log.length > 14 ? '\n…' : ''}\n\n${potLine}${rpLine}${cardTransferLine}${synLine ? `\n\n${synLine}` : ''}`,
           )
           .setColor(color);
+
+        // Optional public result post
+        const pvpResultChannelId = process.env.TCG_PVP_RESULT_CHANNEL_ID;
+        if (pvpResultChannelId && r.winnerUserId != null) {
+          try {
+            const ch = await client.channels.fetch(pvpResultChannelId).catch(() => null);
+            if (ch && ch.isTextBased()) {
+              const winTag = r.winnerUserId === r.chId ? `<@${r.chDiscordId}>` : `<@${r.tgDiscordId}>`;
+              const loseTag = r.winnerUserId === r.chId ? `<@${r.tgDiscordId}>` : `<@${r.chDiscordId}>`;
+              const tier = r.rpResult?.winnerTier || '';
+              await ch.send(`⚔️ **PvP** ${winTag} defeated ${loseTag} · **${r.challengerLabel}** vs **${r.targetLabel}**${r.potGold > 0 ? ` · **${r.potGold}**g pot` : ''}${tier ? ` · ${tier}` : ''}`);
+            }
+          } catch (_) { /* non-critical */ }
+        }
+
         return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
       if (sub === 'list') {
@@ -1351,6 +1464,37 @@ module.exports = {
           flags: MessageFlags.Ephemeral,
         });
       }
+      if (sub === 'set_tier_boss') {
+        const region = interaction.options.getInteger('region', true);
+        const tier = interaction.options.getInteger('tier', true);
+        const memberDid = interaction.options.getString('member_discord_id', true);
+        const rarity = interaction.options.getString('card_rarity', true);
+        const { setTierBossPoolEntry, TIER_BOSS_SEASON_KEY } = require('../../../../../libs/tcgTierBoss');
+        await setTierBossPoolEntry(region, tier, memberDid, rarity, true);
+        return interaction.editReply({
+          content: `Tier Boss set for **Region ${region} Tier ${tier}** (season \`${TIER_BOSS_SEASON_KEY}\`): member \`${memberDid}\` · rarity **${rarity}**.`,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      if (sub === 'set_season') {
+        const seasonKey = interaction.options.getString('season_key', true);
+        const seasonName = interaction.options.getString('season_name') || seasonKey;
+        const durationDays = interaction.options.getInteger('duration_days') || 90;
+        const { upsertSeason, setActiveSeason } = require('../../../../../libs/tcgSeasonEnd');
+        const now = Math.floor(Date.now() / 1000);
+        await upsertSeason({
+          season_key: seasonKey,
+          name: seasonName,
+          start_at: now,
+          end_at: now + durationDays * 24 * 3600,
+          is_active: false,
+        });
+        await setActiveSeason(seasonKey);
+        return interaction.editReply({
+          content: `Season **${seasonName}** (\`${seasonKey}\`) activated. Duration: **${durationDays}** days.`,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
       return interaction.editReply({ content: 'Unknown staff subcommand.', flags: MessageFlags.Ephemeral });
     }
 
@@ -1377,7 +1521,7 @@ module.exports = {
               + `Battle boss pool pity: **${Number(s.pve_bb_pity) || 0} / 11** (card on win, resets on drop)`,
           )
           .setFooter({
-            text: 'Battle boss wins can drop a random pool card (40% / 5% dupe; 11th forces). Tier-boss fights later.',
+            text: 'Battle boss wins drop a random pool card (40% / 5% dupe; 11th forces). Clearing a tier triggers a Tier Boss fight.',
           })
           .setColor(0x3498db);
         return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
@@ -1422,6 +1566,7 @@ module.exports = {
           isBattleBoss,
           battleBossDrop,
           bossMemberCapture,
+          tierBossResult,
           synergyLines,
           synergyGoldMult,
           shardFocusConsumed,
@@ -1538,7 +1683,44 @@ module.exports = {
                 : []),
           )
           .setColor(won ? 0x57f287 : 0xed4245);
-        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+
+        // Tier Boss embed — auto-appended when Battle Boss win clears the tier
+        const embeds = [embed];
+        if (tierBossResult && tierBossResult.ok) {
+          const tb = tierBossResult;
+          const tbTitle = tb.won ? `Tier Boss — Victory` : `Tier Boss — Defeat`;
+          const tbLog = tb.sim.log.slice(0, 10).join('\n') || '—';
+          const tbGoldLine = tb.won && tb.goldGained > 0 ? `**+${tb.goldGained}**g` : '**0**g';
+          const tbFields = [
+            { name: 'Result', value: tb.sim.outcome.toUpperCase(), inline: true },
+            { name: 'Gold', value: tbGoldLine, inline: true },
+          ];
+          if (tb.won && tb.dropResult) {
+            const dr = tb.dropResult;
+            if (dr.granted && dr.template) {
+              const el = dr.template.element ? (DISPLAY_LABEL[dr.template.element] || dr.template.element) : '—';
+              tbFields.push({
+                name: 'Tier Boss drop',
+                value: `**${dr.template.name}** · ${dr.template.rarity} · ${el} · copy **#${dr.userCardId}**`,
+                inline: false,
+              });
+            } else if (dr.reason) {
+              tbFields.push({ name: 'Tier Boss drop', value: `No drop — ${dr.reason}`, inline: false });
+            }
+          }
+          const tbEmbed = new EmbedBuilder()
+            .setTitle(tbTitle)
+            .setDescription(
+              `**${tb.regionName}** · Tier **${tb.tierRoman}** Boss · ×${tb.tierBossMultiplier.toFixed(1)} stats\n`
+                + `**${playerLabel}** vs **${tb.bossLabel}**\n`
+                + `${tb.sim.elementSummary}\n\n${tbLog}${tb.sim.log.length > 10 ? '\n…' : ''}`,
+            )
+            .addFields(...tbFields)
+            .setColor(tb.won ? 0xf1c40f : 0xed4245);
+          embeds.push(tbEmbed);
+        }
+
+        return interaction.editReply({ embeds, flags: MessageFlags.Ephemeral });
       }
       if (sub === 'spar') {
         const result = await tcgSpar.runSpar(client, discordUser);
@@ -1926,6 +2108,81 @@ module.exports = {
         content: `**Set titles** (${rows.length})\n${lines.join('\n')}${more}`,
         flags: MessageFlags.Ephemeral,
       });
+    }
+
+    if (subcommandGroup === 'leaderboard') {
+      const tcgLeaderboard = require('../../../../../libs/tcgLeaderboard');
+      const { EmbedBuilder: LBEmbed } = require('discord.js');
+
+      if (sub === 'season') {
+        const rows = await tcgLeaderboard.topBySeasonRp();
+        const text = tcgLeaderboard.formatBoard(rows, (r) => `${r.username} · **${r.rp}** RP (${r.rank_tier})`);
+        const embed = new LBEmbed()
+          .setTitle('🏆 PvP Season Leaderboard — Top 20 by RP')
+          .setDescription(text)
+          .setColor(0xf1c40f);
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      }
+      if (sub === 'alltime') {
+        const rows = await tcgLeaderboard.topByAlltimeWins();
+        const text = tcgLeaderboard.formatBoard(rows, (r) => `${r.username} · **${r.total_wins}** wins`);
+        const embed = new LBEmbed()
+          .setTitle('🏆 All-Time PvP Wins — Top 20')
+          .setDescription(text)
+          .setColor(0xe67e22);
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      }
+      if (sub === 'region') {
+        const region = interaction.options.getInteger('region', true);
+        const rows = await tcgLeaderboard.topByRegionClears(region);
+        const text = tcgLeaderboard.formatBoard(rows, (r) => `${r.username} · Tier **${r.highest_tier}**`);
+        const embed = new LBEmbed()
+          .setTitle(`🗺️ Region ${region} PvE — Top 20 by Tier Reached`)
+          .setDescription(text)
+          .setColor(0x3498db);
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      }
+      if (sub === 'gold') {
+        const rows = await tcgLeaderboard.topByGold();
+        const text = tcgLeaderboard.formatBoard(rows, (r) => `${r.username} · **${r.gold.toLocaleString()}**g`);
+        const embed = new LBEmbed()
+          .setTitle('💰 Gold Leaderboard — Top 20')
+          .setDescription(text)
+          .setColor(0x2ecc71);
+        return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      }
+      return interaction.editReply({ content: 'Unknown leaderboard subcommand.', flags: MessageFlags.Ephemeral });
+    }
+
+    if (sub === 'rank') {
+      const target = interaction.options.getUser('user') || discordUser;
+      await client.db.checkUser(target);
+      const { getRankRow } = require('../../../../../libs/tcgPvpRank');
+      const { getActiveSeason } = require('../../../../../libs/tcgSeasonEnd');
+      const internalId = await tcgEconomy.getInternalUserId(target.id);
+      if (!internalId) {
+        return interaction.editReply({ content: 'Profile not found.', flags: MessageFlags.Ephemeral });
+      }
+      const row = await getRankRow(internalId);
+      const season = await getActiveSeason();
+      const seasonNote = season ? `Season: **${season.name}**` : '_No active season_';
+      const wins = Number(row.season_wins);
+      const losses = Number(row.season_losses);
+      const { EmbedBuilder: RankEmbed } = require('discord.js');
+      const tierColors = {
+        Bronze: 0xcd7f32, Silver: 0xc0c0c0, Gold: 0xf1c40f,
+        Platinum: 0x00b4d8, Diamond: 0xb9f2ff, Champion: 0xff6b6b,
+      };
+      const embed = new RankEmbed()
+        .setTitle(`${target.username}'s PvP Rank`)
+        .setColor(tierColors[row.rank_tier] ?? 0x99aab5)
+        .addFields(
+          { name: 'Rank', value: `**${row.rank_tier}**`, inline: true },
+          { name: 'RP', value: `**${row.rp}**`, inline: true },
+          { name: 'Season W/L', value: `**${wins}**W / **${losses}**L`, inline: true },
+        )
+        .setFooter({ text: seasonNote });
+      return interaction.editReply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     }
 
     return interaction.editReply({ content: 'Unknown subcommand.', flags: MessageFlags.Ephemeral });

@@ -28,6 +28,7 @@ const {
   battleBossRarityRowsForTier,
   BOSS_MEMBER_CAPTURE_CHANCE,
 } = require('./tcgPveConfig');
+const tcgTierBoss = require('./tcgTierBoss');
 
 function nowUnix() {
   return Math.floor(Date.now() / 1000);
@@ -508,6 +509,7 @@ async function runPveFight(client, discordUser) {
   let tierCleared = false;
   let battleBossDrop = null;
   let bossMemberCapture = null;
+  let tierBossResult = null;
 
   if (won) {
     pveWinGold = baseGoldThisTier;
@@ -603,6 +605,23 @@ async function runPveFight(client, discordUser) {
       }
     }
 
+    // Tier Boss fight — runs when Battle Boss win clears the tier
+    if (tierCleared && isBattleBoss) {
+      tierBossResult = await tcgTierBoss.runTierBossFight(
+        client,
+        discordUser,
+        pFinal,
+        playerRow,
+        region,
+        tier,
+        synMod,
+      );
+      if (tierBossResult.ok && tierBossResult.won && tierBossResult.goldGained > 0) {
+        const g = await tcgEconomy.addGold(client, discordUser, tierBossResult.goldGained);
+        if (!g.ok) tierBossResult.goldGrantError = g.error;
+      }
+    }
+
     const next = advanceProgressAfterWin(progress);
     await db.query('tcg_pve_progress').where({ user_id: internalId }).update({
       current_region: next.current_region,
@@ -656,6 +675,7 @@ async function runPveFight(client, discordUser) {
     playerLevel: lv,
     battleBossDrop,
     bossMemberCapture,
+    tierBossResult,
     synergyLines: synMod.summaryLines,
     synergyGoldMult: synMod.goldMult,
     synergyWeaknessImmune: synMod.weaknessImmune,
