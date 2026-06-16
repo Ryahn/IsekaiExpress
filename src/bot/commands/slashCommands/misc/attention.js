@@ -4,6 +4,7 @@ const { ChannelType, EmbedBuilder, MessageFlags } = require('discord.js');
 const {
   canUseAttentionModLane,
   canUseAttentionStaffLane,
+  fetchMemberForPrivilegeCheck,
   hasGuildAdminOrStaffRole,
 } = require('../../../utils/guildPrivileges');
 const { buildAttentionTypeSelectRows } = require('../../../../../libs/attentionFlow');
@@ -57,7 +58,7 @@ module.exports = {
     const sub = interaction.options.getSubcommand(true);
 
     if (sub === 'config') {
-      const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+      const member = await fetchMemberForPrivilegeCheck(interaction.guild, interaction.user.id);
       if (!hasGuildAdminOrStaffRole(member, client.config.roles.staff)) {
         return interaction.editReply({
           content: 'You need the staff role or Administrator to configure the attention channel.',
@@ -81,7 +82,7 @@ module.exports = {
       });
     }
 
-    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+    const member = await fetchMemberForPrivilegeCheck(interaction.guild, interaction.user.id);
 
     if (sub === 'mod') {
       if (!canUseAttentionModLane(member, client.config?.roles)) {

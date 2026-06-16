@@ -12,6 +12,7 @@ const {
 const {
   canUseAttentionModLane,
   canUseAttentionStaffLane,
+  fetchMemberForPrivilegeCheck,
 } = require('../src/bot/utils/guildPrivileges');
 const { shortenAttentionUrls } = require('./zurlShorten');
 const { normalizeF95AttentionUrl, validateAttentionHttpUrls } = require('./f95UrlNormalize');
@@ -225,7 +226,7 @@ async function handleAttentionTypeSelect(client, interaction) {
     return true;
   }
 
-  const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+  const member = await fetchMemberForPrivilegeCheck(guild, interaction.user.id);
   if (lane === 'mod' && !canUseAttentionModLane(member, client.config?.roles)) {
     await interaction.reply({
       content: 'You need the uploader role, trial mod role, or Administrator for the mod queue.',
@@ -303,7 +304,7 @@ async function handleAttentionModalSubmit(client, interaction) {
     return interaction.editReply({ content: 'This can only be used in a server.' });
   }
 
-  const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+  const member = await fetchMemberForPrivilegeCheck(guild, interaction.user.id);
   if (!member) {
     return interaction.editReply({ content: 'Could not load your member profile.' });
   }
