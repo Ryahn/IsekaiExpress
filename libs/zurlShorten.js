@@ -2,6 +2,9 @@ const axios = require('axios');
 const logger = require('./logger');
 
 const ZURL_API = 'https://zurl.zonies.xyz/api/v1/urls';
+const F95_HOST_RE = /^(?:https?:\/\/)?(?:www\.)?f95zone\.to(?:\/|$)/i;
+const F95_TEXT_URL_RE = /\b(?:https?:\/\/)?(?:www\.)?f95zone\.to(?:\/[^\s<>"']*)?/gi;
+const TRAILING_PUNCTUATION_RE = /[),.;:!?]+$/;
 
 function isHttpUrl(s) {
   if (!s || typeof s !== 'string') return false;
@@ -46,6 +49,44 @@ async function shortenUrlWithZurl(apiKey, longUrl) {
   return url;
 }
 
+function normalizeF95TextUrl(rawUrl) {
+  const url = String(rawUrl || '').trim();
+  if (!F95_HOST_RE.test(url)) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://${url}`;
+}
+
+/**
+ * Replaces f95zone.to links inside free-form text with zurl links.
+ * @param {import('discord.js').Client} client
+ * @param {string | null | undefined} text
+ * @returns {Promise<string | null>}
+ */
+async function shortenF95UrlsInText(client, text) {
+  if (text == null) return null;
+  const value = String(text);
+  const matches = [...value.matchAll(F95_TEXT_URL_RE)];
+  if (!matches.length) return value;
+
+  const apiKey = client.config?.zurl?.apiKey;
+  const replacements = await Promise.all(
+    matches.map(async (match) => {
+      const original = match[0];
+      const trailing = original.match(TRAILING_PUNCTUATION_RE)?.[0] || '';
+      const url = trailing ? original.slice(0, -trailing.length) : original;
+      const normalized = normalizeF95TextUrl(url);
+      const shortened = await shortenUrlWithZurl(apiKey, normalized);
+      return { original, replacement: `${shortened}${trailing}` };
+    }),
+  );
+
+  let out = value;
+  for (const { original, replacement } of replacements) {
+    out = out.replace(original, replacement);
+  }
+  return out;
+}
+
 /**
  * Shorten thread / ticket / member profile URLs for attention queue (parallel).
  * @param {import('discord.js').Client} client
@@ -72,4 +113,4 @@ async function shortenAttentionUrls(client, urls) {
   return out;
 }
 
-module.exports = { shortenAttentionUrls, shortenUrlWithZurl };
+module.exports = { shortenAttentionUrls, shortenF95UrlsInText, shortenUrlWithZurl };

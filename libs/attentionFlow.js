@@ -14,7 +14,7 @@ const {
   canUseAttentionStaffLane,
   fetchMemberForPrivilegeCheck,
 } = require('../src/bot/utils/guildPrivileges');
-const { shortenAttentionUrls } = require('./zurlShorten');
+const { shortenAttentionUrls, shortenF95UrlsInText } = require('./zurlShorten');
 const { normalizeF95AttentionUrl, validateAttentionHttpUrls } = require('./f95UrlNormalize');
 
 const MAX_URL = 2000;
@@ -229,7 +229,8 @@ async function handleAttentionTypeSelect(client, interaction) {
   const member = await fetchMemberForPrivilegeCheck(guild, interaction.user.id);
   if (lane === 'mod' && !canUseAttentionModLane(member, client.config?.roles)) {
     await interaction.reply({
-      content: 'You need the uploader role, trial mod role, or Administrator for the mod queue.',
+      content:
+        'You need the staff role, mod role, uploader role, trial mod role, or Administrator for the mod queue.',
       flags: MessageFlags.Ephemeral,
     });
     return true;
@@ -311,7 +312,8 @@ async function handleAttentionModalSubmit(client, interaction) {
 
   if (lane === 'mod' && !canUseAttentionModLane(member, client.config?.roles)) {
     return interaction.editReply({
-      content: 'You need the uploader role, trial mod role, or Administrator to use the mod queue.',
+      content:
+        'You need the staff role, mod role, uploader role, trial mod role, or Administrator to use the mod queue.',
     });
   }
   if (lane === 'staff' && !canUseAttentionStaffLane(member, client.config?.roles)) {
@@ -368,6 +370,11 @@ async function handleAttentionModalSubmit(client, interaction) {
   threadUrl = shortened.threadUrl;
   ticketUrl = shortened.ticketUrl;
   profileUrl = shortened.profileUrl;
+
+  [reason, extraNotes] = await Promise.all([
+    shortenF95UrlsInText(client, reason),
+    shortenF95UrlsInText(client, extraNotes),
+  ]);
 
   const cfg = await client.db.getGuildConfigurable(interaction.guildId);
   const destId = cfg?.attention_channel_id != null ? String(cfg.attention_channel_id).trim() : '';

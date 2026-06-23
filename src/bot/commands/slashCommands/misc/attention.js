@@ -30,7 +30,9 @@ module.exports = {
     .setName('attention')
     .setDescription('Submit or configure attention requests for mod or staff')
     .addSubcommand((sub) =>
-      sub.setName('mod').setDescription('Start an attention request (mod queue; uploaders and trial mods)'),
+      sub
+        .setName('mod')
+        .setDescription('Start an attention request (mod queue; staff, mods, uploaders, trial mods)'),
     )
     .addSubcommand((sub) =>
       sub
@@ -87,7 +89,8 @@ module.exports = {
     if (sub === 'mod') {
       if (!canUseAttentionModLane(member, client.config?.roles)) {
         return interaction.reply({
-          content: 'You need the uploader role, trial mod role, or Administrator to use the mod queue.',
+          content:
+            'You need the staff role, mod role, uploader role, trial mod role, or Administrator to use the mod queue.',
           flags: MessageFlags.Ephemeral,
         });
       }

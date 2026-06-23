@@ -1,9 +1,50 @@
 const express = require("express");
 const router = express.Router();
+const fs = require('node:fs');
+const path = require('node:path');
 const { timestamp, getDiscordAvatarUrl } = require("../../../libs/utils");
 const db = require("../../../database/db");
 const crypto = require('crypto');
 const config = require('../../../config');
+
+const slashCommandsPath = path.join(__dirname, '../../bot/commands/slashCommands');
+
+function getSlashCommandFiles(dir) {
+	if (!fs.existsSync(dir)) {
+		return [];
+	}
+
+	return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+		const entryPath = path.join(dir, entry.name);
+
+		if (entry.isDirectory()) {
+			return entry.name === 'handlers' ? [] : getSlashCommandFiles(entryPath);
+		}
+
+		return entry.isFile() && entry.name.endsWith('.js') ? [entryPath] : [];
+	});
+}
+
+async function getSlashCommands() {
+	const commands = [];
+
+	for (const file of getSlashCommandFiles(slashCommandsPath)) {
+		try {
+			const command = require(file);
+			const commandData = typeof command.data === 'function' ? await command.data() : command.data;
+			if (!commandData || typeof commandData.toJSON !== 'function') {
+				continue;
+			}
+
+			const { name, description } = commandData.toJSON();
+			commands.push({ name, description });
+		} catch (error) {
+			console.error(`Failed to load slash command metadata from ${file}:`, error);
+		}
+	}
+
+	return commands;
+}
 
 router.get("/", (req, res) => {
 	const allowed = req.session.roles.includes(config.roles.staff);
@@ -107,8 +148,13 @@ router.get('/slashes', async (req, res) => {
 });
 
 router.get('/slashes/list', async (req, res) => {
-	const commandInfo = require('../../../slashCommands.json');
-	res.json({ commands: commandInfo });
+	try {
+		const commands = await getSlashCommands();
+		res.json({ commands });
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ message: 'Error fetching slash commands', error: error.message });
+	}
 });
 
 module.exports = router;

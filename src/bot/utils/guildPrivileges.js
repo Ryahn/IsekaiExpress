@@ -41,9 +41,7 @@ async function fetchMemberForPrivilegeCheck(guild, userId) {
 function hasGuildAdminOrStaffRole(member, staffRoleId) {
   if (!member) return false;
   if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
-  const staffId = typeof staffRoleId === 'string' ? staffRoleId.trim() : '';
-  if (!staffId) return false;
-  return member.roles.cache.has(staffId);
+  return hasConfiguredGuildRole(member, staffRoleId);
 }
 
 /**
@@ -55,9 +53,7 @@ function hasGuildAdminOrStaffRole(member, staffRoleId) {
 function hasGuildAdminOrModRole(member, staffRoleId, modRoleId) {
   if (!member) return false;
   if (hasGuildAdminOrStaffRole(member, staffRoleId)) return true;
-  const modId = typeof modRoleId === 'string' ? modRoleId.trim() : '';
-  if (!modId) return false;
-  return member.roles.cache.has(modId);
+  return hasConfiguredGuildRole(member, modRoleId);
 }
 
 function normalizedRoleId(roleId) {
@@ -81,12 +77,17 @@ function isGuildTrialMod(member, roles) {
   return hasConfiguredGuildRole(member, roles?.trialmod) || isListedTrialMod(member);
 }
 
-/** /attention mod — uploaders or trial mod (plus Administrator). Mods use the staff queue. */
+/** /attention mod — staff, mods, uploaders, trial mods, or Administrator. */
 function canUseAttentionModLane(member, roles) {
   if (!member) return false;
   if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
   if (!roles) return false;
-  return hasConfiguredGuildRole(member, roles.uploader) || isGuildTrialMod(member, roles);
+  return (
+    hasConfiguredGuildRole(member, roles.staff) ||
+    hasConfiguredGuildRole(member, roles.mod) ||
+    hasConfiguredGuildRole(member, roles.uploader) ||
+    isGuildTrialMod(member, roles)
+  );
 }
 
 /** /attention staff — staff, mod, uploader, or trial mod (plus Administrator). */
