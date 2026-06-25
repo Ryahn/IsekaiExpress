@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
-const fetch = require('node-fetch');
+const axios = require('axios');
 const path = require('path');
 const config = require('../../../../../config');
 
@@ -58,15 +58,19 @@ module.exports = {
                 const apiUrl = `https://api.fluxpoint.dev/nsfw/gif/${imageType}`;
 
                 const response = await client.rateLimitHandler.executeWithRateLimit('fluxpoint-nsfw-gif', async () => {
-                    return await fetch(apiUrl, {
+                    return await axios.get(apiUrl, {
                         headers: { Authorization: config.fluxpointApiKey },
+                        timeout: 10000,
+                        responseType: 'text',
+                        transformResponse: [(d) => d], // keep raw body; we JSON.parse manually below
+                        validateStatus: () => true,
                     });
                 });
-                if (!response.ok) {
-                    const snippet = (await response.text()).slice(0, 200);
+                if (response.status < 200 || response.status >= 300) {
+                    const snippet = String(response.data || '').slice(0, 200);
                     throw new Error(`Fluxpoint API ${response.status} ${response.statusText}: ${snippet}`);
                 }
-                const raw = await response.text();
+                const raw = String(response.data || '');
                 let data;
                 try {
                     data = JSON.parse(raw);
@@ -86,11 +90,7 @@ module.exports = {
                 await interaction.editReply('This command can only be used in NSFW channels!');
             }
         } catch (error) {
-            const errText =
-                error instanceof Error
-                    ? `${error.message}${error.stack ? `\n${error.stack}` : ''}`
-                    : String(error);
-            client.logger.error(`Error executing the fuck command: ${errText}`);
+            client.logger.error('Error executing the fuck command:', error);
             const payload = {
                 content: 'Could not load the image (the external API may be down or changed).',
                 flags: MessageFlags.Ephemeral,

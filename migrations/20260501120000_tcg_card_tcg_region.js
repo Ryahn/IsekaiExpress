@@ -1,21 +1,10 @@
 /**
- * PvE "home region" for cards — powers Home Turf / regional bond synergies ([CardSystem.md]).
- * 1–6 matches libs/tcgPveConfig REGION_NAMES; null = no regional tag.
+ * TCG feature removed. This file remains as a historical migration placeholder so knex migration
+ * history stays valid — this migration is already recorded in production's knex_migrations and
+ * must not vanish. Do not add TCG logic here. The original TCG/card schema is intentionally NOT
+ * created on fresh installs (the feature is gone). See database/README.md.
+ *
+ * @param { import("knex").Knex } knex
  */
-exports.up = async function up(knex) {
-  const has = await knex.schema.hasColumn('card_data', 'tcg_region');
-  if (!has) {
-    await knex.schema.alterTable('card_data', (table) => {
-      table.tinyint('tcg_region').unsigned().nullable();
-    });
-  }
-};
-
-exports.down = async function down(knex) {
-  const has = await knex.schema.hasColumn('card_data', 'tcg_region');
-  if (has) {
-    await knex.schema.alterTable('card_data', (table) => {
-      table.dropColumn('tcg_region');
-    });
-  }
-};
+exports.up = async function up() {};
+exports.down = async function down() {};

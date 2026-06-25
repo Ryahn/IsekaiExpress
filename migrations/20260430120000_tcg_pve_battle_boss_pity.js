@@ -1,20 +1,10 @@
 /**
- * Pity counter for battle-boss card pool drops ([CardSystem.md] — hard pity at 11).
+ * TCG feature removed. This file remains as a historical migration placeholder so knex migration
+ * history stays valid — this migration is already recorded in production's knex_migrations and
+ * must not vanish. Do not add TCG logic here. The original TCG/card schema is intentionally NOT
+ * created on fresh installs (the feature is gone). See database/README.md.
+ *
+ * @param { import("knex").Knex } knex
  */
-exports.up = async function up(knex) {
-  const has = await knex.schema.hasColumn('tcg_pve_progress', 'pve_bb_pity');
-  if (!has) {
-    await knex.schema.alterTable('tcg_pve_progress', (table) => {
-      table.smallint('pve_bb_pity').unsigned().notNullable().defaultTo(0);
-    });
-  }
-};
-
-exports.down = async function down(knex) {
-  const has = await knex.schema.hasColumn('tcg_pve_progress', 'pve_bb_pity');
-  if (has) {
-    await knex.schema.alterTable('tcg_pve_progress', (table) => {
-      table.dropColumn('pve_bb_pity');
-    });
-  }
-};
+exports.up = async function up() {};
+exports.down = async function down() {};

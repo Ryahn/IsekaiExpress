@@ -1,20 +1,10 @@
 /**
- * Boss Pack pulls can target boss-tagged catalog rows ([CardSystem.md] — small boss card chance).
+ * TCG feature removed. This file remains as a historical migration placeholder so knex migration
+ * history stays valid — this migration is already recorded in production's knex_migrations and
+ * must not vanish. Do not add TCG logic here. The original TCG/card schema is intentionally NOT
+ * created on fresh installs (the feature is gone). See database/README.md.
+ *
+ * @param { import("knex").Knex } knex
  */
-exports.up = async function up(knex) {
-  const has = await knex.schema.hasColumn('card_data', 'is_boss_card');
-  if (!has) {
-    await knex.schema.alterTable('card_data', (table) => {
-      table.tinyint('is_boss_card').unsigned().notNullable().defaultTo(0);
-    });
-  }
-};
-
-exports.down = async function down(knex) {
-  const has = await knex.schema.hasColumn('card_data', 'is_boss_card');
-  if (has) {
-    await knex.schema.alterTable('card_data', (table) => {
-      table.dropColumn('is_boss_card');
-    });
-  }
-};
+exports.up = async function up() {};
+exports.down = async function down() {};

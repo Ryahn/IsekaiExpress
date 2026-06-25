@@ -13,6 +13,24 @@ const {
 
 const MODERATION_SLASH_CHANNEL_ID = '370603031361749004';
 
+/**
+ * Load and build one slash command module.
+ *  - Throws on a genuine failure (require failure, data() throw, or toJSON() throw) so the caller
+ *    can log + skip just that one file without aborting the whole ready handler.
+ *  - Returns null for a non-command module (no usable `data` export, e.g. a shared helper file in
+ *    the commands tree) so the caller can skip it silently, as before.
+ * @returns {Promise<{ command: any, commandData: any, json: object } | null>}
+ */
+async function buildSlashCommand(client, file) {
+    const command = require(file);
+    const commandData = typeof command.data === 'function' ? await command.data(client) : command.data;
+    if (!commandData || typeof commandData.toJSON !== 'function') {
+        return null;
+    }
+    const json = commandData.toJSON();
+    return { command, commandData, json };
+}
+
 module.exports = class ReadyEvent extends BaseEvent {
     constructor() {
         super('clientReady');
@@ -50,7 +68,14 @@ module.exports = class ReadyEvent extends BaseEvent {
             return commandFiles;
         }
 
-        const commandFiles = getCommandFiles(slashCommands);
+        let commandFiles = [];
+        let discoveryFailed = false;
+        try {
+            commandFiles = getCommandFiles(slashCommands);
+        } catch (err) {
+            discoveryFailed = true;
+            client.logger.error(`Slash command discovery failed (${slashCommands}): ${err?.message ?? String(err)}`);
+        }
 
         try {
             await client.db.query
@@ -76,53 +101,102 @@ module.exports = class ReadyEvent extends BaseEvent {
             }
         }, 24 * 60 * 60 * 1000);
 
+        let loadedCount = 0;
+        let failedCount = 0;
         for (const file of commandFiles) {
-            const command = require(file);
-            const commandData = typeof command.data === 'function' ? await command.data(client) : command.data;
-            if (!commandData || typeof commandData.toJSON !== 'function') {
+            let built;
+            try {
+                built = await buildSlashCommand(client, file);
+            } catch (err) {
+                // Isolate a bad command file: log filename + reason, skip it, keep loading the rest.
+                failedCount += 1;
+                client.logger.error(`Skipping slash command file ${path.basename(file)}: ${err?.message ?? String(err)}`);
                 continue;
             }
 
-            commands.push(commandData.toJSON());
+            // Non-command module (no `data` export) — silently skip, as the original code did.
+            if (!built) continue;
+
+            const { command, commandData, json } = built;
+            commands.push(json);
             commandInfo.push({
                 name: commandData.name,
                 description: commandData.description,
             });
             client.slashCommands.set(commandData.name, command);
-            const hash = crypto.createHash('md5').update(commandData.name).digest('hex');
+            loadedCount += 1;
 
-            if (commandData.name === 'mod') {
-                /* Per-subcommand rows seeded after this loop (MOD_COMMAND_LOGICAL_KEYS). */
-            } else if (command.category === 'moderation') {
-                await client.db.createCommandSettings(commandData.name, hash, command.category, MODERATION_SLASH_CHANNEL_ID);
-            } else if (commandData.name === 'level' || commandData.name === 'import_rank') {
-                await client.db.createCommandSettings(commandData.name, hash, command.category);
-            } else {
-                await client.db.createCommandSettings(commandData.name, hash, command.category, 'all');
+            // command_settings seeding is best-effort and must not drop a valid command from
+            // registration if the DB write fails.
+            try {
+                const hash = crypto.createHash('md5').update(commandData.name).digest('hex');
+                if (commandData.name === 'mod') {
+                    /* Per-subcommand rows seeded after this loop (MOD_COMMAND_LOGICAL_KEYS). */
+                } else if (command.category === 'moderation') {
+                    await client.db.createCommandSettings(commandData.name, hash, command.category, MODERATION_SLASH_CHANNEL_ID);
+                } else if (commandData.name === 'level' || commandData.name === 'import_rank') {
+                    await client.db.createCommandSettings(commandData.name, hash, command.category);
+                } else {
+                    await client.db.createCommandSettings(commandData.name, hash, command.category, 'all');
+                }
+            } catch (err) {
+                client.logger.error(`command_settings seeding failed for ${commandData.name}: ${err?.message ?? String(err)}`);
             }
+        }
+
+        // Write the command manifest once, after the loop, with only successfully-built commands.
+        try {
             fs.writeFileSync('slashCommands.json', JSON.stringify(commandInfo, null, 2));
+        } catch (err) {
+            client.logger.error(`Failed to write slashCommands.json: ${err?.message ?? String(err)}`);
+        }
+
+        if (failedCount > 0) {
+            client.logger.warn(`Slash command load: ${loadedCount} loaded, ${failedCount} failed/skipped.`);
         }
 
         for (const logicalKey of MOD_COMMAND_LOGICAL_KEYS) {
-            const modHash = crypto.createHash('md5').update(logicalKey).digest('hex');
-            const displayName = logicalKey.replace(/:/g, ' ');
-            await client.db.createCommandSettings(
-                displayName,
-                modHash,
-                'moderation',
-                MODERATION_SLASH_CHANNEL_ID,
-            );
+            // Best-effort, per-key: a DB failure on one key must not abort startup or block
+            // slash registration. createCommandSettings is onConflict-ignore (rarely throws).
+            try {
+                const modHash = crypto.createHash('md5').update(logicalKey).digest('hex');
+                const displayName = logicalKey.replace(/:/g, ' ');
+                await client.db.createCommandSettings(
+                    displayName,
+                    modHash,
+                    'moderation',
+                    MODERATION_SLASH_CHANNEL_ID,
+                );
+            } catch (err) {
+                client.logger.error(`mod command_settings seeding failed for ${logicalKey}: ${err?.message ?? String(err)}`);
+            }
         }
 
-        // try {
-            await rest.put(
-                Routes.applicationGuildCommands(client.config.discord.applicationId, client.config.discord.guildId),
-                { body: commands },
+        // Never register an EMPTY command list — a PUT with [] wipes all existing guild slash
+        // commands. If discovery failed (or nothing built), skip registration and keep the
+        // currently-registered commands in place.
+        if (discoveryFailed || commands.length === 0) {
+            client.logger.error(
+                `Skipping slash command registration (${discoveryFailed ? 'command discovery failed' : 'no commands built'}) ` +
+                'to avoid wiping existing guild slash commands with an empty list. Bot will continue.',
             );
-
-        // } catch (err) {
-        //     client.logger.error(err)
-        // }
+        } else {
+            try {
+                await rest.put(
+                    Routes.applicationGuildCommands(client.config.discord.applicationId, client.config.discord.guildId),
+                    { body: commands },
+                );
+                client.logger.info(`Registered ${commands.length} guild slash commands.`);
+            } catch (err) {
+                // Do NOT abort the rest of ready setup (guild config, prefixes, custom command cache,
+                // intervals) if registration fails. Log code + message only — never the token/headers.
+                // e.g. DiscordAPIError[10002] Unknown Application => APPLICATION_ID/token mismatch.
+                client.logger.error(
+                    `Slash command registration failed (code ${err?.code ?? 'n/a'}): ${err?.message ?? String(err)}. ` +
+                    'Bot will continue; slash commands may be stale until resolved.',
+                );
+            }
+        }
 
         const guildIds = client.guilds.cache.map(g => g.id);
         let dbGuildIds = [];
@@ -211,3 +285,6 @@ module.exports = class ReadyEvent extends BaseEvent {
         client.logger.info('Collection refreshed, no errors occurred while starting the program! SUCCESS!');
     }
 }
+
+// Exposed for focused unit testing of command-file loading isolation.
+module.exports.buildSlashCommand = buildSlashCommand;

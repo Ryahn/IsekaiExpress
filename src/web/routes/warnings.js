@@ -49,7 +49,7 @@ router.post("/add", async (req, res) => {
 		res.status(201).json({ message: 'Warning created' });
 	} catch (error) {
 		console.error(error);
-		res.status(400).json({ message: 'Error creating warning', error: error.message });
+		res.status(400).json({ message: 'Error creating warning' });
 	}
 });
 
@@ -71,7 +71,7 @@ router.post("/edit/:id", async (req, res) => {
 		res.status(200).json({ message: 'Warning updated' });
 	} catch (error) {
 		console.error(error);
-		res.status(400).json({ message: 'Error updating warning', error: error.message });
+		res.status(400).json({ message: 'Error updating warning' });
 	}
 });
 
@@ -88,7 +88,7 @@ router.post("/delete/:id", async (req, res) => {
         res.status(200).json({ message: 'Warning deleted' });
     } catch (error) {
         console.error(error);
-        res.status(400).json({ message: 'Error deleting warning', error: error.message });
+        res.status(400).json({ message: 'Error deleting warning' });
     }
 });
 

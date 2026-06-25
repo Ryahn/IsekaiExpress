@@ -1,26 +1,10 @@
 /**
+ * TCG feature removed. This file remains as a historical migration placeholder so knex migration
+ * history stays valid — this migration is already recorded in production's knex_migrations and
+ * must not vanish. Do not add TCG logic here. The original TCG/card schema is intentionally NOT
+ * created on fresh installs (the feature is gone). See database/README.md.
+ *
  * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
  */
-exports.up = function(knex) {
-	return knex.schema.hasTable('rarity').then(function(exists) {
-		if (!exists) {
-			return knex.schema.createTable('rarity', function(table) {
-				table.bigIncrements('rare_id').primary();
-				table.string('name');
-				table.string('abbreviation');
-				table.float('high_chance');
-				table.float('low_chance');
-				table.integer('stars');
-			});
-		}
-	});
-};
-
-/**
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
- */
-exports.down = function(knex) {
-	return knex.schema.dropTableIfExists('rarity');
-};
+exports.up = async function up() {};
+exports.down = async function down() {};

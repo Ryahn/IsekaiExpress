@@ -26,6 +26,17 @@ class BotClient extends Client {
 	}
 
 	async connect() {
+		// Fail fast (clear missing-variable NAMES, never values) instead of looping on a bad login.
+		const missing = [];
+		if (!config.discord.botToken) missing.push('DISCORD_BOT_TOKEN');
+		if (!config.discord.applicationId) missing.push('APPLICATION_ID (or DISCORD_CLIENT_ID)');
+		if (!config.discord.guildId) missing.push('DISCORD_GUILD_ID');
+		if (!config.mysql.user) missing.push('MYSQL_USER');
+		if (!config.mysql.database) missing.push('MYSQL_DB');
+		if (missing.length) {
+			logger.error(`Missing required environment variables: ${missing.join(', ')}. Set them in .env (see .env.example).`);
+			process.exit(1);
+		}
 		try {
 			logger.startup('Bot is starting...');
 			await this.login(config.discord.botToken);

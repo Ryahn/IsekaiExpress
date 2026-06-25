@@ -65,7 +65,7 @@ router.get("/list", async (req, res) => {
 		res.json({ commands: results });
 	} catch (error) {
 		console.error(error);
-		res.status(400).json({ message: 'Error fetching commands', error: error.message });
+		res.status(400).json({ message: 'Error fetching commands' });
 	}
 });
 
@@ -93,7 +93,7 @@ router.post("/add", async (req, res) => {
 		res.status(201).json({ message: 'Command created' });
 	} catch (error) {
 		console.error(error);
-		res.status(500).json({ message: 'Internal server error', error: error.message });
+		res.status(500).json({ message: 'Internal server error' });
 	}
 });
 
@@ -120,7 +120,7 @@ router.post("/edit/:id", async (req, res) => {
 		res.status(200).json({ message: 'Command updated' });
 	} catch (error) {
 		console.error(error);
-		res.status(500).json({ message: 'Internal server error', error: error.message });
+		res.status(500).json({ message: 'Internal server error' });
 	}
 });
 
@@ -139,7 +139,7 @@ router.post("/delete/:id", async(req, res) => {
 		res.status(200).json({ message: 'Command deleted' });
 	} catch (error) {
 		console.error(error);
-		res.status(500).json({ message: 'Internal server error', error: error.message });
+		res.status(500).json({ message: 'Internal server error' });
 	}
 });
 
@@ -153,7 +153,7 @@ router.get('/slashes/list', async (req, res) => {
 		res.json({ commands });
 	} catch (error) {
 		console.error(error);
-		res.status(500).json({ message: 'Error fetching slash commands', error: error.message });
+		res.status(500).json({ message: 'Error fetching slash commands' });
 	}
 });
 

@@ -1,5 +1,6 @@
-const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const moment = require('moment');
+const { requireModerator } = require('../../../../utils/permissionGuards');
 
 async function getBans(db, page) {
   const itemsPerPage = 5;
@@ -28,12 +29,7 @@ function createBansEmbed(totalBans, bans, currentPage, totalPages) {
 }
 
 async function bansListExecute(client, interaction) {
-  if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) {
-    return interaction.editReply({
-      content: 'You do not have permission to list bans.',
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  if (!(await requireModerator(client, interaction))) return;
 
   const pageRequested = interaction.options.getInteger('page') ?? 1;
 
@@ -59,9 +55,7 @@ async function bansListExecute(client, interaction) {
 async function unbanExecute(client, interaction) {
   let userId;
   try {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) {
-      return interaction.followUp('You do not have permission to unban users.');
-    }
+    if (!(await requireModerator(client, interaction))) return;
 
     const targetUser = interaction.options.getUser('user');
     const targetUserId = interaction.options.getString('userid');

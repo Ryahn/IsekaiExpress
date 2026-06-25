@@ -55,7 +55,10 @@ module.exports = {
 
   session: {
     secret: str('SESSION_SECRET', ''),
-    expires: int('SESSION_EXPIRES', 7)
+    expires: int('SESSION_EXPIRES', 7),
+    /** Set true in production (TLS terminated at the proxy + trust proxy enabled). Default false
+     *  preserves current behavior for local/HTTP dev. */
+    cookieSecure: bool('SESSION_COOKIE_SECURE', false)
   },
 
   mysql: {

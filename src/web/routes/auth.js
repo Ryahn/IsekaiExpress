@@ -31,11 +31,7 @@ router.get(
   async (req, res) => {
     try {
       const userId = req.user.id;
-      const [member, userRows] = await Promise.all([
-        rest.get(Routes.guildMember(config.discord.guildId, userId)),
-        db.sql('SELECT * FROM users WHERE discord_id = ?', [userId])
-      ]);
-      const existingUser = userRows[0];
+      const member = await rest.get(Routes.guildMember(config.discord.guildId, userId));
 
       req.session.roles = member.roles;
       req.session.loggedin = true;
@@ -44,9 +40,12 @@ router.get(
       req.session.expires = Date.now() + daysToSeconds(config.session.expires);
       req.session.csrf = generateCsrfToken();
 
-      if (!existingUser) {
-        await db.sql('INSERT INTO users (username, discord_id) VALUES (?, ?)', [req.user.username, userId]);
-      }
+      // Upsert instead of race-prone read-then-insert; the users_discord_id_unique index makes
+      // concurrent logins for the same Discord user collapse to one row (username refreshed).
+      await db.sql(
+        'INSERT INTO users (username, discord_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE username = VALUES(username)',
+        [req.user.username, userId],
+      );
 
       req.session.save((err) => {
         if (err) {

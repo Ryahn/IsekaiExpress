@@ -1,14 +1,10 @@
 /**
- * Align card_data.member_id with users.id when stage 2 ran before ensureNullableUserFkColumn.
+ * TCG feature removed. This file remains as a historical migration placeholder so knex migration
+ * history stays valid — this migration is already recorded in production's knex_migrations and
+ * must not vanish. Do not add TCG logic here. The original TCG/card schema is intentionally NOT
+ * created on fresh installs (the feature is gone). See database/README.md.
+ *
+ * @param { import("knex").Knex } knex
  */
-const { ensureNullableUserFkColumn } = require('./helpers/mysqlUsersId');
-
-exports.up = async function up(knex) {
-  if (await knex.schema.hasColumn('card_data', 'member_id')) {
-    await ensureNullableUserFkColumn(knex, 'card_data', 'member_id');
-  }
-};
-
-exports.down = async function down() {
-  /* data repair; down is a no-op */
-};
+exports.up = async function up() {};
+exports.down = async function down() {};

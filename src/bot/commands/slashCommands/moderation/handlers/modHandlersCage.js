@@ -1,10 +1,10 @@
 const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const moment = require('moment');
+const { requireModerator } = require('../../../../utils/permissionGuards');
 
 async function cageApplyExecute(client, interaction) {
-  if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
-    return interaction.editReply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
-  }
+  // Moderation action — honor configured mod/staff roles (mirrors cage remove).
+  if (!(await requireModerator(client, interaction))) return;
 
   const userToCage = interaction.options.getUser('user');
   const duration = interaction.options.getString('duration');
@@ -104,6 +104,9 @@ async function cageApplyExecute(client, interaction) {
 }
 
 async function cageRemoveExecute(client, interaction) {
+  // Removes a moderation cage (role + DB row) — restrict to moderators, mirroring cage apply.
+  if (!(await requireModerator(client, interaction))) return;
+
   const userToUncage = interaction.options.getUser('user');
 
   const cageRoleId = await client.db.getCageRoleId(userToUncage.id);
@@ -136,6 +139,9 @@ async function cageRemoveExecute(client, interaction) {
 }
 
 async function cageListExecute(client, interaction) {
+  // Exposes caged-user IDs, reasons, and acting moderators — mod-gated like bans:list / warnings.
+  if (!(await requireModerator(client, interaction))) return;
+
   const cagedUsers = await client.db.getCagedUsers(client.utils.timestamp());
 
   if (!cagedUsers) {

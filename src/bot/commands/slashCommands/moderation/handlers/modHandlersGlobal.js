@@ -1,17 +1,9 @@
 const { MessageFlags } = require('discord.js');
 const { parseWhitelistJson, updateGuildGlobalLockCache } = require('../../../../middleware/globalCommandLock');
-const { hasGuildAdminOrStaffRole } = require('../../../../utils/guildPrivileges');
+const { requireStaff } = require('../../../../utils/permissionGuards');
 
 async function globalLockOnExecute(client, interaction) {
-  if (!interaction.inGuild()) {
-    return interaction.editReply({ content: 'This command can only be used in a server.', flags: MessageFlags.Ephemeral });
-  }
-  if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
-    return interaction.editReply({
-      content: 'You need Administrator permission or the configured staff role.',
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  if (!(await requireStaff(client, interaction))) return;
 
   const guildId = interaction.guildId;
   await client.db.updateGuildGlobalCommandLock(guildId, { locked: false });
@@ -28,15 +20,7 @@ async function globalLockOnExecute(client, interaction) {
 }
 
 async function globalLockOffExecute(client, interaction) {
-  if (!interaction.inGuild()) {
-    return interaction.editReply({ content: 'This command can only be used in a server.', flags: MessageFlags.Ephemeral });
-  }
-  if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
-    return interaction.editReply({
-      content: 'You need Administrator permission or the configured staff role.',
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  if (!(await requireStaff(client, interaction))) return;
 
   const guildId = interaction.guildId;
   const row = await client.db.getGuildConfigurable(guildId);
@@ -56,15 +40,7 @@ async function globalLockOffExecute(client, interaction) {
 }
 
 async function globalWhitelistExecute(client, interaction) {
-  if (!interaction.inGuild()) {
-    return interaction.editReply({ content: 'This command can only be used in a server.', flags: MessageFlags.Ephemeral });
-  }
-  if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
-    return interaction.editReply({
-      content: 'You need Administrator permission or the configured staff role.',
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  if (!(await requireStaff(client, interaction))) return;
 
   const guildId = interaction.guildId;
   const channel = interaction.options.getChannel('channel', true);

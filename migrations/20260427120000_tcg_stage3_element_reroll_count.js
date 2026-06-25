@@ -1,17 +1,10 @@
 /**
- * Stage 3 — element reroll pricing uses per-card reroll count ([CardSystem.md]).
+ * TCG feature removed. This file remains as a historical migration placeholder so knex migration
+ * history stays valid — this migration is already recorded in production's knex_migrations and
+ * must not vanish. Do not add TCG logic here. The original TCG/card schema is intentionally NOT
+ * created on fresh installs (the feature is gone). See database/README.md.
+ *
+ * @param { import("knex").Knex } knex
  */
-exports.up = async function up(knex) {
-  if (await knex.schema.hasColumn('user_cards', 'element_reroll_count')) return;
-  await knex.schema.alterTable('user_cards', (table) => {
-    table.integer('element_reroll_count').unsigned().notNullable().defaultTo(0);
-  });
-};
-
-exports.down = async function down(knex) {
-  if (await knex.schema.hasColumn('user_cards', 'element_reroll_count')) {
-    await knex.schema.alterTable('user_cards', (table) => {
-      table.dropColumn('element_reroll_count');
-    });
-  }
-};
+exports.up = async function up() {};
+exports.down = async function down() {};

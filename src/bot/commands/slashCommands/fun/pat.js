@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
-const { fetchRandom } = require('nekos-best.js');
+const { fetchRandom } = require('../../../utils/nekosBest');
 const path = require('path');
 
 module.exports = {
@@ -40,7 +40,7 @@ module.exports = {
             'a husbando'];
         let random = Math.floor(Math.random() * people.length);
 
-        let headPatTarget = targetUser ? `${targetUser}` : people[random];
+        let headPatTarget = target ? `${target}` : people[random];
         const embed = new EmbedBuilder()
             .setDescription(`${interaction.user} pats ${headPatTarget}`)
             .setColor(`#${getRandomColor()}`)

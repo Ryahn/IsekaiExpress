@@ -3,11 +3,11 @@ const Tesseract = require('tesseract.js');
 const axios = require('axios');
 const fs = require('fs');
 const sharp = require('sharp');
+const { requireModerator, requireGuildManager, denyEphemeral } = require('../../../../utils/permissionGuards');
 
 async function xpSettingsExecute(client, interaction) {
-  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    return interaction.editReply({ content: 'You do not have permission to change XP settings.', flags: MessageFlags.Ephemeral });
-  }
+  // Guild-scoped XP settings (updateXPSettings is keyed by guildId) — guild managers may change.
+  if (!(await requireGuildManager(client, interaction))) return;
 
   const { getRandomColor } = client.utils;
 
@@ -74,6 +74,9 @@ async function xpSettingsExecute(client, interaction) {
 }
 
 async function xpUserExecute(client, interaction) {
+  // Mutates another user's XP/level — restrict to moderators (admin, staff, or mod role).
+  if (!(await requireModerator(client, interaction))) return;
+
   const { getRandomColor } = client.utils;
   const option = interaction.options.getString('option');
   const user = interaction.options.getUser('target');
@@ -133,9 +136,8 @@ async function xpUserExecute(client, interaction) {
 
 async function xpDoubleExecute(client, interaction) {
   try {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.followUp('You do not have permission to enable double XP.');
-    }
+    // Guild-scoped double-XP toggle (toggleDoubleXP is keyed by guildId).
+    if (!(await requireGuildManager(client, interaction))) return;
 
     const guildId = interaction.guildId;
     const settings = await client.db.getXPSettings(guildId);
@@ -153,8 +155,9 @@ async function xpDoubleExecute(client, interaction) {
 
 async function xpImportRankExecute(client, interaction) {
   try {
+    // KEPT Administrator-only: bulk OCR XP import can overwrite leaderboard state.
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      await interaction.editReply('You do not have permission to use this command.');
+      await denyEphemeral(interaction, 'You do not have permission to use this command (Administrator only).');
       return;
     }
 

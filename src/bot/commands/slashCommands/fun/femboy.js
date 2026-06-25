@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
-const fetch = require('node-fetch');
+const axios = require('axios');
 const path = require('path');
 
 module.exports = {
@@ -25,16 +25,16 @@ module.exports = {
             });
         }
     
-		const query = interaction.options.getString('query');
+		const query = interaction.options.getString('tags');
 
-		const api = `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&limit=100&tags=${query}&api_key=${client.config.femboy.apiKey}&user_id=${client.config.femboy.userId}`;
+		const api = `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&limit=100&tags=${encodeURIComponent(query)}&api_key=${client.config.femboy.apiKey}&user_id=${client.config.femboy.userId}`;
 
 		const response = await client.rateLimitHandler.executeWithRateLimit('gelbooru-api', async () => {
-			return await fetch(api);
+			return await axios.get(api, { timeout: 10000, validateStatus: () => true });
 		});
-		if (!response.ok) return interaction.editReply({ content: 'No results found', flags: MessageFlags.Ephemeral });
+		if (response.status < 200 || response.status >= 300) return interaction.editReply({ content: 'No results found', flags: MessageFlags.Ephemeral });
 
-		const data = await response.json();
+		const data = response.data;
 		if (!data.post || data.post.length <= 0) return interaction.editReply({ content: 'No results found', flags: MessageFlags.Ephemeral });
 
 		const index = Math.floor(Math.random() * data.post.length);

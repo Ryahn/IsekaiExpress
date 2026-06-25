@@ -1,13 +1,17 @@
 **/node_modules
 .env
+.env.*
+!.env.example
 .config.js
 **/logs
 **/level_card.png
+**/cropped_level_card.png
 **/src/bot/media/cards/*
 test.js
 slashCommands.json
 *.txt
 f95bot.sql
+*backup*.sql
 batch_*.json
 .cursor/
 .claude

@@ -1,14 +1,13 @@
-const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const moment = require('moment');
+const { requireModerator } = require('../../../../utils/permissionGuards');
 
 async function warnExecute(client, interaction) {
   if (!client.config.warningSystem.enabled) {
     return interaction.editReply('The warning system is not enabled.');
   }
   try {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) {
-      return interaction.followUp('You do not have permission to warn users.');
-    }
+    if (!(await requireModerator(client, interaction))) return;
 
     const targetUser = interaction.options.getUser('user');
     const reason = interaction.options.getString('reason') || 'No reason provided';
@@ -91,9 +90,7 @@ async function warningsListExecute(client, interaction) {
     return interaction.editReply({ content: 'The warning system is not enabled.', flags: MessageFlags.Ephemeral });
   }
 
-  if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) {
-    return interaction.editReply({ content: 'You do not have permission to list warnings for users.', flags: MessageFlags.Ephemeral });
-  }
+  if (!(await requireModerator(client, interaction))) return;
 
   const targetUser = interaction.options.getUser('user');
   const pageRequested = interaction.options.getInteger('page') ?? 1;
@@ -122,9 +119,7 @@ async function delwarnExecute(client, interaction) {
     return interaction.editReply('The warning system is not enabled.');
   }
 
-  if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) {
-    return interaction.followUp('You do not have permission to delete warnings.');
-  }
+  if (!(await requireModerator(client, interaction))) return;
 
   const warnId = interaction.options.getString('warn_id');
 

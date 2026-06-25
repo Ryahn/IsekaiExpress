@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
-const fetch = require('node-fetch');
+const axios = require('axios');
 const path = require('path');
 
 module.exports = {
@@ -28,9 +28,9 @@ module.exports = {
             let target = interaction.options.getUser('target') || interaction.user;
             const avatar = target.displayAvatarURL({ size: 512, format: 'jpg', dynamic: false });
             const response = await client.rateLimitHandler.executeWithRateLimit('nekobot-api', async () => {
-                return await fetch(`https://nekobot.xyz/api/imagegen?type=magik&image=${avatar}`);
+                return await axios.get(`https://nekobot.xyz/api/imagegen?type=magik&image=${avatar}`, { timeout: 10000 });
             });
-            const data = await response.json();
+            const data = response.data;
 
             const embed = new EmbedBuilder() // or MessageEmbed based on your version
                 .setTitle('Magik')

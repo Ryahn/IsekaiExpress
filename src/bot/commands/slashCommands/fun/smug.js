@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
-const { fetchRandom } = require('nekos-best.js');
+const { fetchRandom } = require('../../../utils/nekosBest');
 const path = require('path');
 
 module.exports = {

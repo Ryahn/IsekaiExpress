@@ -1,7 +1,7 @@
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 const moment = require('moment');
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
-const { hasGuildAdminOrStaffRole } = require('../../../../utils/guildPrivileges');
+const { requireStaff, requireGuildManager } = require('../../../../utils/permissionGuards');
 const {
   augmentUpdateCommandSubcommand,
   updateCommandSettingsExecute,
@@ -16,6 +16,9 @@ function forumTagToData(tag) {
 }
 
 async function serverSettingsExecute(client, interaction) {
+  // Toggles guild-wide systems (XP, warnings, image archive, level-up) — restrict to guild managers.
+  if (!(await requireGuildManager(client, interaction))) return;
+
   try {
     const option = interaction.options.getString('option');
 
@@ -103,9 +106,7 @@ function createCommandSettingsEmbed(totalCommands, commands, currentPage, totalP
 }
 
 async function channelSettingsExecute(client, interaction) {
-  if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
-    return interaction.editReply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
-  }
+  if (!(await requireStaff(client, interaction))) return;
 
   const pageRequested = interaction.options.getInteger('page') || 1;
 
@@ -254,15 +255,8 @@ async function channelStatsExecute(client, interaction) {
 }
 
 async function copyChannelExecute(client, interaction) {
-  if (!interaction.inGuild()) {
-    return interaction.editReply({ content: 'This command can only be used in a server.', flags: MessageFlags.Ephemeral });
-  }
-  if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
-    return interaction.editReply({
-      content: 'You need Administrator permission or the configured staff role.',
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  // requireStaff denies non-guild use ("server only") as well as non-staff callers.
+  if (!(await requireStaff(client, interaction))) return;
 
   const source = interaction.options.getChannel('to_copy', true);
   const newName = interaction.options.getString('new_name', true).trim();

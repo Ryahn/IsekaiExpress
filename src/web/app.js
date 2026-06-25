@@ -1,4 +1,5 @@
 const express = require("express");
+const helmet = require("helmet");
 const session = require("express-session");
 const passport = require("passport");
 const RedisStore = require("connect-redis").default;
@@ -22,6 +23,14 @@ let redisStore = new RedisStore({
 
 const app = express();
 
+// Security headers. CSP is intentionally disabled: templates use inline scripts/styles and
+// vendored assets (leaflet, fontawesome, dhtmlx, lodash), which a strict CSP would break. The
+// remaining helmet defaults (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, HSTS, etc.)
+// are safe and add value. Revisit a tailored CSP separately if inline assets are removed.
+app.use(helmet({ contentSecurityPolicy: false }));
+// Behind the Traefik TLS proxy; needed for correct protocol/IP detection and secure cookies.
+app.set('trust proxy', 1);
+
 nunjucks.configure([
   path.join(__dirname, 'views'),
 ], {
@@ -40,7 +49,11 @@ app.use(
     secret: config.session.secret,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false },
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax', // allows the cookie on the top-level OAuth callback redirect
+      secure: config.session.cookieSecure,
+    },
   })
 );
 
@@ -233,6 +246,10 @@ app.get('/', (req, res) => {
 });
 
 async function start() {
+  if (!config.session.secret) {
+    logger.error('Missing required environment variable: SESSION_SECRET. Set it in .env (see .env.example).');
+    process.exit(1);
+  }
   try {
     await redisClient.connect();
     logger.startup('Connected to Redis server');

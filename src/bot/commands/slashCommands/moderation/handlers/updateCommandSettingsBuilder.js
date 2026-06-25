@@ -1,5 +1,6 @@
 const { MessageFlags } = require('discord.js');
 const { PermissionFlagsBits } = require('discord.js');
+const { denyEphemeral } = require('../../../../utils/permissionGuards');
 
 function escapeLikeSegment(s) {
   return String(s).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
@@ -53,8 +54,10 @@ async function updateCommandSettingsExecute(client, interaction) {
 
     const channel = interaction.options.getChannel('channel', true);
 
+    // KEPT Administrator-only: command_settings is a global (non guild-scoped) table; a change
+    // here affects the command's allowed channel for every guild the bot serves.
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.followUp('You do not have permission to use this command.');
+      return denyEphemeral(interaction, 'You do not have permission to use this command (Administrator only).');
     }
 
     await client.db.updateCommandSettings(selectedCommand, channel.id);

@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const utils = require('./utils');
 
 /** @type {Map<string, number>} key: `${userId}:${channelId}` → last XP grant epoch ms */
 const lastChannelMessageXpAt = new Map();
@@ -15,8 +16,12 @@ function pruneMessageXpCooldownMap() {
 
 const self = (module.exports = {
   xpSystem: async (client, message) => {
+    // Callers (messageCreate) already filter bots / DMs, but guard defensively so this
+    // service is safe to call from anywhere.
+    if (!message.guild || message.author.bot || message.webhookId || message.system) return;
+
     try {
-      client.db.checkUser(message.author);
+      await client.db.checkUser(message.author);
       const settings = await client.db.getXPSettings(message.guild.id);
       const cdSec = Math.max(1, Number(settings.message_xp_cooldown_seconds) || 60);
       const cdMs = cdSec * 1000;
@@ -27,9 +32,8 @@ const self = (module.exports = {
         return;
       }
 
-      const user = await client.db.getUserXP(message.author.id);
-      const guildSettings = (await client.db.getGuildConfigurable(message.guild.id)) || {};
-
+      // Claim the cooldown slot BEFORE any awaited work so a burst of messages in the
+      // same channel cannot race past the check and grant XP multiple times.
       pruneMessageXpCooldownMap();
       lastChannelMessageXpAt.set(cooldownKey, now);
 
@@ -42,34 +46,43 @@ const self = (module.exports = {
       let xpGain = lo === hi ? lo : Math.floor(Math.random() * (hi - lo + 1)) + lo;
 
       if (settings.double_xp_enabled || self.isWeekend(settings.weekend_days)) {
-        xpGain = Math.floor(xpGain * Number(settings.weekend_multiplier) || 1);
+        // Parenthesise the multiply: the previous `xpGain * Number(x) || 1` bound `||` to the
+        // whole product, silently flooring legitimate gains to 1 when the multiplier was odd.
+        const mult = Number(settings.weekend_multiplier) || 1;
+        xpGain = Math.floor(xpGain * mult);
       }
 
-      user.xp += xpGain;
-      user.message_count = 0;
+      // Atomic increment under a row lock — no lost updates across concurrent channels.
+      const result = await client.db.addUserXP(message.author.id, xpGain, utils.calculateLevel);
 
-      const newLevel = self.calculateLevel(user.xp);
-      if (newLevel > user.level) {
-        user.level = newLevel;
+      if (result.leveledUp) {
+        const guildSettings = (await client.db.getGuildConfigurable(message.guild.id)) || {};
         if (guildSettings.level_up_enabled && guildSettings.level_up_channel) {
           const channel = message.guild.channels.cache.get(guildSettings.level_up_channel);
-          if (channel) self.sendLevelUpMessage(channel, message.author, newLevel);
+          if (channel) {
+            await self.sendLevelUpMessage(channel, message.author, result.level).catch((e) =>
+              client.logger.error('Error sending level-up message:', e),
+            );
+          }
         }
       }
 
-      await client.db.updateUserXPAndLevel(message.author.id, user.xp, user.level, user.message_count);
-      client.logger.info(`${message.author.username} gained ${xpGain} XP and is now level ${user.level}`);
+      client.logger.info(
+        `${message.author.username} gained ${xpGain} XP and is now level ${result.level}`,
+      );
     } catch (error) {
       client.logger.error('Error in XP system:', error);
     }
   },
 
   isWeekend: (weekendDays) => {
+    if (!weekendDays) return false;
     const today = new Date().toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase();
-    return weekendDays.split(',').includes(today);
+    return String(weekendDays).split(',').map((d) => d.trim()).includes(today);
   },
 
-  calculateLevel: (xp) => Math.floor(0.47 * Math.sqrt(xp)),
+  /** Kept as an alias of the canonical formula in libs/utils to avoid drift. */
+  calculateLevel: utils.calculateLevel,
 
   sendLevelUpMessage: (channel, user, newLevel) => {
     const embed = new EmbedBuilder()
@@ -78,6 +91,6 @@ const self = (module.exports = {
       .setColor('#00FF00')
       .setThumbnail(user.displayAvatarURL());
 
-    channel.send({ embeds: [embed] });
+    return channel.send({ embeds: [embed] });
   },
 });

@@ -1,21 +1,10 @@
 /**
- * Basic pack pity — [CardSystem.md] 10 packs without Uncommon → Uncommon on 10th.
- * Stored as consecutive pack opens that contained zero UC pulls (0–9+; force at >= 9).
+ * TCG feature removed. This file remains as a historical migration placeholder so knex migration
+ * history stays valid — this migration is already recorded in production's knex_migrations and
+ * must not vanish. Do not add TCG logic here. The original TCG/card schema is intentionally NOT
+ * created on fresh installs (the feature is gone). See database/README.md.
+ *
+ * @param { import("knex").Knex } knex
  */
-exports.up = async function up(knex) {
-  const has = await knex.schema.hasColumn('user_wallets', 'tcg_basic_pack_pity');
-  if (!has) {
-    await knex.schema.alterTable('user_wallets', (table) => {
-      table.smallint('tcg_basic_pack_pity').unsigned().notNullable().defaultTo(0);
-    });
-  }
-};
-
-exports.down = async function down(knex) {
-  const has = await knex.schema.hasColumn('user_wallets', 'tcg_basic_pack_pity');
-  if (has) {
-    await knex.schema.alterTable('user_wallets', (table) => {
-      table.dropColumn('tcg_basic_pack_pity');
-    });
-  }
-};
+exports.up = async function up() {};
+exports.down = async function down() {};

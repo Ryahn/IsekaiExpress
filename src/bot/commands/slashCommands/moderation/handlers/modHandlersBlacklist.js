@@ -1,13 +1,10 @@
 const { EmbedBuilder, MessageFlags } = require('discord.js');
-const { hasGuildAdminOrStaffRole } = require('../../../../utils/guildPrivileges');
+const { requireStaff } = require('../../../../utils/permissionGuards');
 const { resolveInvite, parseInviteCodeFromUserInput } = require('../../../../../../libs/invitePolicy');
 
+// Delegates to the shared staff guard (admin or configured staff role); ephemeral, no double-reply.
 async function assertStaff(interaction, client) {
-  if (!hasGuildAdminOrStaffRole(interaction.member, client.config.roles.staff)) {
-    await interaction.editReply({ content: 'You need the staff role or Administrator.', flags: MessageFlags.Ephemeral });
-    return false;
-  }
-  return true;
+  return requireStaff(client, interaction);
 }
 
 const SNOWFLAKE_RE = /^\d{17,20}$/;

@@ -1,15 +1,10 @@
 /**
- * user_wallets may have been created with BIGINT UNSIGNED while users.id is signed BIGINT,
- * leaving no FK if an older 20260426120000 ran before alignUserIdColumnAndFk existed.
+ * TCG feature removed. This file remains as a historical migration placeholder so knex migration
+ * history stays valid — this migration is already recorded in production's knex_migrations and
+ * must not vanish. Do not add TCG logic here. The original TCG/card schema is intentionally NOT
+ * created on fresh installs (the feature is gone). See database/README.md.
+ *
+ * @param { import("knex").Knex } knex
  */
-const { alignUserIdColumnAndFk } = require('./helpers/mysqlUsersId');
-
-exports.up = async function up(knex) {
-  if (await knex.schema.hasTable('user_wallets')) {
-    await alignUserIdColumnAndFk(knex, 'user_wallets', { onDelete: 'CASCADE' });
-  }
-};
-
-exports.down = async function down() {
-  /* data repair; down is a no-op */
-};
+exports.up = async function up() {};
+exports.down = async function down() {};
