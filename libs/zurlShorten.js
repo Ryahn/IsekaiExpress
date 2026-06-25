@@ -6,6 +6,16 @@ const F95_HOST_RE = /^(?:https?:\/\/)?(?:www\.)?f95zone\.to(?:\/|$)/i;
 const F95_TEXT_URL_RE = /\b(?:https?:\/\/)?(?:www\.)?f95zone\.to(?:\/[^\s<>"']*)?/gi;
 const TRAILING_PUNCTUATION_RE = /[),.;:!?]+$/;
 
+function sanitizeShortenInput(raw) {
+  let url = String(raw || '').trim();
+  if (!url) return '';
+  if (url.startsWith('<') && url.endsWith('>')) {
+    url = url.slice(1, -1).trim();
+  }
+  url = url.replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
+  return url.trim();
+}
+
 function isHttpUrl(s) {
   if (!s || typeof s !== 'string') return false;
   return /^https?:\/\//i.test(s.trim());
@@ -18,11 +28,16 @@ function isHttpUrl(s) {
  * @returns {Promise<string>}
  */
 async function shortenUrlWithZurl(apiKey, longUrl) {
-  const url = String(longUrl).trim();
+  let url = sanitizeShortenInput(longUrl);
   if (!url) return url;
   const key = String(apiKey || '').trim();
   if (!key) return url;
   if (!isHttpUrl(url)) return url;
+  try {
+    url = new URL(url).href;
+  } catch {
+    return url;
+  }
 
   try {
     const res = await axios.post(ZURL_API, { url }, {

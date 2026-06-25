@@ -3,14 +3,11 @@
 .config.js
 **/logs
 **/level_card.png
+**/src/bot/media/cards/*
 test.js
 slashCommands.json
-**/src/bot/media/cards/*
-**/src/bot/tcg/*_data.json
 *.txt
 f95bot.sql
 batch_*.json
-CardSystem.md
 .cursor/
-**/src/card_web/Aniworld*
 .claude

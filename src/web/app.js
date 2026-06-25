@@ -24,7 +24,6 @@ const app = express();
 
 nunjucks.configure([
   path.join(__dirname, 'views'),
-  path.join(__dirname, '../char_voting/views'),
 ], {
   autoescape: true,                            // Escape variables by default
   express: app,                                // Connect with Express
@@ -45,16 +44,7 @@ app.use(
   })
 );
 
-app.use(
-  '/public/cards',
-  express.static(path.join(__dirname, '../bot/media/cards')),
-);
-app.use(
-  '/public/tcg-elements',
-  express.static(path.join(__dirname, '../../tools/card_elements')),
-);
 app.use('/public', express.static(path.join(__dirname, "public")));
-app.use('/char_voting/uploads', express.static(path.join(__dirname, '../char_voting/uploads')));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.set('views', path.join(__dirname, 'views'));
@@ -101,10 +91,7 @@ app.use((req, res, next) => {
     req.path === '/auth/login' ||
     req.path === '/auth/discord/callback' ||
     req.path === '/docs/farm' ||
-    req.path.startsWith('/stats/') ||
-    req.path.startsWith('/char_voting') ||
-    req.path.startsWith('/tcg/') ||
-    req.path.startsWith('/api/tcg/')
+    req.path.startsWith('/stats/')
   ) {
     return next();
   }
@@ -237,9 +224,6 @@ app.get('/stats/farm', async (req, res, next) => {
     next(err);
   }
 });
-
-const cardCatalogRoutes = require('../card_web/cardCatalogRoutes');
-app.use(cardCatalogRoutes);
 
 const indexRouter = require("./routes/routerIndex");
 app.use("/", indexRouter);

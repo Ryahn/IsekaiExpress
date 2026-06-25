@@ -154,12 +154,6 @@ const self = module.exports = {
     return rows[0];
   },
 
-  updateCardDescription: async (uuid, description) => {
-    await db.table('card_data').where('uuid', uuid).update({ description: description });
-    const card = await db.table('card_data').where('uuid', uuid).first();
-    return card;
-  },
-
   createCommandSettings: async (name, hash, category = 'misc', channelId = '351435045921357824',) => {
     await db.table('command_settings').insert({name: name, hash: hash, channel_id: channelId, category: category, created_at: nowUnix(), updated_at: nowUnix()}).onConflict('hash').ignore();
   },
@@ -181,10 +175,6 @@ const self = module.exports = {
 
   updateCommandSettings: async (hash, channelId) => {
     await db.table('command_settings').update({channel_id: channelId}).where({hash: hash});
-  },
-
-  createCard: async (card) => {
-    await db.table('card_data').insert(card).onConflict('uuid').merge();
   },
 
   getUserRank: async (userId) => {

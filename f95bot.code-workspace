@@ -20,10 +20,5 @@
 			"name": "Root",
 			"path": "."
 		}
-	],
-	"settings": {
-		"files.exclude": {
-			"src/bot/media/cards/*": true
-		}
-	}
+	]
 }

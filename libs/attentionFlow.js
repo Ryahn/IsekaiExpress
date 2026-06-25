@@ -226,22 +226,25 @@ async function handleAttentionTypeSelect(client, interaction) {
     return true;
   }
 
-  const member = await fetchMemberForPrivilegeCheck(guild, interaction.user.id);
-  if (lane === 'mod' && !canUseAttentionModLane(member, client.config?.roles)) {
-    await interaction.reply({
-      content:
-        'You need the staff role, mod role, uploader role, trial mod role, or Administrator for the mod queue.',
-      flags: MessageFlags.Ephemeral,
-    });
-    return true;
-  }
-  if (lane === 'staff' && !canUseAttentionStaffLane(member, client.config?.roles)) {
-    await interaction.reply({
-      content:
-        'You need the staff role, mod role, uploader role, trial mod role, or Administrator for the staff queue.',
-      flags: MessageFlags.Ephemeral,
-    });
-    return true;
+  const member = interaction.member;
+  const hasCachedRoles = Boolean(member?.roles?.cache && member?.permissions?.has);
+  if (hasCachedRoles) {
+    if (lane === 'mod' && !canUseAttentionModLane(member, client.config?.roles)) {
+      await interaction.reply({
+        content:
+          'You need the staff role, mod role, uploader role, trial mod role, or Administrator for the mod queue.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return true;
+    }
+    if (lane === 'staff' && !canUseAttentionStaffLane(member, client.config?.roles)) {
+      await interaction.reply({
+        content:
+          'You need the staff role, mod role, uploader role, trial mod role, or Administrator for the staff queue.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return true;
+    }
   }
 
   const raw = interaction.values[0] || '';

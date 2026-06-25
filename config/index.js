@@ -109,40 +109,12 @@ module.exports = {
   youtubeApiKey: str('YOUTUBE_API_KEY', ''),
 
   url: str('PUBLIC_BASE_URL', baseUrl),
-  cardUrl: str('CARD_PUBLIC_URL', `${baseUrl}/public/cards`),
 
   /** Daily sync of https://api.phish.gg/servers/all into blacklists (bot uses node-schedule). */
   phishGg: {
     dailySyncEnabled: bool('PHISH_GG_DAILY_SYNC', false),
     /** Interval in ms (default 24h). */
     dailySyncIntervalMs: int('PHISH_GG_DAILY_SYNC_MS', 24 * 60 * 60 * 1000),
-  },
-
-  /**
-   * Batch card generation — `card_data.tcg_region` (Home Turf 1–6 for Region packs / synergy):
-   * - unset/invalid: no tag (null)
-   * - 1–6: every template gets that same region (legacy)
-   * - "random" / "auto": per card, random valid region for that **element** (see
-   *   `pickRandomHomeRegionForElement` in `libs/tcgPveConfig.js` vs PvE `elementPoolForEncounter`)
-   */
-  farm: {
-    /** Max Farm XP convertible to TCG gold per UTC+7 calendar day (see farm login reset). */
-    xpDailyConvertCap: int('FARM_XP_DAILY_CONVERT_CAP', 500),
-  },
-
-  tcg: {
-    catalogRegionMode: (() => {
-      const v = str('TCG_CATALOG_DEFAULT_REGION', '').trim().toLowerCase();
-      if (v === '' || v === '0') return { type: 'none' };
-      if (v === 'random' || v === 'auto') return { type: 'random' };
-      const n = parseInt(v, 10);
-      if (Number.isFinite(n) && n >= 1 && n <= 6) return { type: 'fixed', region: n };
-      return { type: 'none' };
-    })(),
-    /** Daily featured offer announcement (UTC); empty = disabled. */
-    featuredAnnounceChannelId: str('TCG_FEATURED_CHANNEL_ID', ''),
-    /** Meta-season key for Season Recall purchase gate (Stage 7 consumes `tcg_season_recall_ready`). */
-    metaSeasonKey: str('TCG_META_SEASON', 's0'),
   },
 
   roles: {
@@ -158,13 +130,5 @@ module.exports = {
   /** zurl.zonies.xyz — shortens /attention thread, ticket, and member profile URLs when set. */
   zurl: {
     apiKey: str('ZONIE_API_KEY', ''),
-  },
-
-  emojis: {
-    type: str('EMOJI_TYPE', '🃏'),
-    level: str('EMOJI_LEVEL', '⭐'),
-    power: str('EMOJI_POWER', '⚡'),
-    class: str('EMOJI_CLASS', '🎭'),
-    star: str('EMOJI_STAR', '✦')
   }
 };

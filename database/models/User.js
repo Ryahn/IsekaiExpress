@@ -1,4 +1,3 @@
-const path = require('path');
 const { Model } = require('objection');
 
 class User extends Model {
@@ -7,44 +6,11 @@ class User extends Model {
   }
 
   /**
-   * Internal PK (matches user_cards.user_id, user_xp.user_id, etc.).
+   * Internal PK.
    * Resolve Discord users with User.query().findOne({ discord_id: snowflake }).
    */
   static get idColumn() {
     return 'id';
-  }
-
-  static get relationMappings() {
-    return {
-      userCards: {
-        relation: Model.HasManyRelation,
-        modelClass: path.join(__dirname, 'UserCard.js'),
-        join: {
-          from: 'users.id',
-          to: 'user_cards.user_id',
-        },
-      },
-      cards: {
-        relation: Model.ManyToManyRelation,
-        modelClass: path.join(__dirname, 'Card.js'),
-        join: {
-          from: 'users.id',
-          through: {
-            from: 'user_cards.user_id',
-            to: 'user_cards.card_id',
-          },
-          to: 'card_data.card_id',
-        },
-      },
-      wallet: {
-        relation: Model.HasOneRelation,
-        modelClass: path.join(__dirname, 'UserWallet.js'),
-        join: {
-          from: 'users.id',
-          to: 'user_wallets.user_id',
-        },
-      },
-    };
   }
 
   static get jsonSchema() {

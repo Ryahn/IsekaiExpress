@@ -19,13 +19,9 @@ npm-debug.log
 # MySQL dump (can be very large; bind/import via scripts, not the image)
 f95bot.sql
 
-# Card renders — local dev art (~15GB+); same as .gitignore **/src/bot/media/cards/*
+# Generated media can be very large and is not served by the app anymore.
 src/bot/media/cards
 **/media/cards
-
-# TCG / Discord export JSON (generated locally; matches root + src/web .gitignore)
-**/src/bot/tcg/*_data.json
-src/web/tcg/*_data.json
 
 # IDEs / tooling caches
 .cursor
@@ -39,7 +35,6 @@ slashCommands.json
 test.js
 .config.js
 chatdump
-CardSystem.md
 **/level_card.png
 
 # Common dev output (if present)

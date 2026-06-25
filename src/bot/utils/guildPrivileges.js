@@ -1,23 +1,5 @@
 const { PermissionFlagsBits } = require('discord.js');
 
-/** @type {Set<string> | null} */
-let trialModUserIdsCache = null;
-
-function getTrialModUserIds() {
-  if (trialModUserIdsCache) return trialModUserIdsCache;
-  try {
-    const data = require('../tcg/trialmod_data.json');
-    trialModUserIdsCache = new Set(
-      (Array.isArray(data) ? data : [])
-        .map((entry) => String(entry.discord_id ?? '').trim())
-        .filter(Boolean),
-    );
-  } catch {
-    trialModUserIdsCache = new Set();
-  }
-  return trialModUserIdsCache;
-}
-
 /**
  * @param {import('discord.js').Guild | null | undefined} guild
  * @param {string} userId
@@ -68,13 +50,8 @@ function hasConfiguredGuildRole(member, roleId) {
   return member.roles.cache.some((role) => String(role.id) === id);
 }
 
-function isListedTrialMod(member) {
-  if (!member?.id) return false;
-  return getTrialModUserIds().has(String(member.id));
-}
-
 function isGuildTrialMod(member, roles) {
-  return hasConfiguredGuildRole(member, roles?.trialmod) || isListedTrialMod(member);
+  return hasConfiguredGuildRole(member, roles?.trialmod);
 }
 
 /** /attention mod — staff, mods, uploaders, trial mods, or Administrator. */

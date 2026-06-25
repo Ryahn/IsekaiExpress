@@ -5,8 +5,6 @@ const config = require('../../config');
 const { farmManager } = require('./utils/farm/farmManager');
 const db = require('../../database/db');
 const { syncPhishGgServers } = require('../../libs/phishGgSync');
-const tcgFeaturedShop = require('../../libs/tcgFeaturedShop');
-const tcgSeasonEnd = require('../../libs/tcgSeasonEnd');
 const { timestamp } = require('../../libs/utils');
 const logger = require('../../libs/logger');
 const process = require('process');
@@ -183,66 +181,6 @@ const client = new BotClient({
 			}
 			catch (error) {
 				logger.error('[FARM-REMIND] Error in harvest maturity job:', error);
-			}
-		});
-
-		schedule.scheduleJob('5 0 * * *', async () => {
-			try {
-				const ch = config.tcg?.featuredAnnounceChannelId;
-				if (!ch) return;
-				const meta = config.tcg?.metaSeasonKey || 's0';
-				const r = await tcgFeaturedShop.postFeaturedAnnouncementIfConfigured(client, ch, meta);
-				if (r.ok && !r.skipped) {
-					logger.info(`[TCG-FEATURED] posted daily offer msg=${r.messageId}`);
-				} else if (!r.ok && r.error) {
-					logger.warn(`[TCG-FEATURED] announce failed: ${r.error}`);
-				}
-			}
-			catch (err) {
-				logger.error('[TCG-FEATURED] announce job error', err);
-			}
-		});
-
-		// Season end check — runs daily at 00:05 UTC; triggers when active season has passed end_at
-		schedule.scheduleJob('5 0 * * *', async () => {
-			try {
-				const season = await tcgSeasonEnd.getActiveSeason();
-				if (!season) return;
-				const now = Math.floor(Date.now() / 1000);
-				if (Number(season.end_at) > now) return; // not ended yet
-
-				// Derive next season key from current quarter
-				const d = new Date();
-				const m = d.getUTCMonth(); // 0-11
-				const y = d.getUTCFullYear();
-				const quarters = [
-					{ key: `winter_${y}`,  name: `Winter Circuit ${y}` },
-					{ key: `spring_${y}`,  name: `Spring Surge ${y}` },
-					{ key: `summer_${y}`,  name: `Summer Clash ${y}` },
-					{ key: `autumn_${y}`,  name: `Autumn Gauntlet ${y}` },
-				];
-				const qIdx = Math.floor(m / 3);
-				const next = quarters[qIdx] || quarters[0];
-
-				// Seed next season row if missing (3-month duration)
-				const nextStart = now;
-				const nextEnd = now + 90 * 24 * 3600;
-				await tcgSeasonEnd.upsertSeason({
-					season_key: next.key,
-					name: next.name,
-					start_at: nextStart,
-					end_at: nextEnd,
-					is_active: false,
-				});
-
-				const r = await tcgSeasonEnd.runSeasonEnd(client, season.season_key, next.key);
-				if (r.ok) {
-					logger.info(`[TCG-SEASON] Season end complete. Processed=${r.processed} next=${next.key}`);
-				} else {
-					logger.warn(`[TCG-SEASON] Season end failed: ${r.error}`);
-				}
-			} catch (err) {
-				logger.error('[TCG-SEASON] cron error', err);
 			}
 		});
 

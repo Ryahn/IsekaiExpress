@@ -243,7 +243,8 @@ async function sharpPngForScan(inputBuffer, sharpOptions = {}) {
     maxEdge > OCR_MAX_EDGE
       ? pipeline.resize(OCR_MAX_EDGE, OCR_MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
       : pipeline;
-  return resized.png().toBuffer();
+  const buffer = await resized.png().toBuffer();
+  return { buffer, meta };
 }
 
 /**
@@ -261,7 +262,7 @@ async function preprocessForScan(inputBuffer) {
   let lastErr;
   for (const attempt of attempts) {
     try {
-      return await attempt();
+        return await attempt();
     } catch (e) {
       lastErr = e;
     }
@@ -287,13 +288,22 @@ async function preprocessForScan(inputBuffer) {
  */
 async function scanImageUrl(client, url) {
   const rawBuf = await downloadImageBuffer(url);
-  const pngBuf = await preprocessForScan(rawBuf);
+  const { buffer: pngBuf, meta } = await preprocessForScan(rawBuf);
 
-  const worker = await getOcrWorker();
-  const {
-    data: { text: ocrRaw, confidence: ocrConfidenceRaw },
-  } = await worker.recognize(pngBuf);
-  const ocrConfidence = typeof ocrConfidenceRaw === 'number' ? ocrConfidenceRaw : 0;
+  let ocrRaw = '';
+  let ocrConfidence = 0;
+  const width = typeof meta?.width === 'number' ? meta.width : null;
+  const height = typeof meta?.height === 'number' ? meta.height : null;
+  const tinyImage = width != null && height != null && (width < 3 || height < 3);
+  if (!tinyImage) {
+    const worker = await getOcrWorker();
+    const {
+      data: { text, confidence },
+    } = await worker.recognize(pngBuf);
+    ocrRaw = text;
+    ocrConfidence = typeof confidence === 'number' ? confidence : 0;
+  }
+
   const normalized = normalizeOcrText(ocrRaw);
   const ocrSnippet = normalized.slice(0, 1200);
 

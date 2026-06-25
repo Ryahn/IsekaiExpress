@@ -1,8 +1,6 @@
 const { ChannelType, EmbedBuilder, MessageFlags, SlashCommandBuilder } = require('discord.js');
 const path = require('path');
-const config = require('../../../../../config');
 const { farmManager } = require('../../../utils/farm/farmManager');
-const { convertFarmXpToGold, FARM_XP_PER_GOLD } = require('../../../utils/farm/farmXpConvert');
 const {
 	buildFarmHelpPages,
 	attachFarmHelpPagination,
@@ -172,7 +170,7 @@ async function farmRemindersCommand(interaction) {
 function formatFarmXpLogLine(e) {
 	const t = e.createdAt.toISOString().replace('T', ' ').slice(0, 19);
 	if (e.eventType === 'convert' && e.goldGained != null) {
-		return `\`${t}\` · spent **${e.amount}** XP → **+${e.goldGained}**g`;
+		return `\`${t}\` · spent **${e.amount}** XP · _legacy conversion_`;
 	}
 	return `\`${t}\` · +**${e.amount}** XP · _${e.source}_`;
 }
@@ -180,22 +178,16 @@ function formatFarmXpLogLine(e) {
 async function farmXpShowSlash(interaction) {
 	const userId = interaction.user.id;
 	const guildId = interaction.guildId;
-	const dailyCap = config.farm?.xpDailyConvertCap ?? 500;
 	const prefix = await farmManager.getServerPrefix(guildId);
 	const userFarm = await farmManager.getUserFarm(userId, guildId);
 	const limitWarnings = await farmManager.getFarmLimitWarnings(userId, guildId);
-	const remaining = Math.max(0, dailyCap - userFarm.farmXpConvertedToday);
-	const goldEq = Math.floor(userFarm.farmXp / FARM_XP_PER_GOLD);
 	const embed = new EmbedBuilder()
 		.setColor(0x57f287)
 		.setTitle('🌾 Farm XP')
 		.addFields(
 			{ name: 'Balance', value: `**${userFarm.farmXp.toLocaleString()}** XP`, inline: true },
-			{ name: '≈ Full gold value', value: `**${goldEq}**g · _50 XP = 1g_`, inline: true },
-			{ name: 'Converted today (UTC+7)', value: `**${userFarm.farmXpConvertedToday}** / **${dailyCap}** XP`, inline: true },
-			{ name: 'Under cap today', value: `**${remaining}** XP left`, inline: true },
 		)
-		.setFooter({ text: `Prefix: ${prefix}xp · ${prefix}xp convert · ${prefix}xp history` })
+		.setFooter({ text: `Prefix: ${prefix}xp · ${prefix}xp history` })
 		.setTimestamp();
 	applyLimitNotesToEmbed(embed, { warnings: limitWarnings, mitigation: [] });
 	await interaction.editReply({ embeds: [embed] });
@@ -221,39 +213,6 @@ async function farmXpHistorySlash(interaction) {
 				.setColor(0x57f287)
 				.setTitle('Farm XP · last 10')
 				.setDescription(body.slice(0, 3900)),
-		],
-	});
-}
-
-async function farmXpConvertSlash(interaction) {
-	const amountOpt = interaction.options.getInteger('amount');
-	const mode = amountOpt == null ? 'all' : 'amount';
-	const res = await convertFarmXpToGold(interaction.client, interaction.user, {
-		mode,
-		amount: amountOpt ?? undefined,
-	});
-	if (!res.ok) {
-		await interaction.editReply({
-			embeds: [
-				new EmbedBuilder()
-					.setColor(0xed4245)
-					.setTitle('Cannot convert')
-					.setDescription(res.error),
-			],
-		});
-		return;
-	}
-	await interaction.editReply({
-		embeds: [
-			new EmbedBuilder()
-				.setColor(0x57f287)
-				.setTitle('Converted Farm XP')
-				.setDescription(
-					`Spent **${res.xpSpent}** Farm XP → **+${res.goldGained}** TCG gold\n`
-					+ `Farm XP: **${res.newFarmXp.toLocaleString()}** · Gold: **${res.newGold.toLocaleString()}**\n`
-					+ `Today (UTC+7): **${res.convertedToday}** / **${res.dailyCap}** XP converted · **${res.remainingCapAfter}** XP left under cap`,
-				)
-				.setTimestamp(),
 		],
 	});
 }
@@ -365,28 +324,16 @@ module.exports = {
 		.addSubcommandGroup((group) =>
 			group
 				.setName('xp')
-				.setDescription('Farm XP — balance, history, convert to TCG gold')
+				.setDescription('Farm XP balance and history')
 				.addSubcommand((sub) =>
 					sub
 						.setName('show')
-						.setDescription('Farm XP balance and daily conversion cap (UTC+7)'),
+						.setDescription('Farm XP balance'),
 				)
 				.addSubcommand((sub) =>
 					sub
 						.setName('history')
 						.setDescription('Last 10 Farm XP earn / convert events'),
-				)
-				.addSubcommand((sub) =>
-					sub
-						.setName('convert')
-						.setDescription('Convert Farm XP to TCG gold (omit amount = max allowed today)')
-						.addIntegerOption((opt) =>
-							opt
-								.setName('amount')
-								.setDescription('Farm XP to spend (min 50). Leave empty to convert all allowed today.')
-								.setRequired(false)
-								.setMinValue(50),
-						),
 				),
 		),
 
@@ -424,9 +371,6 @@ module.exports = {
 			}
 			else if (xsub === 'history') {
 				await farmXpHistorySlash(interaction);
-			}
-			else if (xsub === 'convert') {
-				await farmXpConvertSlash(interaction);
 			}
 			else {
 				await interaction.editReply({ content: 'Unknown /farm xp subcommand.', flags: MessageFlags.Ephemeral });

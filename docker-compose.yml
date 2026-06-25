@@ -53,7 +53,6 @@ services:
     restart: unless-stopped
     volumes:
       - ./logs:/usr/src/app/logs
-      - ./src/bot/media/cards:/usr/src/app/src/bot/media/cards
       # Host chat/exports: create ./chatdump on host, then: docker compose up -d --force-recreate bot
       - ./chatdump:/usr/src/app/chatdump
 
@@ -74,8 +73,6 @@ services:
       - mysql
       - redis
     restart: unless-stopped
-    volumes:
-      - ./src/bot/media/cards:/usr/src/app/src/bot/media/cards
     networks:
       - default
       - traefik-network

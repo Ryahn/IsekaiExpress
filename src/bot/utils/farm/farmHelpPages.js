@@ -16,7 +16,6 @@ const BUTTON_NEXT = 'farmhelp_next';
  */
 async function buildFarmHelpPages(guildId) {
 	const p = await farmManager.getServerPrefix(guildId);
-	const dailyCap = config.farm?.xpDailyConvertCap ?? 500;
 	const total = 5;
 
 	const page1 = new EmbedBuilder()
@@ -39,7 +38,7 @@ async function buildFarmHelpPages(guildId) {
 				value:
 					'• `/farm enable` / `/farm disable` — opt in or out of prefix farm commands\n'
 					+ '• `/farm reminders` — turn **harvest-ready** @mentions (or DMs) on or off\n'
-					+ '• `/farm xp` — Farm XP balance, `/farm xp history`, `/farm xp convert`\n'
+					+ '• `/farm xp` — Farm XP balance and `/farm xp history`\n'
 					+ '• `/farm help` — this guide (multi-page)\n'
 					+ `• \`${p}help\` or \`${p}h\` — same help via prefix`,
 				inline: false,
@@ -95,20 +94,14 @@ async function buildFarmHelpPages(guildId) {
 
 	const page3 = new EmbedBuilder()
 		.setColor(HELP_COLOR)
-		.setTitle(`🌾 Farm XP & TCG gold (3/${total})`)
+		.setTitle(`🌾 Farm XP (3/${total})`)
 		.setDescription(
-			'**Farm XP** is separate from Discord/TCG level XP. Earn it from farming, then convert to **TCG gold**.',
+			'**Farm XP** is separate from Discord level XP. Earn it from farming and review your recent XP activity.',
 		)
 		.addFields(
 			{
 				name: `📈 \`${p}xp\`  ·  \`/farm xp show\``,
-				value: `Balance, today’s conversion (**${dailyCap}** XP/day cap, UTC+7), and gold equivalent (50 XP = 1g).`,
-				inline: false,
-			},
-			{
-				name: `🔁 \`${p}xp convert\` / \`/farm xp convert\``,
-				value: 'Spend Farm XP for TCG gold. **`convert all`** uses the lesser of your balance and today’s cap left. '
-					+ '**`convert <n>`** needs at least 50 XP and cannot exceed the daily cap.',
+				value: 'Show your current Farm XP balance.',
 				inline: false,
 			},
 			{

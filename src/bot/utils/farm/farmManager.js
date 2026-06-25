@@ -83,15 +83,10 @@ function cropStatusFromPlanted(userFarm) {
 }
 
 function rowToUserFarm(row) {
-	const todayKey = utc7CalendarDateKey(new Date());
-	const rawConverted = row.farm_xp_converted_today != null ? Number(row.farm_xp_converted_today) : 0;
-	const storedKey = row.farm_xp_conversion_day_key != null ? String(row.farm_xp_conversion_day_key) : null;
-	const farmXpConvertedToday = storedKey === todayKey ? rawConverted : 0;
 	return {
 		money: Number(row.money),
 		experience: row.experience,
 		farmXp: row.farm_xp != null ? Number(row.farm_xp) : 0,
-		farmXpConvertedToday,
 		landSlots: row.land_slots,
 		inventory: parseJson(row.inventory, {}),
 		currentCrop: row.current_crop ? parseJson(row.current_crop, null) : null,
@@ -260,8 +255,6 @@ class FarmManager {
 			const hasFarmXp = await knex.schema.hasColumn('farm_profiles', 'farm_xp');
 			if (hasFarmXp) {
 				insert.farm_xp = 0;
-				insert.farm_xp_converted_today = 0;
-				insert.farm_xp_conversion_day_key = null;
 			}
 			const hasMaturity = await knex.schema.hasColumn('farm_profiles', 'maturity_pinged');
 			if (hasMaturity) {
@@ -282,11 +275,6 @@ class FarmManager {
 		if ('money' in updates) data.money = updates.money;
 		if ('experience' in updates) data.experience = updates.experience;
 		if ('farmXp' in updates) data.farm_xp = updates.farmXp;
-		if ('farmXpConvertedToday' in updates) data.farm_xp_converted_today = updates.farmXpConvertedToday;
-		if ('farmXpConversionDayKey' in updates) {
-			const k = updates.farmXpConversionDayKey;
-			data.farm_xp_conversion_day_key = k == null || k === '' ? null : String(k);
-		}
 		if ('landSlots' in updates) data.land_slots = updates.landSlots;
 		if ('inventory' in updates) data.inventory = serializeMysqlJson(updates.inventory);
 		if ('currentCrop' in updates) {
