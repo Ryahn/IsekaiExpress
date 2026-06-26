@@ -908,3 +908,7 @@ body.voidstation-theme .search-input:focus {
   font-weight: 600;
   border-bottom-color: var(--farm-accent-dim, #4a9d63);
 }
+
+.ocrPreviewModalBody {
+  color: #9fa6bc;
+}
