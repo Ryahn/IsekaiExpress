@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
 const { getDiscordAvatarUrl } = require('../../../libs/utils');
 const db = require('../../../database/db');
 const config = require('../../../config');
 
 const VALID_RANGES = new Set(['24h', '7d', '30d']);
 const VALID_STATUSES = new Set(['clean', 'hit', 'timeout', 'failed', 'skipped']);
+const DISCORD_API_BASE_URL = 'https://discord.com/api/v10';
+const DISCORD_NAME_CACHE_MS = 10 * 60 * 1000;
+const discordNameCache = new Map();
 
 function canView(req) {
 	return Boolean(req.session?.roles?.includes(config.roles.staff));
@@ -51,6 +55,16 @@ function displayNameWithId(name, id) {
 	return nameText && nameText !== idText ? `${nameText} (${idText})` : idText;
 }
 
+function localNameMap(rows, idKey, nameKey) {
+	const names = new Map();
+	for (const row of rows || []) {
+		const id = row[idKey] == null ? '' : String(row[idKey]);
+		const name = row[nameKey] == null ? '' : String(row[nameKey]).trim();
+		if (id && name && !names.has(id)) names.set(id, name);
+	}
+	return names;
+}
+
 async function lookupUserNames(userIds) {
 	if (!userIds.length) return new Map();
 	try {
@@ -83,16 +97,91 @@ async function lookupChannelNames(channelIds) {
 	}
 }
 
+async function fetchDiscordName(kind, id) {
+	if (!config.discord.botToken || !id) return '';
+	const cacheKey = `${kind}:${id}`;
+	const cached = discordNameCache.get(cacheKey);
+	if (cached && Date.now() - cached.t < DISCORD_NAME_CACHE_MS) return cached.name;
+
+	try {
+		const path = kind === 'channel' ? `/channels/${id}` : `/users/${id}`;
+		const response = await axios.get(`${DISCORD_API_BASE_URL}${path}`, {
+			headers: { Authorization: `Bot ${config.discord.botToken}` },
+			timeout: 3000,
+		});
+		const data = response.data || {};
+		const name = kind === 'channel'
+			? data.name
+			: (data.global_name || data.username);
+		discordNameCache.set(cacheKey, { t: Date.now(), name: name || '' });
+		return name || '';
+	}
+	catch {
+		discordNameCache.set(cacheKey, { t: Date.now(), name: '' });
+		return '';
+	}
+}
+
+async function fillDiscordNames(ids, kind, names) {
+	const missingIds = ids.filter((id) => !names.has(id));
+	await Promise.all(missingIds.map(async (id) => {
+		const name = await fetchDiscordName(kind, id);
+		if (name) names.set(id, name);
+	}));
+}
+
+async function persistHistoryName(kind, id, name) {
+	if (!id || !name) return;
+	const column = kind === 'channel' ? 'channel_name' : 'user_name';
+	const idColumn = kind === 'channel' ? 'channel_id' : 'user_id';
+	try {
+		await db.query('scam_scan_history')
+			.where({ [idColumn]: id })
+			.update({ [column]: String(name).slice(0, 100) });
+	}
+	catch {
+		// Older databases may not have the name columns until migrations run.
+	}
+}
+
+async function persistResolvedNames(rows, userNames, channelNames) {
+	const missingUsers = uniqueIds(
+		rows.filter((scan) => !String(scan.user_name || '').trim()),
+		'user_id',
+	);
+	const missingChannels = uniqueIds(
+		rows.filter((scan) => !String(scan.channel_name || '').trim()),
+		'channel_id',
+	);
+	await Promise.all([
+		...missingUsers.map((id) => persistHistoryName('user', id, userNames.get(id))),
+		...missingChannels.map((id) => persistHistoryName('channel', id, channelNames.get(id))),
+	]);
+}
+
 async function enrichScanDisplayNames(scans) {
 	const rows = scans || [];
+	const userIds = uniqueIds(rows, 'user_id');
+	const channelIds = uniqueIds(rows, 'channel_id');
+	const storedUserNames = localNameMap(rows, 'user_id', 'user_name');
+	const storedChannelNames = localNameMap(rows, 'channel_id', 'channel_name');
 	const [userNames, channelNames] = await Promise.all([
-		lookupUserNames(uniqueIds(rows, 'user_id')),
-		lookupChannelNames(uniqueIds(rows, 'channel_id')),
+		lookupUserNames(userIds),
+		lookupChannelNames(channelIds),
 	]);
+	const resolvedUserNames = new Map([...userNames, ...storedUserNames]);
+	const resolvedChannelNames = new Map([...channelNames, ...storedChannelNames]);
+
+	await Promise.all([
+		fillDiscordNames(userIds, 'user', resolvedUserNames),
+		fillDiscordNames(channelIds, 'channel', resolvedChannelNames),
+	]);
+	await persistResolvedNames(rows, resolvedUserNames, resolvedChannelNames);
+
 	return rows.map((scan) => ({
 		...scan,
-		user_display: displayNameWithId(userNames.get(String(scan.user_id)), scan.user_id),
-		channel_display: displayNameWithId(channelNames.get(String(scan.channel_id)), scan.channel_id),
+		user_display: displayNameWithId(resolvedUserNames.get(String(scan.user_id)), scan.user_id),
+		channel_display: displayNameWithId(resolvedChannelNames.get(String(scan.channel_id)), scan.channel_id),
 	}));
 }
 

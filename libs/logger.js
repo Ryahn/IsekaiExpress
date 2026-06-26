@@ -2,7 +2,7 @@
  * silly-logger only accepts a single string for .error() — the second argument is ignored.
  * This wrapper forwards one-arg calls unchanged; for (msg, err) it appends message and errno code.
  *
- * Also fans out warn/error/crash to a Discord webhook (if LOG_WEBHOOK_URL is set)
+ * Also fans out error/crash to a Discord webhook (if LOG_WEBHOOK_URL is set)
  * so the bot owner can monitor errors from a separate admin server.
  */
 const silly = require('silly-logger');
@@ -57,12 +57,10 @@ const origWarn = silly.warn.bind(silly);
 silly.warn = function warnWrapped(msg, err) {
   if (arguments.length <= 1) {
     origWarn(msg);
-    fanOut('warn', msg);
     return;
   }
   const combined = String(msg) + (err != null ? ` ${errorMessage(err)}` : '');
   origWarn(combined);
-  fanOut('warn', combined);
 };
 
 if (typeof silly.crash === 'function') {

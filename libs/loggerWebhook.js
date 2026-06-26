@@ -1,7 +1,7 @@
 /**
  * Discord-webhook log transport.
  *
- * Mirrors warn/error/crash from the main logger to a Discord webhook in another
+ * Mirrors error/crash from the main logger to a Discord webhook in another
  * server (intended for an admin-only debug server, NOT a per-guild mod log).
  *
  * Designed to be safe even under heavy log volume:
@@ -35,7 +35,7 @@ const DISCORD_TOKEN_REGEX = /\b(?:Bot\s+)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6,}\
 const OVERFLOW_KEY = 'warn:loggerWebhookOverflow';
 
 let webhookUrl = '';
-let minLevel = LEVEL_RANK.warn;
+let minLevel = LEVEL_RANK.error;
 let username = 'f95bot logs';
 let initialized = false;
 
@@ -73,8 +73,8 @@ function redact(text) {
 
 function init({ url, level, name } = {}) {
   webhookUrl = (url || process.env.LOG_WEBHOOK_URL || '').trim();
-  const lvlName = (level || process.env.LOG_WEBHOOK_LEVEL || 'warn').toLowerCase();
-  minLevel = LEVEL_RANK[lvlName] || LEVEL_RANK.warn;
+  const lvlName = (level || process.env.LOG_WEBHOOK_LEVEL || 'error').toLowerCase();
+  minLevel = LEVEL_RANK[lvlName] || LEVEL_RANK.error;
   username = (name || process.env.LOG_WEBHOOK_USERNAME || 'f95bot logs').slice(0, 80);
   secrets = collectSecrets();
   initialized = true;

@@ -164,6 +164,8 @@ test('text rule hit short-circuits before pHash', async () => {
     assert.equal(result.severity, 'auto');
     assert.equal(result.matchedRules[0].id, 7);
     assert.equal(phashCalls, 0);
+    assert.ok(client._logs.some(([level, message]) => level === 'info' && message.includes('"status":"hit"')));
+    assert.equal(client._logs.some(([level, message]) => level === 'warn' && message.includes('"status":"hit"')), false);
   } finally {
     axios.get = originalGet;
     imghash.hash = originalHash;

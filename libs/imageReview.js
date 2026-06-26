@@ -109,11 +109,13 @@ async function recordScanHistory(client, message, attachment, scan, options = {}
     await client.db.recordScamScanHistory({
       guildId: message.guild.id,
       channelId: message.channelId,
+      channelName: message.channel?.name || null,
       messageId: message.id,
       attachmentId: attachment.id || null,
       attachmentIndex: options.attachmentIndex || 0,
       attachmentUrl: attachment.url,
       userId: message.author.id,
+      userName: message.author.username || message.author.tag || null,
       isStaffOrMod: Boolean(options.isStaffOrMod),
       status: scan.status,
       reasonCode: scan.reasonCode || scan.reason || null,

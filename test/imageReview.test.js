@@ -281,6 +281,8 @@ test('scan hit records history with matched rules and queued review state', asyn
     assert.equal(client._history[0].matchedRules[0].id, 7);
     assert.equal(client._history[0].manualReviewRequired, true);
     assert.equal(client._history[0].manualReviewQueued, true);
+    assert.equal(client._history[0].userName, 'User#0001');
+    assert.equal(client._history[0].channelName, 'general');
   } finally {
     axios.get = originalGet;
   }

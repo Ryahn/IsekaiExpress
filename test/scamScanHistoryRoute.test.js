@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const axios = require('axios');
 
 const db = require('../database/db');
 const router = require('../src/web/routes/scam-scan-history');
@@ -193,6 +194,13 @@ test('scam scan history resolves user and channel display names', async () => {
 					}),
 				};
 			}
+			if (table === 'scam_scan_history') {
+				return {
+					where: () => ({
+						update: async () => {},
+					}),
+				};
+			}
 			return query(table);
 		},
 	});
@@ -206,5 +214,77 @@ test('scam scan history resolves user and channel display names', async () => {
 	}
 	finally {
 		restore();
+	}
+});
+
+test('scam scan history persists Discord fallback names after lookup', async () => {
+	const originalToken = config.discord.botToken;
+	const originalGet = axios.get;
+	const updates = [];
+	config.discord.botToken = 'bot-token';
+	axios.get = async (url) => {
+		if (url.includes('/users/123')) return { data: { username: 'Alice' } };
+		if (url.includes('/channels/456')) return { data: { name: 'mod-log' } };
+		throw new Error(`unexpected Discord URL: ${url}`);
+	};
+
+	const query = db.query;
+	const restore = patchDb({
+		getScamScanMetrics: async () => emptyMetrics(),
+		getScamScanRuleHitMetrics: async () => [],
+		getScamScanHistoryPage: async () => ({
+			page: 1,
+			limit: 25,
+			hasMore: false,
+			rows: [{
+				id: 1,
+				user_id: '123',
+				channel_id: '456',
+				matched_rule_ids: [],
+			}],
+		}),
+		query(table) {
+			if (table === 'users') {
+				return {
+					select: () => ({
+						whereIn: async () => [],
+					}),
+				};
+			}
+			if (table === 'channel_stats') {
+				return {
+					select: () => ({
+						whereIn: () => ({
+							orderBy: async () => [],
+						}),
+					}),
+				};
+			}
+			if (table === 'scam_scan_history') {
+				return {
+					where: (filter) => ({
+						update: async (patch) => updates.push({ filter, patch }),
+					}),
+				};
+			}
+			return query(table);
+		},
+	});
+	try {
+		const res = fakeRes();
+		await routeHandler('/', 'get')(fakeReq(), res, assert.ifError);
+		const row = res._calls.find((call) => call.type === 'render').model.scans[0];
+
+		assert.equal(row.user_display, 'Alice (123)');
+		assert.equal(row.channel_display, 'mod-log (456)');
+		assert.deepEqual(updates, [
+			{ filter: { user_id: '123' }, patch: { user_name: 'Alice' } },
+			{ filter: { channel_id: '456' }, patch: { channel_name: 'mod-log' } },
+		]);
+	}
+	finally {
+		restore();
+		config.discord.botToken = originalToken;
+		axios.get = originalGet;
 	}
 });

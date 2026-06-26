@@ -409,6 +409,8 @@ module.exports = {
         attachment_index: intOrNull(entry.attachmentIndex) || 0,
         attachment_url_hash: hashAttachmentUrl(entry.attachmentUrl),
         user_id: entry.userId,
+        user_name: entry.userName ? String(entry.userName).slice(0, 100) : null,
+        channel_name: entry.channelName ? String(entry.channelName).slice(0, 100) : null,
         is_staff_or_mod: boolValue(entry.isStaffOrMod),
         status: entry.status || 'failed',
         reason_code: entry.reasonCode || null,

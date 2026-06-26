@@ -575,7 +575,7 @@ function buildLogPayload(result, context) {
 function logScanResult(client, result, context) {
   const payload = JSON.stringify(buildLogPayload(result, context));
   if (result.status === 'hit') {
-    client.logger.warn(`scamImageScan result ${payload}`);
+    client.logger.info?.(`scamImageScan result ${payload}`);
   } else if (result.status === 'timeout' || result.status === 'failed') {
     client.logger.warn(`scamImageScan result ${payload}`);
   } else {

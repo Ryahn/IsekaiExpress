@@ -146,8 +146,26 @@ test('recordScamScanHistory stores sanitized history row and rule hit rows', asy
     assert.equal(fakeDb._tables.scam_scan_history[0].attachment_url_hash.length, 64);
     assert.equal(fakeDb._tables.scam_scan_history[0].attachment_url, undefined);
     assert.equal(fakeDb._tables.scam_scan_history[0].ocr_preview, 'short preview');
+    assert.equal(fakeDb._tables.scam_scan_history[0].user_name, null);
+    assert.equal(fakeDb._tables.scam_scan_history[0].channel_name, null);
     assert.equal(fakeDb._tables.scam_scan_history_rule_hits.length, 1);
     assert.equal(fakeDb._tables.scam_scan_history_rule_hits[0].rule_id, '7');
+  } finally {
+    restore();
+  }
+});
+
+test('recordScamScanHistory stores display names when provided', async () => {
+  const fakeDb = makeFakeDb();
+  const { repo, restore } = loadRepositoryWithFakes(fakeDb);
+  try {
+    await repo.recordScamScanHistory(sampleEntry({
+      userName: 'Alice',
+      channelName: 'mod-log',
+    }));
+
+    assert.equal(fakeDb._tables.scam_scan_history[0].user_name, 'Alice');
+    assert.equal(fakeDb._tables.scam_scan_history[0].channel_name, 'mod-log');
   } finally {
     restore();
   }
