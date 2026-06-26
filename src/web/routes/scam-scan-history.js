@@ -36,6 +36,66 @@ function publicFilters(filters) {
 	};
 }
 
+function uniqueIds(rows, key) {
+	return [...new Set(
+		(rows || [])
+			.map((row) => row[key])
+			.filter((value) => value != null && value !== '')
+			.map((value) => String(value)),
+	)];
+}
+
+function displayNameWithId(name, id) {
+	const idText = String(id || '');
+	const nameText = String(name || '').trim();
+	return nameText && nameText !== idText ? `${nameText} (${idText})` : idText;
+}
+
+async function lookupUserNames(userIds) {
+	if (!userIds.length) return new Map();
+	try {
+		const rows = await db.query('users')
+			.select('discord_id', 'username')
+			.whereIn('discord_id', userIds);
+		return new Map(rows.map((row) => [String(row.discord_id), row.username]));
+	}
+	catch {
+		return new Map();
+	}
+}
+
+async function lookupChannelNames(channelIds) {
+	if (!channelIds.length) return new Map();
+	try {
+		const rows = await db.query('channel_stats')
+			.select('channel_id', 'channel_name', 'month_day')
+			.whereIn('channel_id', channelIds)
+			.orderBy('month_day', 'desc');
+		const names = new Map();
+		for (const row of rows) {
+			const id = String(row.channel_id);
+			if (!names.has(id) && row.channel_name) names.set(id, row.channel_name);
+		}
+		return names;
+	}
+	catch {
+		return new Map();
+	}
+}
+
+async function enrichScanDisplayNames(scans) {
+	const rows = scans || [];
+	const [userNames, channelNames] = await Promise.all([
+		lookupUserNames(uniqueIds(rows, 'user_id')),
+		lookupChannelNames(uniqueIds(rows, 'channel_id')),
+	]);
+	return rows.map((scan) => ({
+		...scan,
+		user_display: displayNameWithId(userNames.get(String(scan.user_id)), scan.user_id),
+		channel_display: displayNameWithId(channelNames.get(String(scan.channel_id)), scan.channel_id),
+	}));
+}
+
 function rangeStart(range) {
 	const now = Date.now();
 	if (range === '24h') return new Date(now - 24 * 60 * 60 * 1000);
@@ -93,7 +153,7 @@ async function buildHistoryState(query = {}) {
 		publicFilters: publicFilters(filters),
 		metrics,
 		ruleHits,
-		scans: page.rows,
+		scans: await enrichScanDisplayNames(page.rows),
 		page,
 	};
 }

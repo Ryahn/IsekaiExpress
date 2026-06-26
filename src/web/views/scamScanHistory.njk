@@ -184,8 +184,8 @@
               <td x-text="valueOrDash(scan.status)"></td>
               <td x-text="valueOrDash(scan.reason_code)"></td>
               <td x-text="valueOrDash(scan.failure_stage)"></td>
-              <td x-text="valueOrDash(scan.user_id)"></td>
-              <td x-text="valueOrDash(scan.channel_id)"></td>
+              <td x-text="displayWithId(scan.user_display, scan.user_id)"></td>
+              <td x-text="displayWithId(scan.channel_display, scan.channel_id)"></td>
               <td x-text="valueOrDash(scan.message_id)"></td>
               <td x-text="valueOrDash(scan.attachment_index)"></td>
               <td x-text="reviewLabel(scan)"></td>

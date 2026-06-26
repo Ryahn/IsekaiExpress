@@ -585,6 +585,10 @@
 					return value == null || value === '' ? '-' : value;
 				},
 
+				displayWithId: function(display, id) {
+					return display || this.valueOrDash(id);
+				},
+
 				reviewLabel: function(scan) {
 					if (scan.manual_review_queued) return 'queued';
 					if (scan.manual_review_required) return 'required';
