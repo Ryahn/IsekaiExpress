@@ -5,16 +5,18 @@
 
 {% block content %}
 
+<div x-data="slashCommandsPanel()" x-init="init()">
 <div class="vs-page-header">
   <h3 class="vs-page-title">Slash Commands</h3>
   <p class="vs-page-subtitle">All registered Discord slash commands</p>
 </div>
 
 <div class="search-box">
-  <input class="form-control search-input" type="search" id="searchInput" placeholder="Search slash commands..." aria-label="Search">
+  <input class="form-control search-input" type="search" x-model.debounce.250ms="search" @input="applySearch" placeholder="Search slash commands..." aria-label="Search">
 </div>
 
-<div id="stash-table"></div>
+<p class="text-body-secondary small" x-show="isLoading" x-cloak>Refreshing slash commands...</p>
+<div id="slashCommandsTable"></div>
 
 <footer class="footer mt-5">
   <div class="row g-0 justify-content-between align-items-center">
@@ -27,52 +29,10 @@
   </div>
 </footer>
 
-<!-- Toast -->
-<div class="position-fixed top-0 end-0 p-3" style="z-index: 11; margin-top: 70px;">
-  <div class="toast" id="myToast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="3000">
-    <div class="toast-header">
-      <strong class="me-auto">Message</strong>
-      <small class="text-muted" id="timestamp"></small>
-      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
-    <div class="toast-body"></div>
-  </div>
 </div>
 
 {% endblock %}
 
 {% block scripts %}
 <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.4.3/dist/js/tabulator.min.js"></script>
-
-<script>
-  document.querySelector('.logout-link').addEventListener('click', function(e) {
-    e.preventDefault();
-    document.getElementById('logout-form').submit();
-  });
-
-  document.addEventListener('DOMContentLoaded', function() {
-    var table = new Tabulator('#stash-table', {
-      ajaxURL: '/commands/slashes/list',
-      ajaxResponse: function(url, params, response) {
-        return response.commands;
-      },
-      pagination: 'local',
-      paginationSize: 10,
-      layout: 'fitColumns',
-      initialSort: [{ column: 'name', dir: 'asc' }],
-      columns: [
-        { title: 'Name', field: 'name' },
-        { title: 'Description', field: 'description' }
-      ]
-    });
-
-    document.getElementById('searchInput').addEventListener('input', function(e) {
-      var searchValue = e.target.value.toLowerCase();
-      table.setFilter(function(data) {
-        return (typeof data.name === 'string' && data.name.toLowerCase().includes(searchValue)) ||
-               (typeof data.description === 'string' && data.description.toLowerCase().includes(searchValue));
-      });
-    });
-  });
-</script>
 {% endblock %}

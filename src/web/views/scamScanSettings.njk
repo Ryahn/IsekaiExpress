@@ -1,7 +1,8 @@
 {% extends "layout.njk" %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<script type="application/json" id="scamScanSettingsState">{{ alpineStateJson | safe }}</script>
+<div class="container-fluid py-4" x-data="scamScanSettingsPanel(JSON.parse(document.getElementById('scamScanSettingsState').textContent))" x-init="init()">
   <div class="row mb-4">
     <div class="col">
       <h2 class="mb-1">Scam Scan Settings</h2>
@@ -11,27 +12,12 @@
     </div>
   </div>
 
-  {% if success %}
-    <div class="alert alert-success">{{ success }}</div>
-  {% endif %}
-
-  {% if errors and errors.length %}
-    <div class="alert alert-danger">
-      <strong>Could not save settings.</strong>
-      <ul class="mb-0">
-        {% for error in errors %}
-          <li>{{ error }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-  {% endif %}
-
   <div class="alert alert-warning">
     Lower timeouts may increase staff review fallbacks. Higher timeouts or concurrency may increase CPU/RAM usage.
     Concurrency changes apply to new scan work after settings are reloaded.
   </div>
 
-  <form method="post" action="/scam-scan-settings/save">
+  <form method="post" action="/scam-scan-settings/save" @submit.prevent="saveSettings">
     <input type="hidden" name="_csrf" value="{{ csrfToken }}">
 
     <div class="card mb-4">
@@ -46,7 +32,7 @@
         {% for item in toggles %}
           {% set key = item[0] %}
           <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" id="{{ key }}" name="{{ key }}" {% if settings[key] %}checked{% endif %}>
+            <input class="form-check-input" type="checkbox" id="{{ key }}" name="{{ key }}" x-model="settings.{{ key }}">
             <label class="form-check-label" for="{{ key }}">
               {{ item[1] }}
               <span class="text-body-secondary">(default: {{ definitions[key].default }})</span>
@@ -79,7 +65,7 @@
               type="number"
               id="{{ key }}"
               name="{{ key }}"
-              value="{{ settings[key] }}"
+              x-model="settings.{{ key }}"
               min="{{ definitions[key].min }}"
               max="{{ definitions[key].max }}"
               step="1">
@@ -91,7 +77,9 @@
       </div>
     </div>
 
-    <button type="submit" class="btn btn-primary">Save Settings</button>
+    <button type="submit" class="btn btn-primary" :disabled="isSaving">
+      <span x-text="isSaving ? 'Saving...' : 'Save Settings'"></span>
+    </button>
   </form>
 </div>
 {% endblock %}

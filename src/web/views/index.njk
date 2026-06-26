@@ -84,25 +84,4 @@
   </div>
 </footer>
 
-<!-- Toast -->
-<div class="position-fixed top-0 end-0 p-3" style="z-index: 11; margin-top: 70px;">
-  <div class="toast" id="myToast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="3000">
-    <div class="toast-header">
-      <strong class="me-auto">Message</strong>
-      <small class="text-muted" id="timestamp"></small>
-      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
-    <div class="toast-body"></div>
-  </div>
-</div>
-
-{% endblock %}
-
-{% block scripts %}
-<script>
-  document.querySelector('.logout-link').addEventListener('click', function(e) {
-    e.preventDefault();
-    document.getElementById('logout-form').submit();
-  });
-</script>
 {% endblock %}

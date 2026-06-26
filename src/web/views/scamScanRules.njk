@@ -2,25 +2,12 @@
 
 {% block content %}
 
+<script type="application/json" id="scamScanRulesState">{{ alpineStateJson | safe }}</script>
+<div x-data="scamScanRulesPanel(JSON.parse(document.getElementById('scamScanRulesState').textContent))" x-init="init()">
 <div class="vs-page-header">
   <h3 class="vs-page-title">Image Scam Scan Rules</h3>
   <p class="vs-page-subtitle">Manage OCR keyword rules used by the image scam scanner</p>
 </div>
-
-{% if success %}
-<div class="alert alert-success" role="alert">{{ success }}</div>
-{% endif %}
-
-{% if errors and errors.length %}
-<div class="alert alert-danger" role="alert">
-  <strong>Could not save rules:</strong>
-  <ul class="mb-0">
-    {% for error in errors %}
-    <li>{{ error }}</li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
 
 <div class="row g-4">
   <div class="col-12 col-xl-7">
@@ -36,13 +23,15 @@
           Bare lines are treated as keyword rules. Regex is not enabled yet.
           Avoid very short keywords because they can match unrelated OCR text.
         </p>
-        <form method="post" action="/scam-scan-rules/save">
+        <form method="post" action="/scam-scan-rules/save" @submit.prevent="saveRules">
           <input type="hidden" name="_csrf" value="{{ csrfToken }}">
           <div class="mb-3">
-            <label class="form-label" for="rules">Enabled keyword rules ({{ ruleCount }})</label>
-            <textarea class="form-control" id="rules" name="rules" rows="18" spellcheck="false">{{ rulesText }}</textarea>
+            <label class="form-label" for="rules">Enabled keyword rules (<span x-text="ruleCount"></span>)</label>
+            <textarea class="form-control" id="rules" name="rules" rows="18" spellcheck="false" x-model="rules"></textarea>
           </div>
-          <button class="btn btn-primary" type="submit">Save Rules</button>
+          <button class="btn btn-primary" type="submit" :disabled="isSaving">
+            <span x-text="isSaving ? 'Saving...' : 'Save Rules'"></span>
+          </button>
         </form>
       </div>
     </div>
@@ -57,28 +46,31 @@
         <p class="text-body-secondary">
           Paste sample OCR text to preview keyword matches. Test text is not saved.
         </p>
-        <form method="post" action="/scam-scan-rules/test">
+        <form method="post" action="/scam-scan-rules/test" @submit.prevent="testRules">
           <input type="hidden" name="_csrf" value="{{ csrfToken }}">
           <div class="mb-3">
             <label class="form-label" for="test_text">Sample OCR text</label>
-            <textarea class="form-control" id="test_text" name="test_text" rows="8">{{ testText }}</textarea>
+            <textarea class="form-control" id="test_text" name="test_text" rows="8" x-model="testText"></textarea>
           </div>
-          <button class="btn btn-secondary" type="submit">Test Rules</button>
+          <button class="btn btn-secondary" type="submit" :disabled="isTesting">
+            <span x-text="isTesting ? 'Testing...' : 'Test Rules'"></span>
+          </button>
         </form>
 
-        {% if testMatches %}
-        <hr>
-        <h6>Matches</h6>
-        {% if testMatches.matches.length %}
-        <ul>
-          {% for match in testMatches.matches %}
-          <li><code>{{ match.pattern }}</code> <span class="text-body-secondary">({{ match.type }})</span></li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <p class="text-body-secondary mb-0">No rules matched the sample text.</p>
-        {% endif %}
-        {% endif %}
+        <template x-if="testMatches">
+          <div>
+            <hr>
+            <h6>Matches</h6>
+            <template x-if="testMatches.matches && testMatches.matches.length">
+              <ul>
+                <template x-for="match in testMatches.matches" :key="match.type + ':' + match.pattern">
+                  <li><code x-text="match.pattern"></code> <span class="text-body-secondary">(<span x-text="match.type"></span>)</span></li>
+                </template>
+              </ul>
+            </template>
+            <p class="text-body-secondary mb-0" x-show="!testMatches.matches || !testMatches.matches.length">No rules matched the sample text.</p>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -94,5 +86,7 @@
     </div>
   </div>
 </footer>
+
+</div>
 
 {% endblock %}

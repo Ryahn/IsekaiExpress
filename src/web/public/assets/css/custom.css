@@ -709,29 +709,59 @@ body.voidstation-theme .input-group-text {
   cursor: not-allowed !important;
 }
 
-/* 14. TOAST */
-body.voidstation-theme .toast {
+/* 14. ALPINE + TOASTR */
+[x-cloak] {
+  display: none !important;
+}
+
+body.voidstation-theme #toast-container > .toast {
+  background-image: none !important;
   background-color: var(--vs-bg-surface) !important;
   border: 1px solid var(--vs-border) !important;
   border-radius: 10px !important;
   color: var(--vs-text-primary) !important;
   font-family: 'Plus Jakarta Sans', sans-serif !important;
+  opacity: 1 !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35) !important;
+  padding: 0.85rem 1rem 0.85rem 1.25rem !important;
 }
 
-body.voidstation-theme .toast-header {
-  background-color: transparent !important;
-  border-bottom: 1px solid var(--vs-border) !important;
+body.voidstation-theme #toast-container > .toast::before {
+  display: none !important;
+}
+
+body.voidstation-theme #toast-container > .toast-success {
+  border-color: rgba(52, 211, 153, 0.45) !important;
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.15), 0 12px 30px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.voidstation-theme #toast-container > .toast-error {
+  border-color: rgba(248, 113, 113, 0.45) !important;
+  box-shadow: 0 0 16px rgba(248, 113, 113, 0.15), 0 12px 30px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.voidstation-theme #toast-container > .toast-info,
+body.voidstation-theme #toast-container > .toast-warning {
+  border-color: rgba(96, 165, 250, 0.45) !important;
+}
+
+body.voidstation-theme #toast-container .toast-title {
+  color: var(--vs-text-primary) !important;
+  font-weight: 700 !important;
+}
+
+body.voidstation-theme #toast-container .toast-message {
   color: var(--vs-text-primary) !important;
 }
 
-body.voidstation-theme .toast.text-bg-success {
-  border-color: rgba(52, 211, 153, 0.4) !important;
-  box-shadow: 0 0 16px rgba(52, 211, 153, 0.15) !important;
+body.voidstation-theme #toast-container .toast-progress {
+  background-color: var(--vs-accent-light) !important;
+  opacity: 0.8 !important;
 }
 
-body.voidstation-theme .toast.text-bg-danger {
-  border-color: rgba(248, 113, 113, 0.4) !important;
-  box-shadow: 0 0 16px rgba(248, 113, 113, 0.15) !important;
+body.voidstation-theme #toast-container .toast-close-button {
+  color: var(--vs-text-muted) !important;
+  opacity: 0.9 !important;
 }
 
 /* 15. FOOTER */
