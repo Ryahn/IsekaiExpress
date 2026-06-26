@@ -158,7 +158,7 @@ module.exports = class InteractionEvent extends BaseEvent {
         ? modSlashLogicalKey(interaction)
         : interaction.commandName === 'attention' &&
             attentionSub &&
-            ['mod', 'staff', 'config'].includes(attentionSub)
+            ['mod', 'staff', 'config', 'archive', 'prune'].includes(attentionSub)
           ? `attention:${attentionSub}`
           : interaction.commandName;
 

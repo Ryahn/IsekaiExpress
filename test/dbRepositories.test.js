@@ -47,7 +47,8 @@ test('db.js re-exports key functions from every domain', () => {
     'hasImageReviewApproval', 'upsertImageReviewApproval', 'insertPendingImageReview',
     'insertImageHashBlacklist', 'listImageTextBlacklist',
     // attention / misc
-    'insertAttentionRequest', 'claimAttentionRequestStatus', 'createChannelStats',
+    'insertAttentionRequest', 'claimAttentionRequestStatus', 'listResolvedUnarchivedAttentionRequests',
+    'markAttentionRequestArchived', 'createChannelStats',
     'getAfkUser', 'createAfkUser',
   ];
   for (const name of expected) {

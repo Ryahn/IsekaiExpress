@@ -29,13 +29,31 @@ const REQUIRED = {
   afk_users: ['user_id', 'guild_id', 'message', 'timestamp'],
   channel_stats: ['channel_id', 'channel_name', 'month_day', 'total'],
   Guilds: ['guildId', 'guildOwnerId'],
-  GuildConfigurable: ['guildId', 'xp_enabled', 'warning_enabled', 'image_archive_enabled', 'level_up_enabled', 'level_up_channel'],
+  GuildConfigurable: [
+    'guildId',
+    'xp_enabled',
+    'warning_enabled',
+    'image_archive_enabled',
+    'level_up_enabled',
+    'level_up_channel',
+    'attention_archive_channel_id',
+  ],
   image_review_approvals: ['guild_id', 'user_id', 'approved_by', 'approved_at'],
   pending_invites: ['id', 'status', 'reviewed_by', 'queue_message_id', 'created_at'],
   pending_image_reviews: ['id', 'status', 'reviewed_by', 'queue_message_id', 'home_guild_id', 'author_id'],
   image_text_blacklist: ['id', 'pattern', 'pattern_type', 'added_by', 'added_at'],
   image_hash_blacklist: ['id', 'phash', 'description', 'added_by', 'added_at'],
-  attention_requests: ['id', 'status', 'reviewed_by', 'queue_message_id', 'queue_channel_id', 'resolved_at'],
+  attention_requests: [
+    'id',
+    'status',
+    'reviewed_by',
+    'queue_message_id',
+    'queue_channel_id',
+    'resolved_at',
+    'archive_message_id',
+    'archive_channel_id',
+    'archived_at',
+  ],
   // NOTE: dmca/games/uploaders are intentionally NOT checked — confirmed absent from production
   // and unreferenced by current code (legacy/web tables). Snapshots are historical only.
 };

@@ -79,16 +79,17 @@ function createLimiter(maxConcurrency) {
   let max = maxConcurrency;
 
   function drain() {
-    if (active >= max || queue.length === 0) return;
-    const next = queue.shift();
-    active += 1;
-    Promise.resolve()
-      .then(next.fn)
-      .then(next.resolve, next.reject)
-      .finally(() => {
-        active -= 1;
-        drain();
-      });
+    while (active < max && queue.length > 0) {
+      const next = queue.shift();
+      active += 1;
+      Promise.resolve()
+        .then(next.fn)
+        .then(next.resolve, next.reject)
+        .finally(() => {
+          active -= 1;
+          drain();
+        });
+    }
   }
 
   function limit(fn) {
@@ -913,6 +914,7 @@ module.exports = {
   OCR_MIN_CONFIDENCE_FOR_TEXT,
   DEFAULT_SCAM_SCAN_SETTINGS,
   _internal: {
+    createLimiter,
     makeEmptyScanResult,
     validateImageMetadata,
     preprocessForScan,

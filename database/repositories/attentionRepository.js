@@ -40,6 +40,28 @@ module.exports = {
       });
   },
 
+  listResolvedUnarchivedAttentionRequests: async (guildId, queueChannelId) => {
+    return db('attention_requests')
+      .select('*')
+      .where({ guild_id: guildId, queue_channel_id: queueChannelId })
+      .whereIn('status', ['handled', 'rejected', 'dismissed'])
+      .whereNotNull('queue_message_id')
+      .whereNull('archived_at')
+      .orderBy('resolved_at', 'asc')
+      .orderBy('id', 'asc');
+  },
+
+  markAttentionRequestArchived: async (id, archiveMessageId, archiveChannelId) => {
+    return db('attention_requests')
+      .where({ id })
+      .whereNull('archived_at')
+      .update({
+        archive_message_id: archiveMessageId,
+        archive_channel_id: archiveChannelId,
+        archived_at: db.fn.now(),
+      });
+  },
+
   // --- Misc / utility: channel statistics ---
   createChannelStats: async (channelId, channelName, currentDate) => {
     await db.table('channel_stats').insert({ channel_id: channelId, channel_name: channelName, month_day: currentDate, total: 1 });

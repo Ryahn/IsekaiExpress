@@ -49,6 +49,16 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 test.afterEach(() => {
   scamImageScan._internal.clearTestState();
 });
@@ -603,4 +613,144 @@ test('settings load failure uses safe defaults and does not become clean on rule
   } finally {
     axios.get = originalGet;
   }
+});
+
+test('increasing scan concurrency allows additional queued work to progress', async () => {
+  const limit = scamImageScan._internal.createLimiter(1);
+  const first = deferred();
+  const started = [];
+
+  const p1 = limit(async () => {
+    started.push('first');
+    await first.promise;
+    return 'first';
+  });
+  const p2 = limit(async () => {
+    started.push('second');
+    return 'second';
+  });
+
+  await delay(0);
+  assert.deepEqual(started, ['first']);
+  limit.setMaxConcurrency(2);
+  await delay(0);
+  assert.deepEqual(started, ['first', 'second']);
+  first.resolve();
+  assert.deepEqual(await Promise.all([p1, p2]), ['first', 'second']);
+});
+
+test('reducing scan concurrency while work is active does not deadlock', async () => {
+  const limit = scamImageScan._internal.createLimiter(2);
+  const first = deferred();
+  const second = deferred();
+  const started = [];
+
+  const p1 = limit(async () => {
+    started.push('first');
+    await first.promise;
+    return 'first';
+  });
+  const p2 = limit(async () => {
+    started.push('second');
+    await second.promise;
+    return 'second';
+  });
+  const p3 = limit(async () => {
+    started.push('third');
+    return 'third';
+  });
+
+  await delay(0);
+  assert.deepEqual(started, ['first', 'second']);
+  limit.setMaxConcurrency(1);
+  first.resolve();
+  await delay(0);
+  assert.deepEqual(started, ['first', 'second']);
+  second.resolve();
+  assert.deepEqual(await Promise.all([p1, p2, p3]), ['first', 'second', 'third']);
+  assert.deepEqual(started, ['first', 'second', 'third']);
+});
+
+test('increasing OCR concurrency allows additional queued OCR work to progress', async () => {
+  const limit = scamImageScan._internal.createLimiter(1);
+  const first = deferred();
+  const started = [];
+
+  const p1 = limit(async () => {
+    started.push('ocr-first');
+    await first.promise;
+    return 'ocr-first';
+  });
+  const p2 = limit(async () => {
+    started.push('ocr-second');
+    return 'ocr-second';
+  });
+
+  await delay(0);
+  assert.deepEqual(started, ['ocr-first']);
+  limit.setMaxConcurrency(2);
+  await delay(0);
+  assert.deepEqual(started, ['ocr-first', 'ocr-second']);
+  first.resolve();
+  assert.deepEqual(await Promise.all([p1, p2]), ['ocr-first', 'ocr-second']);
+});
+
+test('reducing OCR concurrency while work is active does not deadlock', async () => {
+  const limit = scamImageScan._internal.createLimiter(2);
+  const first = deferred();
+  const second = deferred();
+  const started = [];
+
+  const p1 = limit(async () => {
+    started.push('ocr-first');
+    await first.promise;
+    return 'ocr-first';
+  });
+  const p2 = limit(async () => {
+    started.push('ocr-second');
+    await second.promise;
+    return 'ocr-second';
+  });
+  const p3 = limit(async () => {
+    started.push('ocr-third');
+    return 'ocr-third';
+  });
+
+  await delay(0);
+  limit.setMaxConcurrency(1);
+  first.resolve();
+  await delay(0);
+  assert.deepEqual(started, ['ocr-first', 'ocr-second']);
+  second.resolve();
+  assert.deepEqual(await Promise.all([p1, p2, p3]), ['ocr-first', 'ocr-second', 'ocr-third']);
+});
+
+test('limiter slots are released after success, rejection, and thrown exceptions', async () => {
+  const limit = scamImageScan._internal.createLimiter(1);
+  const started = [];
+  const results = [];
+
+  const tasks = [
+    limit(async () => {
+      started.push('success');
+      return 'success';
+    }).then((v) => results.push(v)),
+    limit(async () => {
+      started.push('reject');
+      throw new Error('timeout-like rejection');
+    }).catch((e) => results.push(e.message)),
+    limit(() => {
+      started.push('throw');
+      throw new Error('sync throw');
+    }).catch((e) => results.push(e.message)),
+    limit(async () => {
+      started.push('after');
+      return 'after';
+    }).then((v) => results.push(v)),
+  ];
+
+  await Promise.all(tasks);
+
+  assert.deepEqual(started, ['success', 'reject', 'throw', 'after']);
+  assert.deepEqual(results, ['success', 'timeout-like rejection', 'sync throw', 'after']);
 });

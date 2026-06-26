@@ -1,5 +1,6 @@
 const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
+const { archiveAttentionRequestMessage, getAttentionArchiveChannels } = require('./attentionArchive');
 
 async function denyButton(interaction, text) {
   try {
@@ -125,6 +126,20 @@ async function handleAttentionButton(client, interaction) {
       await msg.edit({ embeds: [embed], components: [] }).catch((e) =>
         client.logger.warn(`attention: edit queue message failed: ${e?.message || e}`),
       );
+    }
+  }
+
+  const archiveChannels = await getAttentionArchiveChannels(client, interaction.guild).catch((e) => {
+    client.logger.warn(`attention: could not load archive config for request ${id}: ${e?.message || e}`);
+    return null;
+  });
+  if (archiveChannels?.archiveChannel) {
+    const result = await archiveAttentionRequestMessage(client, interaction.guild, { ...row, status }, {
+      queueChannel,
+      archiveChannel: archiveChannels.archiveChannel,
+    }).catch((e) => ({ status: 'failed', reason: e?.message || String(e) }));
+    if (result.status !== 'archived' && result.status !== 'skipped') {
+      client.logger.warn(`attention: archive request ${id} failed: ${result.reason || result.status}`);
     }
   }
 

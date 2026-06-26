@@ -13,8 +13,10 @@ const {
   parseScamScanSettingsInput,
   serializeScamScanSettingValue,
 } = require('../../libs/scamScanSettings');
+const logger = require('../../libs/logger');
 
 let scamScanSettingsCache = { t: 0, settings: null };
+let scamScanSettingsInvalidRowsWarnedAt = 0;
 
 async function hasScamScanRulesTable() {
   return db.schema.hasTable('scam_scan_rules');
@@ -314,6 +316,7 @@ module.exports = {
 
   clearScamScanSettingsCache: () => {
     scamScanSettingsCache = { t: 0, settings: null };
+    scamScanSettingsInvalidRowsWarnedAt = 0;
   },
 
   getScamScanSettings: async () => {
@@ -328,6 +331,12 @@ module.exports = {
     }
     const rows = await db('scam_scan_settings').select('key', 'value');
     const parsed = hydrateScamScanSettingsRows(rows);
+    if (parsed.errors.length && now - scamScanSettingsInvalidRowsWarnedAt > SCAM_SCAN_SETTINGS_CACHE_MS) {
+      scamScanSettingsInvalidRowsWarnedAt = now;
+      for (const error of parsed.errors) {
+        logger.warn(`Invalid scam scan setting row ignored: ${error}`);
+      }
+    }
     const settings = parsed.settings;
     scamScanSettingsCache = { t: now, settings };
     return { ...settings };
