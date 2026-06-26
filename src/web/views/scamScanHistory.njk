@@ -194,7 +194,9 @@
               <td x-text="valueOrDash(scan.timing_phash_ms)"></td>
               <td x-text="ruleIdsLabel(scan)"></td>
               <td x-text="imageLabel(scan)"></td>
-              <td x-text="valueOrDash(scan.ocr_preview)"></td>
+              <td>
+                <button class="btn btn-sm btn-info" type="button" @click="openOcrPreview(scan)" :disabled="!hasOcrPreview(scan)">View</button>
+              </td>
             </tr>
           </template>
           <tr x-show="!scans.length"><td colspan="15">No scan history for this filter.</td></tr>
@@ -204,6 +206,23 @@
     <div class="card-footer d-flex justify-content-between">
       <span>Page <span x-text="page.page"></span></span>
       <button class="btn btn-link p-0" type="button" x-show="page.hasMore" @click="nextPage" :disabled="isLoading">Next page</button>
+    </div>
+  </div>
+
+  <div class="modal fade" id="ocrPreviewModal" tabindex="-1" aria-labelledby="ocrPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="ocrPreviewModalLabel" x-text="ocrPreview.title"></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <pre class="mb-0 text-body" style="white-space: pre-wrap;" x-text="ocrPreview.text"></pre>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>

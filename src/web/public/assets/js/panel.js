@@ -541,6 +541,7 @@
 				ruleHits: config.ruleHits || [],
 				scans: config.scans || [],
 				page: config.page || { page: 1, limit: 25, hasMore: false },
+				ocrPreview: { title: 'OCR preview', text: '' },
 				isLoading: false,
 				isRefreshing: false,
 				pollTimer: null,
@@ -598,6 +599,18 @@
 					return Array.isArray(scan.matched_rule_ids) && scan.matched_rule_ids.length
 						? scan.matched_rule_ids.join(', ')
 						: '-';
+				},
+
+				hasOcrPreview: function(scan) {
+					return Boolean(scan.ocr_preview && String(scan.ocr_preview).trim());
+				},
+
+				openOcrPreview: function(scan) {
+					this.ocrPreview = {
+						title: scan.message_id ? 'OCR preview for message ' + scan.message_id : 'OCR preview',
+						text: this.hasOcrPreview(scan) ? String(scan.ocr_preview) : 'No OCR preview was captured for this scan.',
+					};
+					showBootstrapModal('#ocrPreviewModal');
 				},
 
 				queryString: function() {
