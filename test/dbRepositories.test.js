@@ -40,6 +40,9 @@ test('db.js re-exports key functions from every domain', () => {
     // command settings
     'createCommandSettings', 'getAllowedChannel', 'updateCommandSettings', 'getCommand',
     'refreshCustomCommandsCache', 'bumpCustomCommandsRevision',
+    'normalizeCustomCommandName', 'normalizeCustomCommandContent', 'validateCustomCommandName',
+    'getCustomCommandHash', 'parseCustomCommandIdentifier', 'getCustomCommandByIdentifier',
+    'createCustomCommand', 'updateCustomCommand', 'deleteCustomCommand',
     // image / review
     'hasImageReviewApproval', 'upsertImageReviewApproval', 'insertPendingImageReview',
     'insertImageHashBlacklist', 'listImageTextBlacklist',
@@ -87,6 +90,6 @@ test('no db function name is silently dropped (count matches sum of repos)', () 
     (n, repo) => n + Object.keys(repo).length,
     0,
   );
-  // 73 moved functions across the six repositories.
-  assert.equal(repoFnCount, 73, `expected 73 repository functions, found ${repoFnCount}`);
+  // 82 moved functions across the six repositories.
+  assert.equal(repoFnCount, 82, `expected 82 repository functions, found ${repoFnCount}`);
 });

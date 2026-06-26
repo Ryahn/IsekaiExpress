@@ -1,7 +1,41 @@
+const crypto = require('crypto');
 const db = require('../knex');
 
 /** Match the original db.js nowUnix helper used by createCommandSettings. */
 const nowUnix = () => Math.floor(Date.now() / 1000);
+const CUSTOM_COMMAND_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+function normalizeCustomCommandName(name) {
+  return String(name || '').trim();
+}
+
+function validateCustomCommandName(name) {
+  const normalized = normalizeCustomCommandName(name);
+  if (!normalized) {
+    return { ok: false, message: 'Command name is required.' };
+  }
+  if (!CUSTOM_COMMAND_NAME_PATTERN.test(normalized)) {
+    return {
+      ok: false,
+      message: 'Command names can only contain letters, numbers, underscores, and hyphens, up to 64 characters.',
+    };
+  }
+  return { ok: true, name: normalized };
+}
+
+function normalizeCustomCommandContent(content) {
+  return String(content || '').trim();
+}
+
+function getCustomCommandHash(name) {
+  return crypto.createHash('md5').update(normalizeCustomCommandName(name).toLowerCase()).digest('hex');
+}
+
+function parseCustomCommandIdentifier(identifier) {
+  const value = String(identifier || '').trim();
+  if (!value) return null;
+  return /^\d+$/.test(value) ? { id: value } : { name: value };
+}
 
 /**
  * Command channel settings + custom command content + app_state revision tracking.
@@ -70,5 +104,118 @@ const self = (module.exports = {
 
   incrementCustomCommandUsage: async (commandNameHash) => {
     await db.table('commands').increment('usage', 1).where({ hash: commandNameHash });
+  },
+
+  normalizeCustomCommandName,
+  normalizeCustomCommandContent,
+  validateCustomCommandName,
+  getCustomCommandHash,
+  parseCustomCommandIdentifier,
+
+  getCustomCommandByIdentifier: async (identifier) => {
+    const parsed = parseCustomCommandIdentifier(identifier);
+    if (!parsed) return null;
+    if (parsed.id) {
+      return db.table('commands').select('*').where({ id: parsed.id }).first();
+    }
+    return db
+      .table('commands')
+      .select('*')
+      .whereRaw('LOWER(name) = ?', [normalizeCustomCommandName(parsed.name).toLowerCase()])
+      .first();
+  },
+
+  createCustomCommand: async ({ name, content, userId }) => {
+    const nameCheck = validateCustomCommandName(name);
+    if (!nameCheck.ok) {
+      return { ok: false, reason: 'validation', message: nameCheck.message };
+    }
+
+    const normalizedContent = normalizeCustomCommandContent(content);
+    if (!normalizedContent) {
+      return { ok: false, reason: 'validation', message: 'Command content is required.' };
+    }
+
+    const hash = getCustomCommandHash(nameCheck.name);
+    const duplicate = await db.table('commands').select('id', 'name').where({ hash }).first();
+    if (duplicate) {
+      return {
+        ok: false,
+        reason: 'duplicate',
+        message: `A custom command named "${duplicate.name}" already exists.`,
+        command: duplicate,
+      };
+    }
+
+    const ts = nowUnix();
+    const [id] = await db.table('commands').insert({
+      hash,
+      name: nameCheck.name,
+      content: normalizedContent,
+      created_by: userId,
+      updated_by: userId,
+      created_at: ts,
+      updated_at: ts,
+    });
+    await self.bumpCustomCommandsRevision();
+
+    return {
+      ok: true,
+      command: await db.table('commands').select('*').where({ id }).first(),
+    };
+  },
+
+  updateCustomCommand: async ({ identifier, name, content, userId }) => {
+    const existing = await self.getCustomCommandByIdentifier(identifier);
+    if (!existing) {
+      return { ok: false, reason: 'not_found', message: 'Custom command not found.' };
+    }
+
+    const nameCheck = validateCustomCommandName(name);
+    if (!nameCheck.ok) {
+      return { ok: false, reason: 'validation', message: nameCheck.message };
+    }
+
+    const normalizedContent = normalizeCustomCommandContent(content);
+    if (!normalizedContent) {
+      return { ok: false, reason: 'validation', message: 'Command content is required.' };
+    }
+
+    const hash = getCustomCommandHash(nameCheck.name);
+    const duplicate = await db.table('commands').select('id', 'name').where({ hash }).first();
+    if (duplicate && String(duplicate.id) !== String(existing.id)) {
+      return {
+        ok: false,
+        reason: 'duplicate',
+        message: `A custom command named "${duplicate.name}" already exists.`,
+        command: duplicate,
+      };
+    }
+
+    await db.table('commands').where({ id: existing.id }).update({
+      name: nameCheck.name,
+      hash,
+      content: normalizedContent,
+      updated_by: userId,
+      updated_at: nowUnix(),
+    });
+    await self.bumpCustomCommandsRevision();
+
+    return {
+      ok: true,
+      command: await db.table('commands').select('*').where({ id: existing.id }).first(),
+      previous: existing,
+    };
+  },
+
+  deleteCustomCommand: async (identifier) => {
+    const existing = await self.getCustomCommandByIdentifier(identifier);
+    if (!existing) {
+      return { ok: false, reason: 'not_found', message: 'Custom command not found.' };
+    }
+
+    await db.table('commands').where({ id: existing.id }).delete();
+    await self.bumpCustomCommandsRevision();
+    return { ok: true, command: existing };
   },
 });

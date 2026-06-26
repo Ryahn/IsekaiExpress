@@ -9,6 +9,7 @@ const { handleModerationButton } = require('../../../../libs/moderationButtons')
 const { handleAttentionButton } = require('../../../../libs/attentionButtons');
 const { handleAttentionModalSubmit, handleAttentionTypeSelect } = require('../../../../libs/attentionFlow');
 const { handleModUpdateCommandSettingsAutocomplete } = require('../../commands/slashCommands/moderation/handlers/updateCommandSettingsBuilder');
+const { handleCustomCommandModalSubmit } = require('../../commands/slashCommands/moderation/custom_command');
 
 /**
  * @param {import('discord.js').Interaction} interaction
@@ -59,6 +60,30 @@ module.exports = class InteractionEvent extends BaseEvent {
     }
 
     if (interaction.isModalSubmit()) {
+      if (interaction.customId?.startsWith('custom_command:')) {
+        try {
+          if (await handleCustomCommandModalSubmit(client, interaction)) return;
+        } catch (e) {
+          client.logger.error('Custom command modal submit error:', e);
+          try {
+            if (interaction.deferred || interaction.replied) {
+              await interaction.editReply({
+                content: 'An error occurred while saving the custom command.',
+                flags: MessageFlags.Ephemeral,
+              });
+            } else {
+              await interaction.reply({
+                content: 'An error occurred while saving the custom command.',
+                flags: MessageFlags.Ephemeral,
+              });
+            }
+          } catch (_) {
+            /* ignore */
+          }
+        }
+        return;
+      }
+
       if (interaction.customId?.startsWith('attention:form:')) {
         try {
           await handleAttentionModalSubmit(client, interaction);
@@ -112,7 +137,8 @@ module.exports = class InteractionEvent extends BaseEvent {
     const attentionSub =
       interaction.commandName === 'attention' ? interaction.options.getSubcommand(false) : null;
     const skipDefer =
-      interaction.commandName === 'attention' && (attentionSub === 'mod' || attentionSub === 'staff');
+      (interaction.commandName === 'attention' && (attentionSub === 'mod' || attentionSub === 'staff')) ||
+      interaction.commandName === 'custom_command';
 
     const cooldownKey =
       interaction.commandName === 'mod'
