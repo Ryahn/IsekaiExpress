@@ -29,8 +29,10 @@ const LEVEL_COLOR = {
 const MAX_DESCRIPTION = 3500;
 const MIN_SPACING_MS = 1500;
 const DEDUPE_WINDOW_MS = 30_000;
+const MAX_QUEUE_LENGTH = 100;
 const SECRET_KEY_REGEX = /(_TOKEN|_SECRET|_PASSWORD|_PASS|_KEY|HOOK_URL)$/i;
 const DISCORD_TOKEN_REGEX = /\b(?:Bot\s+)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}\b/g;
+const OVERFLOW_KEY = 'warn:loggerWebhookOverflow';
 
 let webhookUrl = '';
 let minLevel = LEVEL_RANK.warn;
@@ -43,6 +45,7 @@ let timer = null;
 let lastSendAt = 0;
 let sending = false;
 let secrets = [];
+let overflowDropped = 0;
 
 function collectSecrets() {
   const acc = new Set();
@@ -138,6 +141,28 @@ function scheduleSend() {
   timer = setTimeout(processQueue, wait);
 }
 
+function enqueueOverflowNotice() {
+  const msg = `Logger webhook queue overflow; dropped ${overflowDropped} log message(s).`;
+  const existing = queue.find((q) => q.key === OVERFLOW_KEY);
+  if (existing) {
+    existing.msg = msg;
+    existing.count = overflowDropped;
+    return;
+  }
+
+  if (queue.length >= MAX_QUEUE_LENGTH) {
+    queue.shift();
+  }
+
+  queue.push({
+    key: OVERFLOW_KEY,
+    level: 'warn',
+    msg,
+    count: overflowDropped,
+    firstAt: Date.now(),
+  });
+}
+
 async function processQueue() {
   timer = null;
   if (!queue.length) return;
@@ -145,6 +170,9 @@ async function processQueue() {
   recentlySent.set(item.key, Date.now());
   pruneSent();
   await postItem(item);
+  if (item.key === OVERFLOW_KEY) {
+    overflowDropped = 0;
+  }
   if (queue.length) scheduleSend();
 }
 
@@ -175,14 +203,29 @@ function enqueue(level, msg) {
     return;
   }
 
+  if (queue.length >= MAX_QUEUE_LENGTH) {
+    overflowDropped += 1;
+    enqueueOverflowNotice();
+    scheduleSend();
+    return;
+  }
+
   queue.push({ key, level, msg: text, count: 1, firstAt: Date.now() });
   scheduleSend();
+}
+
+function shutdown() {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
 }
 
 module.exports = {
   init,
   enqueue,
   isEnabled,
+  shutdown,
   // exported for tests
   _internal: { redact, collectSecrets, buildPayload },
 };

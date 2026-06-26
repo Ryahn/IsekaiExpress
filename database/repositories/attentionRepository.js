@@ -45,6 +45,14 @@ module.exports = {
     await db.table('channel_stats').insert({ channel_id: channelId, channel_name: channelName, month_day: currentDate, total: 1 });
   },
 
+  incrementChannelStats: async (channelId, channelName, currentDate) => {
+    await db.raw(
+      'INSERT INTO channel_stats (channel_id, channel_name, month_day, total) VALUES (?, ?, ?, 1) ' +
+        'ON DUPLICATE KEY UPDATE total = total + 1, channel_name = VALUES(channel_name)',
+      [channelId, channelName, currentDate],
+    );
+  },
+
   getChannelStats: async (channelId, currentDate) => {
     const row = await db.table('channel_stats')
       .select('*')

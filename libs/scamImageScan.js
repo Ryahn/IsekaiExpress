@@ -7,30 +7,146 @@ const { hasGuildAdminOrStaffRole, hasGuildAdminOrModRole } = require('../src/bot
 const { extractHttpUrls, getBlacklistedLinkHostsList, hostMatchesBlacklistedDomain } = require('./scamLinkPolicy');
 const { normalizeBlacklistedLinkHost } = require('./blacklistedLinkHostNormalize');
 const { withModLogRolePing } = require('./modLogNotify');
+const {
+  normalizeScamScanText,
+  testScamScanRulesAgainstTextRows,
+} = require('./scamScanRulesText');
+const { defaultScamScanSettings } = require('./scamScanSettings');
 
-const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
-const DOWNLOAD_TIMEOUT_MS = 20000;
-const SCAN_TIMEOUT_MS = 25000;
+const DEFAULT_SCAM_SCAN_SETTINGS = defaultScamScanSettings();
+const SCAN_TOTAL_TIMEOUT_MS = DEFAULT_SCAM_SCAN_SETTINGS.scam_scan_total_timeout_ms;
+const DOWNLOAD_TIMEOUT_MS = DEFAULT_SCAM_SCAN_SETTINGS.scam_scan_download_timeout_ms;
+const OCR_TIMEOUT_MS = DEFAULT_SCAM_SCAN_SETTINGS.scam_scan_ocr_timeout_ms;
+const PHASH_TIMEOUT_MS = DEFAULT_SCAM_SCAN_SETTINGS.scam_scan_phash_timeout_ms;
+const MAX_IMAGE_BYTES = DEFAULT_SCAM_SCAN_SETTINGS.scam_scan_max_image_bytes;
+const MAX_IMAGE_PIXELS = DEFAULT_SCAM_SCAN_SETTINGS.scam_scan_max_image_pixels;
+const MAX_SCAN_CONCURRENCY = DEFAULT_SCAM_SCAN_SETTINGS.scam_scan_max_scan_concurrency;
+const MAX_OCR_CONCURRENCY = DEFAULT_SCAM_SCAN_SETTINGS.scam_scan_max_ocr_concurrency;
 
-class OversizeImageError extends Error {
-  constructor(size) {
-    super(`image exceeds ${MAX_DOWNLOAD_BYTES} byte download cap (size=${size || 'unknown'})`);
-    this.name = 'OversizeImageError';
-    this.code = 'OVERSIZE_IMAGE';
-  }
-}
-const OCR_MAX_EDGE = 1600;
 /** Below this, OCR text / hostname extraction is ignored (still run pHash). Reduces false bans on photos/noise. */
 const OCR_MIN_CONFIDENCE_FOR_TEXT = 60;
 /** blockhash bit length passed to imghash. 16 = 256-bit hash, far less collision-prone than 8 (64-bit). */
 const PHASH_BITS = 16;
-/** Hamming distance (bits) — calibrated for 256-bit hash; ~5% bit diff. */
+/** Hamming distance (bits) - calibrated for 256-bit hash; ~5% bit diff. */
 const PHASH_MAX_HAMMING = 14;
 const LIST_CACHE_MS = 60 * 1000;
+
+const DEFAULT_TIMINGS = Object.freeze({
+  downloadMs: null,
+  preprocessMs: null,
+  ocrMs: null,
+  rulesMs: null,
+  phashMs: null,
+  totalMs: null,
+});
+
+const DEFAULT_IMAGE = Object.freeze({
+  bytes: null,
+  width: null,
+  height: null,
+  format: null,
+});
+
+class ScanStageTimeoutError extends Error {
+  constructor(stage, reasonCode) {
+    super(reasonCode);
+    this.name = 'ScanStageTimeoutError';
+    this.stage = stage;
+    this.reasonCode = reasonCode;
+  }
+}
+
+class ScanStageError extends Error {
+  constructor(stage, reasonCode, message) {
+    super(message || reasonCode);
+    this.name = 'ScanStageError';
+    this.stage = stage;
+    this.reasonCode = reasonCode;
+  }
+}
+
+class OversizeImageError extends Error {
+  constructor(size) {
+    super(`image exceeds ${MAX_IMAGE_BYTES} byte download cap (size=${size || 'unknown'})`);
+    this.name = 'OversizeImageError';
+    this.code = 'OVERSIZE_IMAGE';
+  }
+}
+
+function createLimiter(maxConcurrency) {
+  const queue = [];
+  let active = 0;
+  let max = maxConcurrency;
+
+  function drain() {
+    if (active >= max || queue.length === 0) return;
+    const next = queue.shift();
+    active += 1;
+    Promise.resolve()
+      .then(next.fn)
+      .then(next.resolve, next.reject)
+      .finally(() => {
+        active -= 1;
+        drain();
+      });
+  }
+
+  function limit(fn) {
+    return new Promise((resolve, reject) => {
+      queue.push({ fn, resolve, reject });
+      drain();
+    });
+  }
+
+  limit.setMaxConcurrency = (nextMax) => {
+    const n = Number(nextMax);
+    if (Number.isInteger(n) && n > 0) {
+      max = n;
+      drain();
+    }
+  };
+
+  return limit;
+}
+
+const limitScan = createLimiter(MAX_SCAN_CONCURRENCY);
+const limitOcr = createLimiter(MAX_OCR_CONCURRENCY);
 
 let textListCache = { t: 0, rows: [] };
 let hashListCache = { t: 0, rows: [] };
 let ocrWorkerPromise = null;
+let ocrResetPromise = null;
+let createOcrWorker = () => createWorker('eng');
+let testTimeoutOverrides = null;
+let testSettingsOverrides = null;
+
+function getTimeouts(settings = DEFAULT_SCAM_SCAN_SETTINGS) {
+  return {
+    totalMs: testTimeoutOverrides?.totalMs ?? settings.scam_scan_total_timeout_ms,
+    downloadMs: testTimeoutOverrides?.downloadMs ?? settings.scam_scan_download_timeout_ms,
+    ocrMs: testTimeoutOverrides?.ocrMs ?? settings.scam_scan_ocr_timeout_ms,
+    phashMs: testTimeoutOverrides?.phashMs ?? settings.scam_scan_phash_timeout_ms,
+  };
+}
+
+async function getEffectiveScamScanSettings(client) {
+  const defaults = { ...DEFAULT_SCAM_SCAN_SETTINGS, ...testSettingsOverrides };
+  if (typeof client?.db?.getScamScanSettings !== 'function') {
+    return defaults;
+  }
+  try {
+    const loaded = await client.db.getScamScanSettings();
+    return { ...defaults, ...loaded, ...testSettingsOverrides };
+  } catch (e) {
+    client?.logger?.warn?.('scamImageScan settings load failed; using safe defaults:', e);
+    return defaults;
+  }
+}
+
+function applyLimiterSettings(settings) {
+  limitScan.setMaxConcurrency(settings.scam_scan_max_scan_concurrency);
+  limitOcr.setMaxConcurrency(settings.scam_scan_max_ocr_concurrency);
+}
 
 function bustScamBlacklistCache() {
   textListCache = { t: 0, rows: [] };
@@ -38,21 +154,56 @@ function bustScamBlacklistCache() {
 }
 
 async function getOcrWorker() {
+  if (ocrResetPromise) {
+    await ocrResetPromise;
+  }
   if (!ocrWorkerPromise) {
-    ocrWorkerPromise = createWorker('eng');
+    ocrWorkerPromise = createOcrWorker();
   }
   return ocrWorkerPromise;
 }
 
+async function resetOcrWorker(client, reason) {
+  const current = ocrWorkerPromise;
+  ocrWorkerPromise = null;
+  if (!current) {
+    if (ocrResetPromise) await ocrResetPromise;
+    return;
+  }
+  const reset = (async () => {
+    try {
+      const worker = await current;
+      await worker.terminate?.();
+    } catch (e) {
+      client?.logger?.warn?.(`scamImageScan OCR worker reset failed (${reason || 'unknown'}):`, e);
+    }
+  })();
+  ocrResetPromise = reset;
+  try {
+    await reset;
+  } finally {
+    if (ocrResetPromise === reset) {
+      ocrResetPromise = null;
+    }
+  }
+}
+
+async function warmOcrWorker(client) {
+  try {
+    await getOcrWorker();
+    client?.logger?.info?.('scamImageScan OCR worker warmed');
+  } catch (e) {
+    ocrWorkerPromise = null;
+    client?.logger?.warn?.('scamImageScan OCR worker warmup failed:', e);
+  }
+}
+
 function normalizeOcrText(text) {
-  return String(text || '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+  return normalizeScamScanText(text);
 }
 
 /**
- * Tesseract often emits “words” from fur, knit patterns, etc. Treat as unreliable for text blacklist.
+ * Tesseract often emits "words" from fur, knit patterns, etc. Treat as unreliable for text blacklist.
  */
 function isLikelyOcrNoiseText(normalized, ocrRaw) {
   const n = String(normalized || '');
@@ -85,25 +236,93 @@ function keywordPatternMatchesNormalized(normalized, patternLower) {
   return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(normalized);
 }
 
-function matchTextBlacklist(normalized, rows) {
-  for (const row of rows) {
-    const p = String(row.pattern || '').toLowerCase();
-    if (!p) continue;
-    if (row.pattern_type === 'regex') {
-      try {
-        if (new RegExp(p, 'i').test(normalized)) {
-          return { hit: true, detail: `text:${row.pattern_type}:${row.pattern}` };
-        }
-      } catch {
-        /* invalid regex in DB */
-      }
-    } else {
-      if (keywordPatternMatchesNormalized(normalized, p)) {
-        return { hit: true, detail: `text:${row.pattern_type}:${row.pattern}` };
-      }
-    }
+function makeEmptyScanResult() {
+  return {
+    status: 'failed',
+    hit: false,
+    reasonCode: null,
+    failureStage: null,
+    matchedRules: [],
+    matchedHashes: [],
+    timings: { ...DEFAULT_TIMINGS },
+    image: { ...DEFAULT_IMAGE },
+    ocrPreview: null,
+    reason: null,
+    detail: '',
+    severity: undefined,
+    ocrSnippet: null,
+    ocrConfidence: 0,
+  };
+}
+
+function finalizeResult(result, status, patch = {}) {
+  const out = Object.assign(result, patch, { status });
+  out.hit = status === 'hit';
+  if (out.ocrPreview && !out.ocrSnippet) out.ocrSnippet = out.ocrPreview;
+  return out;
+}
+
+function timeoutResult(result, stage, reasonCode) {
+  return finalizeResult(result, 'timeout', {
+    reasonCode,
+    failureStage: stage,
+    reason: reasonCode,
+    detail: reasonCode,
+  });
+}
+
+function failedResult(result, stage, reasonCode, message) {
+  return finalizeResult(result, 'failed', {
+    reasonCode,
+    failureStage: stage,
+    reason: reasonCode,
+    detail: message || reasonCode,
+  });
+}
+
+function skippedResult(result, stage, reasonCode, message) {
+  return finalizeResult(result, 'skipped', {
+    reasonCode,
+    failureStage: stage,
+    reason: reasonCode,
+    detail: message || reasonCode,
+  });
+}
+
+async function timeStage(result, stageKey, fn) {
+  const started = Date.now();
+  try {
+    return await fn();
+  } finally {
+    result.timings[stageKey] = Date.now() - started;
   }
-  return { hit: false };
+}
+
+function withTimeout(promise, ms, stage, reasonCode) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new ScanStageTimeoutError(stage, reasonCode)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
+function matchTextBlacklist(normalized, rows) {
+  const match = testScamScanRulesAgainstTextRows(normalized, rows).matches[0];
+  if (!match) return { hit: false };
+  return {
+    hit: true,
+    detail: `text:${match.type}:${match.pattern}`,
+    severity: match.severity || 'review',
+    rule: { id: match.id, type: match.type, pattern: match.pattern, severity: match.severity || 'review' },
+  };
 }
 
 /**
@@ -137,7 +356,10 @@ async function getCachedTextRows(client) {
   if (now - textListCache.t < LIST_CACHE_MS && textListCache.rows.length) {
     return textListCache.rows;
   }
-  const rows = await client.db.getImageTextBlacklistRows();
+  const rows =
+    typeof client.db.getEnabledScamScanRules === 'function'
+      ? await client.db.getEnabledScamScanRules()
+      : await client.db.getImageTextBlacklistRows();
   textListCache = { t: now, rows };
   return rows;
 }
@@ -159,7 +381,11 @@ async function matchLinkBlacklistHosts(client, ocrRaw) {
   for (const h of hosts) {
     const matched = hostMatchesBlacklistedDomain(h, list);
     if (matched) {
-      return { hit: true, detail: `link_domain:${matched}` };
+      return {
+        hit: true,
+        detail: `link_domain:${matched}`,
+        rule: { id: null, type: 'link_domain', pattern: matched },
+      };
     }
   }
   return { hit: false };
@@ -183,65 +409,108 @@ async function matchPhash(client, imageBuffer) {
   if (!rows.length) return { hit: false };
   let h;
   try {
-    h = await imghash.hash(imageBuffer, PHASH_BITS);
+    h = await computePreparedScamImagePhash(imageBuffer);
   } catch (e) {
     client.logger.warn('scamImageScan imghash failed', e);
-    return { hit: false };
+    throw new ScanStageError('phash', 'phash_failed', e?.message || 'pHash failed');
   }
   for (const row of rows) {
     const ref = String(row.phash || '').toLowerCase();
     if (!ref) continue;
     const dist = hammingHexBits(h.toLowerCase(), ref);
     if (dist <= PHASH_MAX_HAMMING) {
-      return { hit: true, detail: `phash:dist${dist}:ref#${row.id}`, phash: h };
+      return {
+        hit: true,
+        detail: `phash:dist${dist}:ref#${row.id}`,
+        phash: h,
+        hash: { id: row.id, phash: h, reference: ref, distance: dist, description: row.description || null },
+      };
     }
   }
-  return { hit: false };
+  return { hit: false, phash: h };
 }
 
-async function downloadImageBuffer(url) {
+async function prepareImageForScamScanHash(inputBuffer) {
+  const { buffer } = await preprocessForScan(inputBuffer);
+  return buffer;
+}
+
+async function computePreparedScamImagePhash(preprocessedBuffer) {
+  return imghash.hash(preprocessedBuffer, PHASH_BITS);
+}
+
+async function computeScamImagePhash(inputBuffer) {
+  const prepared = await prepareImageForScamScanHash(inputBuffer);
+  return computePreparedScamImagePhash(prepared);
+}
+
+function classifyDownloadError(e) {
+  if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || e?.code === 'ECONNABORTED') {
+    return new ScanStageTimeoutError('download', 'download_timeout');
+  }
+  if (e?.code === 'ERR_FR_MAX_BODY_LENGTH_EXCEEDED' || /maxContentLength|too large/i.test(e?.message || '')) {
+    return new ScanStageError('download', 'image_too_large', e.message);
+  }
+  return new ScanStageError('download', 'download_failed', e?.message || 'download failed');
+}
+
+async function downloadImageBuffer(url, settings) {
+  const controller = new AbortController();
+  const timeoutMs = getTimeouts(settings).downloadMs;
+  const maxBytes = settings.scam_scan_max_image_bytes;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const opts = {
     responseType: 'arraybuffer',
-    timeout: DOWNLOAD_TIMEOUT_MS,
-    maxContentLength: MAX_DOWNLOAD_BYTES,
-    maxBodyLength: MAX_DOWNLOAD_BYTES,
+    timeout: timeoutMs,
+    signal: controller.signal,
+    maxContentLength: maxBytes,
+    maxBodyLength: maxBytes,
     validateStatus: (s) => s >= 200 && s < 400,
   };
 
-  let lastErr;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await axios.get(url, opts);
-      const buf = Buffer.from(res.data);
-      if (buf.length > MAX_DOWNLOAD_BYTES) {
-        throw new Error('image too large');
-      }
-      const expected = Number(res.headers['content-length']);
-      if (expected > 0 && buf.length < expected) {
-        throw new Error(`truncated download (${buf.length}/${expected} bytes)`);
-      }
-      return buf;
-    } catch (e) {
-      lastErr = e;
-      if (attempt === 0) {
-        await new Promise((r) => setTimeout(r, 400));
-      }
+  try {
+    const res = await axios.get(url, opts);
+    const expected = Number(res.headers?.['content-length']);
+    if (expected > maxBytes) {
+      throw new ScanStageError('download', 'image_too_large', `image exceeds byte cap (${expected})`);
     }
+    const buf = Buffer.from(res.data);
+    if (buf.length > maxBytes) {
+      throw new ScanStageError('download', 'image_too_large', `image exceeds byte cap (${buf.length})`);
+    }
+    if (expected > 0 && buf.length < expected) {
+      throw new ScanStageError('download', 'download_failed', `truncated download (${buf.length}/${expected} bytes)`);
+    }
+    return buf;
+  } catch (e) {
+    if (e instanceof ScanStageError || e instanceof ScanStageTimeoutError) throw e;
+    throw classifyDownloadError(e);
+  } finally {
+    clearTimeout(timeout);
   }
-  throw lastErr;
 }
 
-async function sharpPngForScan(inputBuffer, sharpOptions = {}) {
-  const instance = sharp(inputBuffer, { failOn: 'none', ...sharpOptions });
-  const meta = await instance.metadata();
-  if (!meta.width || !meta.height) {
-    throw new Error('not an image');
+function validateImageMetadata(meta, settings = DEFAULT_SCAM_SCAN_SETTINGS) {
+  const width = typeof meta?.width === 'number' ? meta.width : null;
+  const height = typeof meta?.height === 'number' ? meta.height : null;
+  if (!width || !height) {
+    throw new ScanStageError('preprocess', 'image_dimensions_unavailable', 'image dimensions unavailable');
   }
+  const pixels = width * height;
+  if (pixels > settings.scam_scan_max_image_pixels) {
+    throw new ScanStageError('preprocess', 'image_too_many_pixels', `image exceeds pixel cap (${pixels})`);
+  }
+  return { width, height, pixels };
+}
+
+async function sharpPngForScan(inputBuffer, meta, settings = DEFAULT_SCAM_SCAN_SETTINGS, sharpOptions = {}) {
+  validateImageMetadata(meta, settings);
   const pipeline = sharp(inputBuffer, { failOn: 'none', ...sharpOptions }).rotate().greyscale();
   const maxEdge = Math.max(meta.width, meta.height);
+  const ocrMaxEdge = settings.scam_scan_ocr_max_edge;
   const resized =
-    maxEdge > OCR_MAX_EDGE
-      ? pipeline.resize(OCR_MAX_EDGE, OCR_MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
+    maxEdge > ocrMaxEdge
+      ? pipeline.resize(ocrMaxEdge, ocrMaxEdge, { fit: 'inside', withoutEnlargement: true })
       : pipeline;
   const buffer = await resized.png().toBuffer();
   return { buffer, meta };
@@ -249,20 +518,29 @@ async function sharpPngForScan(inputBuffer, sharpOptions = {}) {
 
 /**
  * Discord sometimes serves HEIF/AVIF or truncated CDN payloads that confuse libvips on the
- * first decode pass. Try plain decode, then sequential read, then a JPEG-only reread.
+ * first decode pass. Inspect metadata once, enforce pixel limits, then try decode variants.
  */
-async function preprocessForScan(inputBuffer) {
+async function preprocessForScan(inputBuffer, settings = DEFAULT_SCAM_SCAN_SETTINGS) {
+  let meta;
+  try {
+    meta = await sharp(inputBuffer, { failOn: 'none' }).metadata();
+    validateImageMetadata(meta, settings);
+  } catch (e) {
+    if (e instanceof ScanStageError) throw e;
+    throw new ScanStageError('preprocess', 'image_decode_failed', e?.message || 'image metadata failed');
+  }
+
   const attempts = [
-    () => sharpPngForScan(inputBuffer),
-    () => sharpPngForScan(inputBuffer, { sequentialRead: true }),
-    () => sharpPngForScan(inputBuffer, { limitInputPixels: false }),
-    () => sharpPngForScan(inputBuffer, { pages: 1 }),
+    () => sharpPngForScan(inputBuffer, meta, settings),
+    () => sharpPngForScan(inputBuffer, meta, settings, { sequentialRead: true }),
+    () => sharpPngForScan(inputBuffer, meta, settings, { limitInputPixels: false }),
+    () => sharpPngForScan(inputBuffer, meta, settings, { pages: 1 }),
   ];
 
   let lastErr;
   for (const attempt of attempts) {
     try {
-        return await attempt();
+      return await attempt();
     } catch (e) {
       lastErr = e;
     }
@@ -272,133 +550,277 @@ async function preprocessForScan(inputBuffer) {
   const looksJpeg = head[0] === 0xff && head[1] === 0xd8;
   if (looksJpeg) {
     try {
-      return await sharpPngForScan(inputBuffer, { failOn: 'none', page: 0 });
+      return await sharpPngForScan(inputBuffer, meta, settings, { failOn: 'none', page: 0 });
     } catch (e) {
       lastErr = e;
     }
   }
 
-  throw lastErr || new Error('image decode failed');
+  throw new ScanStageError('preprocess', 'image_decode_failed', lastErr?.message || 'image decode failed');
+}
+
+function buildLogPayload(result, context) {
+  return {
+    attachmentIndex: context?.attachmentIndex ?? null,
+    messageId: context?.messageId ?? null,
+    status: result.status,
+    reasonCode: result.reasonCode,
+    failureStage: result.failureStage,
+    timings: result.timings,
+    image: result.image,
+  };
+}
+
+function logScanResult(client, result, context) {
+  const payload = JSON.stringify(buildLogPayload(result, context));
+  if (result.status === 'hit') {
+    client.logger.warn(`scamImageScan result ${payload}`);
+  } else if (result.status === 'timeout' || result.status === 'failed') {
+    client.logger.warn(`scamImageScan result ${payload}`);
+  } else {
+    client.logger.info?.(`scamImageScan result ${payload}`);
+  }
+}
+
+function applyMetaToResult(result, rawBuf, meta) {
+  result.image.bytes = rawBuf.length;
+  result.image.width = typeof meta?.width === 'number' ? meta.width : null;
+  result.image.height = typeof meta?.height === 'number' ? meta.height : null;
+  result.image.format = meta?.format || null;
 }
 
 /**
  * @param {import('discord.js').Client} client
  * @param {string} url
- * @returns {Promise<{ hit: boolean, reason: string, detail: string, severity?: 'auto' | 'review', ocrSnippet?: string, phash?: string }>}
+ * @returns {Promise<object>}
  */
-async function scanImageUrl(client, url) {
-  const rawBuf = await downloadImageBuffer(url);
-  const { buffer: pngBuf, meta } = await preprocessForScan(rawBuf);
+async function scanImageUrl(client, url, settings = DEFAULT_SCAM_SCAN_SETTINGS) {
+  const result = makeEmptyScanResult();
+  const started = Date.now();
+  try {
+    const rawBuf = await timeStage(result, 'downloadMs', () => downloadImageBuffer(url, settings));
+    result.image.bytes = rawBuf.length;
 
-  let ocrRaw = '';
-  let ocrConfidence = 0;
-  const width = typeof meta?.width === 'number' ? meta.width : null;
-  const height = typeof meta?.height === 'number' ? meta.height : null;
-  const tinyImage = width != null && height != null && (width < 3 || height < 3);
-  if (!tinyImage) {
-    const worker = await getOcrWorker();
-    const {
-      data: { text, confidence },
-    } = await worker.recognize(pngBuf);
-    ocrRaw = text;
-    ocrConfidence = typeof confidence === 'number' ? confidence : 0;
-  }
+    const { buffer: pngBuf, meta } = await timeStage(result, 'preprocessMs', () => preprocessForScan(rawBuf, settings));
+    applyMetaToResult(result, rawBuf, meta);
 
-  const normalized = normalizeOcrText(ocrRaw);
-  const ocrSnippet = normalized.slice(0, 1200);
+    let ocrRaw = '';
+    let ocrConfidence = 0;
+    const tinyImage = result.image.width != null && result.image.height != null
+      && (result.image.width < 3 || result.image.height < 3);
 
-  const trustOcrTokens =
-    ocrConfidence >= OCR_MIN_CONFIDENCE_FOR_TEXT && !isLikelyOcrNoiseText(normalized, ocrRaw);
-
-  if (trustOcrTokens) {
-    const textRows = await getCachedTextRows(client);
-    const textHit = matchTextBlacklist(normalized, textRows);
-    if (textHit.hit) {
-      return {
-        hit: true,
-        reason: 'ocr',
-        severity: 'auto',
-        detail: textHit.detail,
-        ocrSnippet,
-        ocrConfidence,
-      };
+    if (!settings.scam_scan_ocr_enabled) {
+      result.timings.ocrMs = 0;
+      result.timings.rulesMs = 0;
+    } else if (!tinyImage) {
+      try {
+        const ocrData = await timeStage(result, 'ocrMs', () =>
+          limitOcr(async () => {
+              const worker = await getOcrWorker();
+              try {
+                return await withTimeout(worker.recognize(pngBuf), getTimeouts(settings).ocrMs, 'ocr', 'ocr_timeout');
+              } catch (e) {
+                if (e instanceof ScanStageTimeoutError) {
+                  await resetOcrWorker(client, 'ocr_timeout');
+                } else {
+                  await resetOcrWorker(client, 'ocr_failed');
+                }
+                throw e;
+              }
+          }),
+        );
+        const data = ocrData?.data || {};
+        ocrRaw = data.text || '';
+        ocrConfidence = typeof data.confidence === 'number' ? data.confidence : 0;
+      } catch (e) {
+        if (e instanceof ScanStageTimeoutError) {
+          return timeoutResult(result, e.stage, e.reasonCode);
+        }
+        return failedResult(result, 'ocr', 'ocr_failed', e?.message || 'OCR failed');
+      }
+    } else {
+      result.timings.ocrMs = 0;
     }
 
-    const linkHit = await matchLinkBlacklistHosts(client, ocrRaw);
-    if (linkHit.hit) {
-      return {
-        hit: true,
-        reason: 'ocr_link_host',
-        severity: 'auto',
-        detail: linkHit.detail,
-        ocrSnippet,
-        ocrConfidence,
-      };
+    const normalized = normalizeOcrText(ocrRaw);
+    const ocrSnippet = normalized.slice(0, 1200);
+    result.ocrPreview = ocrSnippet || null;
+    result.ocrSnippet = result.ocrPreview;
+    result.ocrConfidence = ocrConfidence;
+
+    if (settings.scam_scan_ocr_enabled) {
+      let ruleHit;
+      try {
+        ruleHit = await timeStage(result, 'rulesMs', async () => {
+          const trustOcrTokens =
+            ocrConfidence >= OCR_MIN_CONFIDENCE_FOR_TEXT && !isLikelyOcrNoiseText(normalized, ocrRaw);
+
+          if (!trustOcrTokens) return { hit: false };
+
+          const textRows = await getCachedTextRows(client);
+          const textHit = matchTextBlacklist(normalized, textRows);
+          if (textHit.hit) return { ...textHit, reason: 'ocr' };
+
+          const linkHit = await matchLinkBlacklistHosts(client, ocrRaw);
+          if (linkHit.hit) return { ...linkHit, reason: 'ocr_link_host', severity: 'auto' };
+
+          return { hit: false };
+        });
+      } catch (e) {
+        return failedResult(result, 'rules', 'rule_loading_failed', e?.message || 'rule loading failed');
+      }
+
+      if (ruleHit.hit) {
+        result.matchedRules.push(ruleHit.rule);
+        return finalizeResult(result, 'hit', {
+          reasonCode: ruleHit.reason,
+          reason: ruleHit.reason,
+          severity: ruleHit.severity,
+          detail: ruleHit.detail,
+        });
+      }
     }
+
+    if (!settings.scam_scan_phash_enabled) {
+      result.timings.phashMs = 0;
+      return finalizeResult(result, settings.scam_scan_ocr_enabled ? 'clean' : 'skipped', {
+        reasonCode: settings.scam_scan_ocr_enabled ? 'none' : 'scanner_checks_disabled',
+        reason: settings.scam_scan_ocr_enabled ? 'none' : 'scanner_checks_disabled',
+        failureStage: settings.scam_scan_ocr_enabled ? null : 'settings',
+        detail: settings.scam_scan_ocr_enabled ? '' : 'OCR and pHash scanning are disabled',
+      });
+    }
+
+    let ph;
+    try {
+      ph = await timeStage(result, 'phashMs', () =>
+        withTimeout(matchPhash(client, pngBuf), getTimeouts(settings).phashMs, 'phash', 'phash_timeout'),
+      );
+    } catch (e) {
+      if (e instanceof ScanStageTimeoutError) {
+        return timeoutResult(result, e.stage, e.reasonCode);
+      }
+      return failedResult(result, 'phash', 'phash_failed', e?.message || 'pHash failed');
+    }
+
+    if (ph.hit) {
+      result.matchedHashes.push(ph.hash);
+      return finalizeResult(result, 'hit', {
+        reasonCode: 'phash',
+        reason: 'phash',
+        severity: 'review',
+        detail: ph.detail,
+        phash: ph.phash,
+      });
+    }
+
+    return finalizeResult(result, 'clean', {
+      reasonCode: 'none',
+      reason: 'none',
+      detail: '',
+    });
+  } catch (e) {
+    if (e instanceof ScanStageTimeoutError) {
+      return timeoutResult(result, e.stage, e.reasonCode);
+    }
+    if (e instanceof ScanStageError) {
+      const status = e.reasonCode === 'image_too_large' ? 'skipped' : 'failed';
+      return status === 'skipped'
+        ? skippedResult(result, e.stage, e.reasonCode, e.message)
+        : failedResult(result, e.stage, e.reasonCode, e.message);
+    }
+    return failedResult(result, 'unknown', 'scan_failed', e?.message || 'scan failed');
+  } finally {
+    result.timings.totalMs = Date.now() - started;
   }
-
-  const ph = await matchPhash(client, pngBuf);
-  if (ph.hit) {
-    return {
-      hit: true,
-      reason: 'phash',
-      severity: 'review',
-      detail: ph.detail,
-      ocrSnippet,
-      phash: ph.phash,
-      ocrConfidence,
-    };
-  }
-
-  return { hit: false, reason: 'none', detail: '', ocrSnippet, ocrConfidence };
-}
-
-function withTimeout(promise, ms) {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('scam_scan_timeout')), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(t);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(t);
-        reject(e);
-      },
-    );
-  });
 }
 
 /**
  * @param {import('discord.js').Client} client
- * @param {{ url: string }} attachment
+ * @param {{ url: string, size?: number }} attachment
+ * @param {{ attachmentIndex?: number, messageId?: string }} [context]
  */
-async function scanImageAttachment(client, attachment) {
-  const size = typeof attachment?.size === 'number' ? attachment.size : null;
-  if (size != null && size > MAX_DOWNLOAD_BYTES) {
-    throw new OversizeImageError(size);
+async function scanImageAttachment(client, attachment, context = {}) {
+  const settings = await getEffectiveScamScanSettings(client);
+  applyLimiterSettings(settings);
+  if (!settings.scam_scan_enabled) {
+    const result = skippedResult(makeEmptyScanResult(), 'settings', 'scanner_disabled', 'Scam image scanner is disabled');
+    result.timings.totalMs = 0;
+    logScanResult(client, result, context);
+    return result;
   }
-  return withTimeout(scanImageUrl(client, attachment.url), SCAN_TIMEOUT_MS);
+
+  const size = typeof attachment?.size === 'number' ? attachment.size : null;
+  if (size != null && size > settings.scam_scan_max_image_bytes) {
+    const result = skippedResult(makeEmptyScanResult(), 'validation', 'image_too_large', `image exceeds byte cap (${size})`);
+    result.image.bytes = size;
+    result.timings.totalMs = 0;
+    logScanResult(client, result, context);
+    return result;
+  }
+
+  const result = await limitScan(() =>
+    withTimeout(scanImageUrl(client, attachment.url, settings), getTimeouts(settings).totalMs, 'total', 'scan_total_timeout'),
+  ).catch((e) => {
+    if (e instanceof ScanStageTimeoutError) {
+      const timeout = timeoutResult(makeEmptyScanResult(), e.stage, e.reasonCode);
+      timeout.timings.totalMs = getTimeouts(settings).totalMs;
+      return timeout;
+    }
+    return failedResult(makeEmptyScanResult(), 'unknown', 'scan_failed', e?.message || 'scan failed');
+  });
+  logScanResult(client, result, context);
+  return result;
+}
+
+function evidenceTitle(scanResult) {
+  if (scanResult.status === 'timeout') return 'Image scam scan timed out';
+  if (scanResult.status === 'failed') return 'Image scam scan failed';
+  if (scanResult.status === 'skipped') return 'Image scam scan skipped';
+  return 'Scam image auto-enforcement';
+}
+
+function evidenceColor(scanResult) {
+  if (scanResult.status === 'hit') return 0xff0000;
+  if (scanResult.status === 'timeout') return 0xffa500;
+  if (scanResult.status === 'failed' || scanResult.status === 'skipped') return 0xffa500;
+  return 0x808080;
 }
 
 function buildScamImageEvidenceEmbed(message, scanResult, attachmentIndex, attachmentUrl) {
-  const matched = `${scanResult.reason} — ${scanResult.detail}`.slice(0, 1000);
+  const matched = `${scanResult.reason || scanResult.reasonCode || scanResult.status} - ${scanResult.detail || ''}`.slice(0, 1000);
+  const timings = scanResult.timings
+    ? Object.entries(scanResult.timings)
+      .map(([k, v]) => `${k}:${v == null ? '-' : v}`)
+      .join(' ')
+      .slice(0, 1000)
+    : '-';
+  const dimensions =
+    scanResult.image?.width && scanResult.image?.height
+      ? `${scanResult.image.width}x${scanResult.image.height}`
+      : '-';
+
   return new EmbedBuilder()
-    .setTitle('Scam image auto-enforcement')
-    .setColor(0xff0000)
+    .setTitle(evidenceTitle(scanResult))
+    .setColor(evidenceColor(scanResult))
     .addFields(
       { name: 'User', value: `${message.author.tag} (${message.author.id})` },
       { name: 'Channel', value: `<#${message.channelId}>` },
       { name: 'Attachment', value: `#${attachmentIndex + 1} ${attachmentUrl.slice(0, 200)}` },
-      { name: 'Match', value: matched },
+      { name: 'Status', value: scanResult.status || '-', inline: true },
+      { name: 'Reason', value: matched || '-', inline: false },
+      { name: 'Failed stage', value: scanResult.failureStage || '-', inline: true },
+      { name: 'Image', value: `${dimensions} ${scanResult.image?.bytes || '-'} bytes ${scanResult.image?.format || ''}`.trim(), inline: true },
       {
         name: 'OCR confidence',
         value:
           typeof scanResult.ocrConfidence === 'number'
             ? String(Math.round(scanResult.ocrConfidence))
-            : '—',
+            : '-',
+        inline: true,
       },
-      { name: 'OCR excerpt', value: (scanResult.ocrSnippet || '—').slice(0, 900) },
+      { name: 'Timings', value: timings || '-' },
+      { name: 'OCR excerpt', value: (scanResult.ocrPreview || scanResult.ocrSnippet || '-').slice(0, 900) },
       { name: 'Message content', value: (message.content || '*(none)*').slice(0, 500) },
     )
     .setTimestamp();
@@ -426,7 +848,7 @@ async function enforceScamImage(client, message, staffRoleId, modRoleId, scanRes
       if (ch && ch.isTextBased()) {
         await ch.send(
           withModLogRolePing(cfg, {
-            content: 'Staff/mod posted scam-pattern image — no ban applied.',
+            content: 'Staff/mod posted scam-pattern image - no ban applied.',
             embeds: [embed],
           }),
         );
@@ -466,6 +888,9 @@ async function enforceScamImage(client, message, staffRoleId, modRoleId, scanRes
 
 module.exports = {
   bustScamBlacklistCache,
+  warmOcrWorker,
+  prepareImageForScamScanHash,
+  computeScamImagePhash,
   scanImageAttachment,
   scanImageUrl,
   enforceScamImage,
@@ -474,8 +899,43 @@ module.exports = {
   keywordPatternMatchesNormalized,
   isLikelyOcrNoiseText,
   OversizeImageError,
-  MAX_DOWNLOAD_BYTES,
+  MAX_DOWNLOAD_BYTES: MAX_IMAGE_BYTES,
+  MAX_IMAGE_BYTES,
+  MAX_IMAGE_PIXELS,
+  SCAN_TOTAL_TIMEOUT_MS,
+  DOWNLOAD_TIMEOUT_MS,
+  OCR_TIMEOUT_MS,
+  PHASH_TIMEOUT_MS,
+  MAX_SCAN_CONCURRENCY,
+  MAX_OCR_CONCURRENCY,
   PHASH_BITS,
   PHASH_MAX_HAMMING,
   OCR_MIN_CONFIDENCE_FOR_TEXT,
+  DEFAULT_SCAM_SCAN_SETTINGS,
+  _internal: {
+    makeEmptyScanResult,
+    validateImageMetadata,
+    preprocessForScan,
+    resetOcrWorker,
+    setOcrWorkerForTest(worker) {
+      ocrWorkerPromise = Promise.resolve(worker);
+    },
+    setOcrWorkerFactoryForTest(factory) {
+      createOcrWorker = factory;
+    },
+    setTimeoutsForTest(overrides) {
+      testTimeoutOverrides = overrides;
+    },
+    setSettingsForTest(overrides) {
+      testSettingsOverrides = overrides;
+    },
+    clearTestState() {
+      testTimeoutOverrides = null;
+      testSettingsOverrides = null;
+      ocrWorkerPromise = null;
+      ocrResetPromise = null;
+      createOcrWorker = () => createWorker('eng');
+      bustScamBlacklistCache();
+    },
+  },
 };

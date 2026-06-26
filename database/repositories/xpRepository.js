@@ -82,8 +82,8 @@ const self = (module.exports = {
     if (guildId) {
       await self.ensureXPSettingsForGuild(guildId);
     }
-    const rows = await db.table('xp_settings').select('*');
-    if (!rows.length) {
+    const first = await db.table('xp_settings').first();
+    if (!first) {
       return {
         messages_per_xp: 1,
         min_xp_per_gain: 15,
@@ -94,11 +94,11 @@ const self = (module.exports = {
         double_xp_enabled: false,
       };
     }
-    if (rows[0].guildId !== undefined && guildId) {
-      const match = rows.find((r) => String(r.guildId) === String(guildId));
+    if (first.guildId !== undefined && guildId) {
+      const match = await db.table('xp_settings').where({ guildId }).first();
       if (match) return match;
     }
-    return rows[0];
+    return first;
   },
 
   toggleDoubleXP: async (enabled, guildId) => {

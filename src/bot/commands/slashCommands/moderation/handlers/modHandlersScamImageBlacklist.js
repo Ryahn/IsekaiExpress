@@ -1,6 +1,6 @@
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { requireStaff } = require('../../../../utils/permissionGuards');
-const { bustScamBlacklistCache, PHASH_BITS } = require('../../../../../../libs/scamImageScan');
+const { bustScamBlacklistCache, computeScamImagePhash, PHASH_BITS } = require('../../../../../../libs/scamImageScan');
 
 // Delegates to the shared staff guard (admin or configured staff role); ephemeral, no double-reply.
 async function assertStaff(interaction, client) {
@@ -18,11 +18,10 @@ async function blacklistAddImageTextExecute(client, interaction) {
     return interaction.editReply({ content: 'Invalid type.', flags: MessageFlags.Ephemeral });
   }
   if (type === 'regex') {
-    try {
-      new RegExp(pattern, 'i');
-    } catch {
-      return interaction.editReply({ content: 'Invalid regex.', flags: MessageFlags.Ephemeral });
-    }
+    return interaction.editReply({
+      content: 'Regex image scam rules are not enabled yet. Use a keyword rule instead.',
+      flags: MessageFlags.Ephemeral,
+    });
   }
   try {
     await client.db.insertImageTextBlacklist({
@@ -50,7 +49,6 @@ async function blacklistAddImageHashExecute(client, interaction) {
   if (!okMime) {
     return interaction.editReply({ content: 'Attach a PNG, JPEG, or WebP image.', flags: MessageFlags.Ephemeral });
   }
-  const imghash = require('imghash');
   const axios = require('axios');
   let buf;
   try {
@@ -61,7 +59,7 @@ async function blacklistAddImageHashExecute(client, interaction) {
   }
   let phash;
   try {
-    phash = await imghash.hash(buf, PHASH_BITS);
+    phash = await computeScamImagePhash(buf);
   } catch (e) {
     return interaction.editReply({ content: `Could not hash image: ${e.message}`, flags: MessageFlags.Ephemeral });
   }

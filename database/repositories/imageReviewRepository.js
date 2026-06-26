@@ -1,4 +1,47 @@
 const db = require('../knex');
+const {
+  normalizeScamScanText,
+  exportScamScanRulesTextRows,
+  parseScamScanRulesText,
+  testScamScanRulesAgainstTextRows,
+} = require('../../libs/scamScanRulesText');
+const {
+  SCAM_SCAN_SETTING_DEFINITIONS,
+  SCAM_SCAN_SETTINGS_CACHE_MS,
+  defaultScamScanSettings,
+  hydrateScamScanSettingsRows,
+  parseScamScanSettingsInput,
+  serializeScamScanSettingValue,
+} = require('../../libs/scamScanSettings');
+
+let scamScanSettingsCache = { t: 0, settings: null };
+
+async function hasScamScanRulesTable() {
+  return db.schema.hasTable('scam_scan_rules');
+}
+
+async function hasScamScanSettingsTable() {
+  return db.schema.hasTable('scam_scan_settings');
+}
+
+async function legacyImageTextRows() {
+  return db('image_text_blacklist')
+    .select('id', 'pattern', 'pattern_type')
+    .whereIn('pattern_type', ['keyword', 'domain'])
+    .orderBy('id', 'asc');
+}
+
+function legacyRowToRule(row) {
+  const type = row.pattern_type === 'domain' ? 'domain' : 'keyword';
+  return {
+    id: row.id,
+    type,
+    pattern: row.pattern,
+    normalized_pattern: normalizeScamScanText(row.pattern),
+    severity: 'auto',
+    enabled: true,
+  };
+}
 
 /**
  * Image archive / review queue, invite review queue, and scam-image blacklists.
@@ -108,6 +151,13 @@ module.exports = {
   },
 
   getImageTextBlacklistRows: async () => {
+    if (await hasScamScanRulesTable()) {
+      return db('scam_scan_rules')
+        .select('id', 'type as pattern_type', 'pattern', 'normalized_pattern', 'severity', 'enabled')
+        .where({ enabled: true })
+        .whereIn('type', ['keyword', 'domain'])
+        .orderBy('id', 'asc');
+    }
     return db('image_text_blacklist').select('id', 'pattern', 'pattern_type').orderBy('id', 'asc');
   },
 
@@ -116,6 +166,33 @@ module.exports = {
   },
 
   insertImageTextBlacklist: async ({ pattern, pattern_type, added_by }) => {
+    if (await hasScamScanRulesTable()) {
+      const type = pattern_type === 'domain' ? 'domain' : 'keyword';
+      if (pattern_type === 'regex') {
+        throw new Error('Regex image scam rules are not enabled yet.');
+      }
+      const normalized = normalizeScamScanText(pattern);
+      await db('scam_scan_rules')
+        .insert({
+          type,
+          pattern,
+          normalized_pattern: normalized,
+          severity: 'auto',
+          enabled: true,
+          created_by: added_by || null,
+          updated_by: added_by || null,
+          created_at: db.fn.now(),
+          updated_at: db.fn.now(),
+        })
+        .onConflict(['type', 'normalized_pattern'])
+        .merge({
+          pattern,
+          severity: 'auto',
+          enabled: true,
+          updated_by: added_by || null,
+          updated_at: db.fn.now(),
+        });
+    }
     await db('image_text_blacklist').insert({
       pattern,
       pattern_type,
@@ -134,10 +211,154 @@ module.exports = {
   },
 
   listImageTextBlacklist: async (limit = 30) => {
+    if (await hasScamScanRulesTable()) {
+      return db('scam_scan_rules')
+        .select('id', 'pattern', 'type as pattern_type', 'severity', 'enabled', 'created_by as added_by', 'created_at as added_at')
+        .whereIn('type', ['keyword', 'domain'])
+        .orderBy('id', 'desc')
+        .limit(limit);
+    }
     return db('image_text_blacklist').select('*').orderBy('id', 'desc').limit(limit);
   },
 
   listImageHashBlacklist: async (limit = 30) => {
     return db('image_hash_blacklist').select('*').orderBy('id', 'desc').limit(limit);
+  },
+
+  getEnabledScamScanRules: async () => {
+    if (await hasScamScanRulesTable()) {
+      return db('scam_scan_rules')
+        .select('id', 'type', 'pattern', 'normalized_pattern', 'severity', 'enabled')
+        .where({ enabled: true })
+        .whereIn('type', ['keyword', 'domain'])
+        .orderBy('id', 'asc');
+    }
+    const rows = await legacyImageTextRows();
+    return rows.map(legacyRowToRule);
+  },
+
+  parseScamScanRulesText,
+
+  replaceScamScanKeywordRulesFromText: async ({ text, userId }) => {
+    const parsed = parseScamScanRulesText(text);
+    if (!parsed.ok) return parsed;
+    if (!(await hasScamScanRulesTable())) {
+      throw new Error('scam_scan_rules table is missing; run migrations before editing scam scan rules.');
+    }
+
+    const existingRows = await db('scam_scan_rules')
+      .select('*')
+      .whereIn('type', ['keyword', 'domain']);
+    const existingByNormalized = new Map(existingRows.map((row) => [`${row.type}:${row.normalized_pattern}`, row]));
+    const desired = new Set(parsed.rules.map((rule) => `${rule.type}:${rule.normalized_pattern}`));
+    const disableIds = existingRows
+      .filter((row) => !desired.has(`${row.type}:${row.normalized_pattern}`))
+      .map((row) => row.id);
+
+    await db.transaction(async (trx) => {
+      if (disableIds.length) {
+        await trx('scam_scan_rules')
+          .whereIn('id', disableIds)
+          .update({
+            enabled: false,
+            updated_by: userId || null,
+            updated_at: trx.fn.now(),
+          });
+      }
+
+      for (const rule of parsed.rules) {
+        const existing = existingByNormalized.get(`${rule.type}:${rule.normalized_pattern}`);
+        if (existing) {
+          await trx('scam_scan_rules')
+            .where({ id: existing.id })
+            .update({
+              pattern: rule.pattern,
+              enabled: true,
+              updated_by: userId || null,
+              updated_at: trx.fn.now(),
+            });
+        } else {
+          await trx('scam_scan_rules').insert({
+            type: rule.type,
+            pattern: rule.pattern,
+            normalized_pattern: rule.normalized_pattern,
+            severity: 'review',
+            enabled: true,
+            created_by: userId || null,
+            updated_by: userId || null,
+            created_at: trx.fn.now(),
+            updated_at: trx.fn.now(),
+          });
+        }
+      }
+    });
+
+    return { ok: true, errors: [], rules: parsed.rules };
+  },
+
+  exportScamScanRulesText: async () => {
+    const rows = await module.exports.getEnabledScamScanRules();
+    return exportScamScanRulesTextRows(rows);
+  },
+
+  testScamScanRulesAgainstText: async (text) => {
+    const rows = await module.exports.getEnabledScamScanRules();
+    return testScamScanRulesAgainstTextRows(text, rows);
+  },
+
+  getScamScanSettingDefinitions: () => SCAM_SCAN_SETTING_DEFINITIONS,
+
+  getDefaultScamScanSettings: () => defaultScamScanSettings(),
+
+  parseScamScanSettingsInput,
+
+  clearScamScanSettingsCache: () => {
+    scamScanSettingsCache = { t: 0, settings: null };
+  },
+
+  getScamScanSettings: async () => {
+    const now = Date.now();
+    if (scamScanSettingsCache.settings && now - scamScanSettingsCache.t < SCAM_SCAN_SETTINGS_CACHE_MS) {
+      return { ...scamScanSettingsCache.settings };
+    }
+    if (!(await hasScamScanSettingsTable())) {
+      const defaults = defaultScamScanSettings();
+      scamScanSettingsCache = { t: now, settings: defaults };
+      return { ...defaults };
+    }
+    const rows = await db('scam_scan_settings').select('key', 'value');
+    const parsed = hydrateScamScanSettingsRows(rows);
+    const settings = parsed.settings;
+    scamScanSettingsCache = { t: now, settings };
+    return { ...settings };
+  },
+
+  replaceScamScanSettings: async ({ settings, userId }) => {
+    const parsed = parseScamScanSettingsInput(settings);
+    if (!parsed.ok) return parsed;
+    if (!(await hasScamScanSettingsTable())) {
+      throw new Error('scam_scan_settings table is missing; run migrations before editing scam scan settings.');
+    }
+
+    await db.transaction(async (trx) => {
+      for (const [key, value] of Object.entries(parsed.settings)) {
+        await trx('scam_scan_settings')
+          .insert({
+            key,
+            value: serializeScamScanSettingValue(value),
+            updated_by: userId || null,
+            updated_at: trx.fn.now(),
+          })
+          .onConflict('key')
+          .merge({
+            value: serializeScamScanSettingValue(value),
+            updated_by: userId || null,
+            updated_at: trx.fn.now(),
+          });
+      }
+    });
+
+    module.exports.clearScamScanSettingsCache();
+    return parsed;
   },
 };

@@ -85,11 +85,9 @@ test('repository index exposes the expected named groups', () => {
   assert.equal(typeof repositories.moderationRepository.createCage, 'function');
 });
 
-test('no db function name is silently dropped (count matches sum of repos)', () => {
-  const repoFnCount = Object.values(repositories).reduce(
-    (n, repo) => n + Object.keys(repo).length,
-    0,
-  );
-  // 82 moved functions across the six repositories.
-  assert.equal(repoFnCount, 82, `expected 82 repository functions, found ${repoFnCount}`);
+test('no db function name is silently dropped from the flat export surface', () => {
+  const repoFnNames = Object.values(repositories).flatMap((repo) => Object.keys(repo));
+  for (const name of repoFnNames) {
+    assert.equal(typeof db[name], 'function', `db.${name} should be re-exported`);
+  }
 });

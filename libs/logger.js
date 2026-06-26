@@ -79,4 +79,8 @@ if (typeof silly.crash === 'function') {
   };
 }
 
+silly.shutdownWebhook = function shutdownWebhook() {
+  webhook.shutdown();
+};
+
 module.exports = silly;

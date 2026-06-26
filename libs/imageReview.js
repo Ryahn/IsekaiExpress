@@ -99,6 +99,20 @@ function buildImageReviewComponents(pendingId) {
   );
 }
 
+function isIncompleteScan(scan) {
+  return scan && ['timeout', 'failed', 'skipped'].includes(scan.status);
+}
+
+function reviewEvidenceTitle(scan, attachmentIndex, totalAttachments) {
+  const suffix = totalAttachments > 1 ? ` (attachment ${attachmentIndex + 1}/${totalAttachments})` : '';
+  if (!scan) return `Image flagged for review${suffix}`;
+  if (scan.status === 'hit') return `Scam-scan hit - staff review required${suffix}`;
+  if (scan.status === 'timeout') return `Image scam scan timed out - staff review required${suffix}`;
+  if (scan.status === 'failed') return `Image scam scan failed - staff review required${suffix}`;
+  if (scan.status === 'skipped') return `Image scam scan skipped - staff review required${suffix}`;
+  return `Image flagged for review${suffix}`;
+}
+
 /**
  * Build the image-review queue payload (evidence embed when a scan hit, plus image previews
  * + Approve/Ban buttons), delete the original message, and post to the review channel.
@@ -135,13 +149,12 @@ async function queueImageReview(client, message, attachments, member, cfg, chId,
   const maxShow = Math.min(attachments.length, previewBudget);
   for (let i = 0; i < maxShow; i++) {
     const att = attachments[i];
+    const titleScan = hasScan && i === 0 ? scan : null;
     const title =
       i === 0
-        ? hasScan
-          ? 'Scam-scan hit — staff review required'
-          : 'Image flagged for review'
+        ? reviewEvidenceTitle(titleScan, scanIndex ?? 0, attachments.length)
         : `Attachment ${i + 1} / ${attachments.length}`;
-    const userFieldValue = message.author.tag + " (`" + message.author.id + "`)";
+    const userFieldValue = message.author.tag + ' (`' + message.author.id + '`)';
     const embed = new EmbedBuilder()
       .setTitle(title)
       .setColor(hasScan ? 0xff4500 : 0xffa500)
@@ -233,6 +246,15 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
   const gid = message.guild.id;
   const cfg = await client.db.getGuildConfigurable(gid);
   const chId = reviewChannelId(cfg);
+  let manualReviewOnFailure = true;
+  if (typeof client.db.getScamScanSettings === 'function') {
+    try {
+      const settings = await client.db.getScamScanSettings();
+      manualReviewOnFailure = settings.scam_scan_manual_review_on_failure !== false;
+    } catch (e) {
+      client.logger.warn('imageReview: scam scan settings load failed; keeping manual review fallback enabled', e);
+    }
+  }
 
   if (needsQueue && !chId) {
     client.logger.warn('imageReview: no image_review_channel_id or modLogId');
@@ -240,10 +262,15 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
   }
 
   let cleanScansCompleted = 0;
+  let firstIncompleteScan = null;
+  let firstIncompleteScanIndex = 0;
   for (let i = 0; i < attachments.length; i++) {
     const att = attachments[i];
     try {
-      const scan = await scanImageAttachment(client, att);
+      const scan = await scanImageAttachment(client, att, {
+        attachmentIndex: i,
+        messageId: message.id,
+      });
       if (scan.hit) {
         if (isStaff || isMod) {
           await enforceScamImage(client, message, staffRoleId, modRoleId, scan, i, att.url);
@@ -263,6 +290,24 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
         await enforceScamImage(client, message, staffRoleId, modRoleId, scan, i, att.url);
         return;
       }
+      if (isIncompleteScan(scan)) {
+        if (manualReviewOnFailure && !firstIncompleteScan) {
+          firstIncompleteScan = scan;
+          firstIncompleteScanIndex = i;
+        }
+        if (isStaff || isMod) {
+          client.logger.warn(
+            `imageReview scam scan ${scan.status} for trusted uploader attachment ${i + 1}` +
+              ` (stage=${scan.failureStage || 'unknown'}, reason=${scan.reasonCode || 'unknown'})`,
+          );
+        } else if (!manualReviewOnFailure) {
+          client.logger.warn(
+            `imageReview scam scan ${scan.status} attachment ${i + 1} not queued` +
+              ` because manual review fallback is disabled (reason=${scan.reasonCode || 'unknown'})`,
+          );
+        }
+        continue;
+      }
       cleanScansCompleted += 1;
     } catch (e) {
       if (e?.code === 'OVERSIZE_IMAGE') {
@@ -281,6 +326,13 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
     return;
   }
 
+  if (!manualReviewOnFailure) {
+    client.logger.warn(
+      `imageReview: ${attachments.length - cleanScansCompleted} attachment scan(s) incomplete; manual review fallback disabled`,
+    );
+    return;
+  }
+
   if (!chId) {
     client.logger.warn(
       `imageReview: ${attachments.length - cleanScansCompleted} attachment scan(s) failed but no review channel`,
@@ -288,7 +340,9 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
     return;
   }
 
-  await queueImageReview(client, message, attachments, member, cfg, chId);
+  await queueImageReview(client, message, attachments, member, cfg, chId, firstIncompleteScan
+    ? { scan: firstIncompleteScan, scanIndex: firstIncompleteScanIndex }
+    : undefined);
 }
 
 module.exports = {

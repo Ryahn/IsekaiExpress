@@ -121,7 +121,11 @@
           field: 'warn_reason',
           hozAlign: 'center',
           formatter: function(cell) {
-            return `<button class="btn btn-sm btn-info viewReasonButton" data-reason="${cell.getValue()}">View</button>`;
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-sm btn-info viewReasonButton';
+            button.textContent = 'View';
+            return button;
           },
           cellClick: function(e, cell) {
             if (e.target.classList.contains('viewReasonButton')) {
@@ -138,8 +142,23 @@
           hozAlign: 'center',
           formatter: function(cell) {
             {% if allow %}
-            return `<button class="btn btn-sm btn-primary editButton" data-id="${cell.getValue()}">Edit</button>
-                    <button class="btn btn-sm btn-danger deleteButton" data-id="${cell.getValue()}">Delete</button>`;
+            var container = document.createElement('div');
+            var editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'btn btn-sm btn-primary editButton';
+            editButton.dataset.id = String(cell.getValue());
+            editButton.textContent = 'Edit';
+
+            var deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.className = 'btn btn-sm btn-danger deleteButton';
+            deleteButton.dataset.id = String(cell.getValue());
+            deleteButton.textContent = 'Delete';
+
+            container.appendChild(editButton);
+            container.appendChild(document.createTextNode(' '));
+            container.appendChild(deleteButton);
+            return container;
             {% else %}
             return '';
             {% endif %}
@@ -160,7 +179,7 @@
             if (e.target.classList.contains('deleteButton')) {
               if (confirm('Are you sure you want to delete this warning?')) {
                 $.ajax({
-                  url: `/warnings/delete/${rowData.warn_id}`,
+                  url: `/warnings/delete/${encodeURIComponent(rowData.warn_id)}`,
                   method: 'POST',
                   data: { warn_id: rowData.warn_id, _csrf: '{{ csrfToken }}' },
                   success: function() { table.replaceData(); }

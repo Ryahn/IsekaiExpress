@@ -12,6 +12,7 @@ const { handleFarmMessage } = require('./farmMessage');
 const { processMemberMessageInvites } = require('../../../../libs/invitePolicy');
 const { processMemberMessageScamLinks } = require('../../../../libs/scamLinkPolicy');
 const { processImageReview } = require('../../../../libs/imageReview');
+const { isConfiguredGuild, logUnexpectedGuildOnce } = require('../../utils/singleGuildGuard');
 
 function parseCommandContent(content, message) {
     const randomPattern = /\{random:(.*?)\}/g;
@@ -33,6 +34,10 @@ module.exports = class MessageEvent extends BaseEvent {
 
     async run(client, message) {
         if (message.author.bot || !message.guild) return;
+        if (!isConfiguredGuild(client, message.guild.id)) {
+            logUnexpectedGuildOnce(client, message.guild.id, 'messageCreate');
+            return;
+        }
 
         try {
             await xpSystem(client, message);

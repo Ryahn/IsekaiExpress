@@ -1,0 +1,97 @@
+{% extends "layout.njk" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row mb-4">
+    <div class="col">
+      <h2 class="mb-1">Scam Scan Settings</h2>
+      <p class="text-body-secondary mb-0">
+        Configure scanner timeouts, limits, toggles, and concurrency. Regex and pHash web management are not enabled here.
+      </p>
+    </div>
+  </div>
+
+  {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+  {% endif %}
+
+  {% if errors and errors.length %}
+    <div class="alert alert-danger">
+      <strong>Could not save settings.</strong>
+      <ul class="mb-0">
+        {% for error in errors %}
+          <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <div class="alert alert-warning">
+    Lower timeouts may increase staff review fallbacks. Higher timeouts or concurrency may increase CPU/RAM usage.
+    Concurrency changes apply to new scan work after settings are reloaded.
+  </div>
+
+  <form method="post" action="/scam-scan-settings/save">
+    <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0">Core Toggles</h5></div>
+      <div class="card-body">
+        {% set toggles = [
+          ['scam_scan_enabled', 'Enable scanner'],
+          ['scam_scan_ocr_enabled', 'Enable OCR text scan'],
+          ['scam_scan_phash_enabled', 'Enable pHash scan'],
+          ['scam_scan_manual_review_on_failure', 'Manual review on scan failure']
+        ] %}
+        {% for item in toggles %}
+          {% set key = item[0] %}
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="{{ key }}" name="{{ key }}" {% if settings[key] %}checked{% endif %}>
+            <label class="form-check-label" for="{{ key }}">
+              {{ item[1] }}
+              <span class="text-body-secondary">(default: {{ definitions[key].default }})</span>
+            </label>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0">Timeouts</h5></div>
+      <div class="card-body row g-3">
+        {% set fields = [
+          ['scam_scan_total_timeout_ms', 'Total timeout ms', 'milliseconds'],
+          ['scam_scan_download_timeout_ms', 'Download timeout ms', 'milliseconds'],
+          ['scam_scan_ocr_timeout_ms', 'OCR timeout ms', 'milliseconds'],
+          ['scam_scan_phash_timeout_ms', 'pHash timeout ms', 'milliseconds'],
+          ['scam_scan_max_image_bytes', 'Max image bytes', 'bytes'],
+          ['scam_scan_max_image_pixels', 'Max image pixels', 'pixels'],
+          ['scam_scan_ocr_max_edge', 'OCR max edge', 'pixels'],
+          ['scam_scan_max_scan_concurrency', 'Max scan concurrency', 'active scans'],
+          ['scam_scan_max_ocr_concurrency', 'Max OCR concurrency', 'active OCR jobs']
+        ] %}
+        {% for item in fields %}
+          {% set key = item[0] %}
+          <div class="col-md-6 col-xl-4">
+            <label class="form-label" for="{{ key }}">{{ item[1] }}</label>
+            <input
+              class="form-control"
+              type="number"
+              id="{{ key }}"
+              name="{{ key }}"
+              value="{{ settings[key] }}"
+              min="{{ definitions[key].min }}"
+              max="{{ definitions[key].max }}"
+              step="1">
+            <div class="form-text">
+              {{ item[2] }}. Default {{ definitions[key].default }}. Range {{ definitions[key].min }}-{{ definitions[key].max }}.
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+  </form>
+</div>
+{% endblock %}

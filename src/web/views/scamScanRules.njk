@@ -1,0 +1,98 @@
+{% extends "layout.njk" %}
+
+{% block content %}
+
+<div class="vs-page-header">
+  <h3 class="vs-page-title">Image Scam Scan Rules</h3>
+  <p class="vs-page-subtitle">Manage OCR keyword rules used by the image scam scanner</p>
+</div>
+
+{% if success %}
+<div class="alert alert-success" role="alert">{{ success }}</div>
+{% endif %}
+
+{% if errors and errors.length %}
+<div class="alert alert-danger" role="alert">
+  <strong>Could not save rules:</strong>
+  <ul class="mb-0">
+    {% for error in errors %}
+    <li>{{ error }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-12 col-xl-7">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">Keyword Rules</h5>
+      </div>
+      <div class="card-body">
+        <p class="text-body-secondary">
+          One rule per line. Blank lines are ignored. Lines starting with <code>#</code> are comments.
+          Use <code>keyword:example phrase</code> for text keywords.
+          Use <code>domain:example.com</code> for domains.
+          Bare lines are treated as keyword rules. Regex is not enabled yet.
+          Avoid very short keywords because they can match unrelated OCR text.
+        </p>
+        <form method="post" action="/scam-scan-rules/save">
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+          <div class="mb-3">
+            <label class="form-label" for="rules">Enabled keyword rules ({{ ruleCount }})</label>
+            <textarea class="form-control" id="rules" name="rules" rows="18" spellcheck="false">{{ rulesText }}</textarea>
+          </div>
+          <button class="btn btn-primary" type="submit">Save Rules</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">Test OCR Text</h5>
+      </div>
+      <div class="card-body">
+        <p class="text-body-secondary">
+          Paste sample OCR text to preview keyword matches. Test text is not saved.
+        </p>
+        <form method="post" action="/scam-scan-rules/test">
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+          <div class="mb-3">
+            <label class="form-label" for="test_text">Sample OCR text</label>
+            <textarea class="form-control" id="test_text" name="test_text" rows="8">{{ testText }}</textarea>
+          </div>
+          <button class="btn btn-secondary" type="submit">Test Rules</button>
+        </form>
+
+        {% if testMatches %}
+        <hr>
+        <h6>Matches</h6>
+        {% if testMatches.matches.length %}
+        <ul>
+          {% for match in testMatches.matches %}
+          <li><code>{{ match.pattern }}</code> <span class="text-body-secondary">({{ match.type }})</span></li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-body-secondary mb-0">No rules matched the sample text.</p>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer mt-5">
+  <div class="row g-0 justify-content-between align-items-center">
+    <div class="col-12 col-sm-auto text-center">
+      <p>IsekaiExpress Bot &mdash; made for F95Zone by Ryahn</p>
+    </div>
+    <div class="col-12 col-sm-auto text-center">
+      <p>v1.13.0</p>
+    </div>
+  </div>
+</footer>
+
+{% endblock %}

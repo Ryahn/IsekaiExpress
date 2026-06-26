@@ -6,7 +6,7 @@ async function getBans(db, page) {
   const itemsPerPage = 5;
   const offset = (page - 1) * itemsPerPage;
   return db('bans')
-    .select('ban_id', 'discord_id', 'username', 'reason', 'banned_by_id', 'banned_by_user', 'created_at')
+    .select('id as ban_id', 'discord_id', 'username', 'reason', 'banned_by_id', 'banned_by_user', 'created_at')
     .orderBy('created_at', 'desc')
     .limit(itemsPerPage)
     .offset(offset);

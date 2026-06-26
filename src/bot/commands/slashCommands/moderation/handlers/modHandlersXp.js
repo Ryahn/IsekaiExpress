@@ -1,9 +1,6 @@
 const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
-const Tesseract = require('tesseract.js');
-const axios = require('axios');
-const fs = require('fs');
-const sharp = require('sharp');
 const { requireModerator, requireGuildManager, denyEphemeral } = require('../../../../utils/permissionGuards');
+const { extractRankFromImageUrl } = require('../../../../utils/rankCardOcr');
 
 async function xpSettingsExecute(client, interaction) {
   // Guild-scoped XP settings (updateXPSettings is keyed by guildId) — guild managers may change.
@@ -163,86 +160,23 @@ async function xpImportRankExecute(client, interaction) {
 
     const imageUrl = interaction.options.getString('url');
     const targetUser = interaction.options.getUser('target');
-    let xpValue = null;
-    let usernameValue = null;
+    const { xpValue, usernameValue } = await extractRankFromImageUrl(imageUrl);
+    const numXp = Number(xpValue);
 
-    async function downloadImage(url, outputPath) {
-      const response = await axios({
-        url,
-        responseType: 'stream',
-      });
-      return new Promise((resolve, reject) => {
-        response.data
-          .pipe(fs.createWriteStream(outputPath))
-          .on('finish', () => resolve())
-          .on('error', (e) => reject(e));
-      });
-    }
+    if (numXp && usernameValue) {
+      if (targetUser.username === usernameValue) {
+        const level = client.utils.calculateLevel(numXp);
+        await client.db.updateUserXP(targetUser.id, numXp, 0, level);
 
-    async function cropImage(inputPath, outputPath, x, y, width, height) {
-      await sharp(inputPath).extract({ left: x, top: y, width, height }).toFile(outputPath);
-    }
-
-    function formatXPStringToNumber(xpString) {
-      let number = parseFloat(xpString);
-      if (xpString.toLowerCase().includes('k')) {
-        number *= 1000;
-      }
-      return number;
-    }
-
-    function cleanText(text) {
-      return text.replace(/[^\w\s]/gi, '').trim();
-    }
-
-    async function extractXPAndUsername() {
-      const imagePath = './level_card.png';
-      const croppedImagePath = './cropped_level_card.png';
-
-      await downloadImage(imageUrl, imagePath);
-
-      const x = 296;
-      const y = 63;
-      const width = 440;
-      const height = 126;
-      await cropImage(imagePath, croppedImagePath, x, y, width, height);
-
-      const xpText = await Tesseract.recognize(imagePath, 'eng', {
-        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
-      }).then(({ data: { text } }) => text);
-
-      const xpMatch = xpText.match(/\d+\.?\d*k/);
-      xpValue = xpMatch ? formatXPStringToNumber(xpMatch[0]) : null;
-
-      const usernameText = await Tesseract.recognize(croppedImagePath, 'eng').then(({ data: { text } }) => text);
-
-      const lines = usernameText.split('\n').map((line) => cleanText(line)).filter(Boolean);
-      usernameValue = lines.length > 0 ? lines[0] : 'Username not found';
-
-      fs.unlinkSync(imagePath);
-      fs.unlinkSync(croppedImagePath);
-
-      return { xpValue, usernameValue };
-    }
-
-    extractXPAndUsername().then(async ({ xpValue: xv, usernameValue: uv }) => {
-      const numXp = Number(xv);
-
-      if (numXp && uv) {
-        if (targetUser.username === uv) {
-          const level = client.utils.calculateLevel(numXp);
-          await client.db.updateUserXP(targetUser.id, numXp, 0, level);
-
-          await interaction.followUp(
-            `Imported XP: ${numXp}\nImported Level: ${level}\nImported for ${targetUser}`,
-          );
-        } else {
-          await interaction.followUp('Username and XP values do not match. Please try again.');
-        }
+        await interaction.followUp(
+          `Imported XP: ${numXp}\nImported Level: ${level}\nImported for ${targetUser}`,
+        );
       } else {
-        await interaction.followUp('Failed to extract XP or username. Please try again.');
+        await interaction.followUp('Username and XP values do not match. Please try again.');
       }
-    });
+    } else {
+      await interaction.followUp('Failed to extract XP or username. Please try again.');
+    }
   } catch (error) {
     client.logger.error('Error executing import_user_rank:', error);
     if (!interaction.replied) {

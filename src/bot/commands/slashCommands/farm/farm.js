@@ -218,6 +218,16 @@ async function farmXpHistorySlash(interaction) {
 }
 
 async function farmPrefixCommand(interaction) {
+	const staffRoleId = interaction.client.config?.roles?.staff;
+	if (!hasGuildAdminOrStaffRole(interaction.member, staffRoleId)) {
+		await interaction.editReply({
+			content:
+				'Only server administrators or members with the configured staff role can change the farm command prefix.',
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
 	const guildId = interaction.guildId;
 	const newPrefix = interaction.options.getString('prefix');
 

@@ -1,5 +1,6 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
 const { Collection } = require('discord.js');
+const { isConfiguredGuild, logUnexpectedGuildOnce } = require('../../utils/singleGuildGuard');
 
 module.exports = class GuildAuditLogEntryEvent extends BaseEvent {
     constructor() {
@@ -10,6 +11,12 @@ module.exports = class GuildAuditLogEntryEvent extends BaseEvent {
     }
 
     async run(client, auditLogEntry) {
+        const guildId = auditLogEntry.guild?.id;
+        if (!isConfiguredGuild(client, guildId)) {
+            logUnexpectedGuildOnce(client, guildId, 'guildAuditLogEntry');
+            return;
+        }
+
         const { executorId, action } = auditLogEntry;
         const key = `${executorId}-${action}`;
         

@@ -111,7 +111,6 @@ async function buildModData(client) {
               .addChoices(
                 { name: 'keyword', value: 'keyword' },
                 { name: 'domain', value: 'domain' },
-                { name: 'regex', value: 'regex' },
               ),
           ),
       )

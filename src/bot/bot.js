@@ -10,6 +10,7 @@ const logger = require('../../libs/logger');
 const process = require('process');
 const cooldownManager = require('./utils/cooldownManager');
 const rateLimitHandler = require('./utils/rateLimitHandler');
+const { createNonOverlappingJob } = require('./utils/nonOverlappingJob');
 
 // Connection management constants
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -84,6 +85,8 @@ const client = new BotClient({
 	],
 });
 
+let shuttingDown = false;
+
 (async () => {
 	client.commands = new Collection();
 	client.slashCommands = new Collection();
@@ -149,7 +152,7 @@ const client = new BotClient({
 
 	client.once(Events.ClientReady, () => {
 
-		schedule.scheduleJob('*/1 * * * *', async () => {
+		const runCagedCleanup = createNonOverlappingJob('caged cleanup', logger, async () => {
 			try {
 				const expiredUsers = await db.getExpiredCagedUsers(timestamp());
 
@@ -185,8 +188,9 @@ const client = new BotClient({
 				logger.error('[SCHEDULE] Error in scheduled job:', error);
 			}
 		});
+		schedule.scheduleJob('*/1 * * * *', runCagedCleanup);
 
-		schedule.scheduleJob('*/3 * * * *', async () => {
+		const runFarmMaturityPings = createNonOverlappingJob('farm maturity reminders', logger, async () => {
 			try {
 				await farmManager.runHarvestMaturityPings(client);
 			}
@@ -194,9 +198,10 @@ const client = new BotClient({
 				logger.error('[FARM-REMIND] Error in harvest maturity job:', error);
 			}
 		});
+		schedule.scheduleJob('*/3 * * * *', runFarmMaturityPings);
 
 		if (config.phishGg && config.phishGg.dailySyncEnabled) {
-			const runPhishSync = async () => {
+			const runPhishSync = createNonOverlappingJob('phish sync', logger, async () => {
 				try {
 					const r = await syncPhishGgServers(db.query, { addedBy: null, dryRun: false });
 					logger.info(
@@ -206,11 +211,11 @@ const client = new BotClient({
 				catch (err) {
 					logger.error('[PHISH-SYNC] failed', err);
 				}
-			};
+			});
 			const ms = config.phishGg.dailySyncIntervalMs;
 			if (ms >= 60_000) {
-				setInterval(runPhishSync, ms);
-				setTimeout(runPhishSync, 90_000);
+				client.phishSyncInterval = setInterval(runPhishSync, ms);
+				client.phishSyncStartupTimeout = setTimeout(runPhishSync, 90_000);
 			} else {
 				logger.warn('[PHISH-SYNC] PHISH_GG_DAILY_SYNC_MS is below 1 minute; ignored.');
 			}
@@ -218,25 +223,53 @@ const client = new BotClient({
 
 	});
 
-	// Graceful shutdown handlers
-	process.on('SIGINT', async () => {
-		logger.info('Received SIGINT. Shutting down gracefully...');
+	async function shutdown(signal) {
+		if (shuttingDown) {
+			logger.warn(`Received ${signal} while shutdown is already in progress.`);
+			return;
+		}
+		shuttingDown = true;
+		logger.info(`Received ${signal}. Shutting down gracefully...`);
+
+		try {
+			await schedule.gracefulShutdown();
+		} catch (err) {
+			logger.error('Error stopping scheduled jobs:', err);
+		}
+
 		clearTimeout(client.reconnectTimeout);
 		if (client.customCommandsPollInterval) clearInterval(client.customCommandsPollInterval);
 		if (client.customCommandsSafetyInterval) clearInterval(client.customCommandsSafetyInterval);
-		await db.end();
-		client.destroy();
+		if (client.pendingInvitesCleanupInterval) clearInterval(client.pendingInvitesCleanupInterval);
+		if (client.phishSyncInterval) clearInterval(client.phishSyncInterval);
+		if (client.phishSyncStartupTimeout) clearTimeout(client.phishSyncStartupTimeout);
+
+		try {
+			client.destroy();
+		} catch (err) {
+			logger.error('Error destroying Discord client:', err);
+		}
+
+		try {
+			await db.end();
+		} catch (err) {
+			logger.error('Error closing Knex pool:', err);
+		}
+
+		if (typeof logger.shutdownWebhook === 'function') {
+			logger.shutdownWebhook();
+		}
+
 		process.exit(0);
+	}
+
+	// Graceful shutdown handlers
+	process.on('SIGINT', () => {
+		shutdown('SIGINT');
 	});
 
-	process.on('SIGTERM', async () => {
-		logger.info('Received SIGTERM. Shutting down gracefully...');
-		clearTimeout(client.reconnectTimeout);
-		if (client.customCommandsPollInterval) clearInterval(client.customCommandsPollInterval);
-		if (client.customCommandsSafetyInterval) clearInterval(client.customCommandsSafetyInterval);
-		await db.end();
-		client.destroy();
-		process.exit(0);
+	process.on('SIGTERM', () => {
+		shutdown('SIGTERM');
 	});
 
 	// Start the connection

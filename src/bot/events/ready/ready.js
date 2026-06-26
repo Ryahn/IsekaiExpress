@@ -10,6 +10,8 @@ const {
     MOD_COMMAND_LOGICAL_KEYS,
     OBSOLETE_MODERATION_COMMAND_NAMES,
 } = require('../../../../libs/modSlashKey');
+const { createNonOverlappingJob } = require('../../utils/nonOverlappingJob');
+const { warmOcrWorker } = require('../../../../libs/scamImageScan');
 
 const MODERATION_SLASH_CHANNEL_ID = '370603031361749004';
 
@@ -86,20 +88,17 @@ module.exports = class ReadyEvent extends BaseEvent {
             client.logger.error('command_settings obsolete cleanup:', e);
         }
 
-        try {
-            await client.db.expireStalePendingInvites(7);
-        } catch (e) {
-            client.logger.error('expireStalePendingInvites:', e);
-        }
-
-        if (client.pendingInvitesCleanupInterval) clearInterval(client.pendingInvitesCleanupInterval);
-        client.pendingInvitesCleanupInterval = setInterval(async () => {
+        const runStaleInviteCleanup = createNonOverlappingJob('stale invite cleanup', client.logger, async () => {
             try {
                 await client.db.expireStalePendingInvites(7);
-            } catch (err) {
-                client.logger.error('expireStalePendingInvites interval:', err);
+            } catch (e) {
+                client.logger.error('expireStalePendingInvites:', e);
             }
-        }, 24 * 60 * 60 * 1000);
+        });
+        await runStaleInviteCleanup();
+
+        if (client.pendingInvitesCleanupInterval) clearInterval(client.pendingInvitesCleanupInterval);
+        client.pendingInvitesCleanupInterval = setInterval(runStaleInviteCleanup, 24 * 60 * 60 * 1000);
 
         let loadedCount = 0;
         let failedCount = 0;
@@ -279,6 +278,10 @@ module.exports = class ReadyEvent extends BaseEvent {
                 }
             }, safetyMs);
         }
+
+        warmOcrWorker(client).catch((e) => {
+            client.logger.warn(`scamImageScan OCR warmup failed: ${e?.message ?? String(e)}`);
+        });
 
         client.user.setActivity('zonies cry', { type: ActivityType.Listening });
         client.logger.info(`${client.user.tag} has logged in. Using prefix: ${client.guildCommandPrefixes.get(client.config.discord.guildId)}`);

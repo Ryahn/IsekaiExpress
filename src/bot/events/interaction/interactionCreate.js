@@ -10,6 +10,7 @@ const { handleAttentionButton } = require('../../../../libs/attentionButtons');
 const { handleAttentionModalSubmit, handleAttentionTypeSelect } = require('../../../../libs/attentionFlow');
 const { handleModUpdateCommandSettingsAutocomplete } = require('../../commands/slashCommands/moderation/handlers/updateCommandSettingsBuilder');
 const { handleCustomCommandModalSubmit } = require('../../commands/slashCommands/moderation/custom_command');
+const { isConfiguredGuild, logUnexpectedGuildOnce } = require('../../utils/singleGuildGuard');
 
 /**
  * @param {import('discord.js').Interaction} interaction
@@ -38,6 +39,18 @@ module.exports = class InteractionEvent extends BaseEvent {
   }
 
   async run(client, interaction) {
+    if (!isConfiguredGuild(client, interaction.guildId)) {
+      logUnexpectedGuildOnce(client, interaction.guildId, 'interactionCreate');
+      if (interaction.isAutocomplete()) {
+        await interaction.respond([]).catch(() => {});
+        return;
+      }
+      if (interaction.isRepliable()) {
+        await replyOrEditEphemeral(interaction, 'This bot is only configured for its primary server.');
+      }
+      return;
+    }
+
     if (interaction.isAutocomplete()) {
       try {
         if (interaction.commandName === 'mod') {

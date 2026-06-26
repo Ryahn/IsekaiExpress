@@ -1,5 +1,6 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
 const path = require('path');
+const { isConfiguredGuild } = require('../../utils/singleGuildGuard');
 
 module.exports = class GuildCreateEvent extends BaseEvent {
     constructor() {
@@ -8,6 +9,12 @@ module.exports = class GuildCreateEvent extends BaseEvent {
 
     async run(client, guild) {
         try {
+            if (!isConfiguredGuild(client, guild.id)) {
+                client.logger.warn(`[SINGLE-GUILD] Leaving unexpected guild ${guild.id}; configured guild is ${client.config.discord.guildId}.`);
+                await guild.leave();
+                return;
+            }
+
             await client.db.createGuild(guild.id, guild.ownerId);
 
             await client.db.createGuildConfigurable(guild.id);

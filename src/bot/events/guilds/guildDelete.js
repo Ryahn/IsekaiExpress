@@ -1,4 +1,5 @@
 const BaseEvent = require('../../utils/structures/BaseEvent');
+const { isConfiguredGuild } = require('../../utils/singleGuildGuard');
 
 module.exports = class GuildDeleteEvent extends BaseEvent {
     constructor() {
@@ -7,6 +8,11 @@ module.exports = class GuildDeleteEvent extends BaseEvent {
 
     async run(client, guild) {
         try {
+            if (!isConfiguredGuild(client, guild.id)) {
+                client.logger.warn(`[SINGLE-GUILD] Ignoring guildDelete for unexpected guild ${guild.id}.`);
+                return;
+            }
+
             await client.db.deleteGuild(guild.id);
             await client.db.deleteGuildConfigurable(guild.id);
 

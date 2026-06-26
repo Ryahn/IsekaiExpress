@@ -1,5 +1,6 @@
 const express = require("express");
 const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const session = require("express-session");
 const passport = require("passport");
 const RedisStore = require("connect-redis").default;
@@ -10,8 +11,34 @@ const { getDiscordAvatarUrl, timestamp, logAudit, checkSessionExpiration } = req
 const nunjucks = require('nunjucks');
 const config = require('../../config');
 const logger = require('../../libs/logger');
+const appDb = require('../../database/db');
 
 logger.startup('Web Panel is starting....')
+
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Too many authentication attempts. Please try again later.' },
+});
+
+const listApiRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Too many requests. Please slow down.' },
+});
+
+const mutatingRouteRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+  message: { message: 'Too many changes requested. Please try again later.' },
+});
 
 const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const redisClient = createClient({ url: redisUrl });
@@ -22,6 +49,19 @@ let redisStore = new RedisStore({
 });
 
 const app = express();
+let server = null;
+let shuttingDown = false;
+
+function shouldSendJsonError(req) {
+  return (
+    req.xhr ||
+    req.method !== 'GET' ||
+    req.path === '/commands/list' ||
+    req.path === '/commands/slashes/list' ||
+    req.path === '/warnings/list' ||
+    req.path.startsWith('/api/')
+  );
+}
 
 // Security headers. CSP is intentionally disabled: templates use inline scripts/styles and
 // vendored assets (leaflet, fontawesome, dhtmlx, lodash), which a strict CSP would break. The
@@ -63,6 +103,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.set('views', path.join(__dirname, 'views'));
 app.set("view engine", "njk");
 
+app.use(['/auth/login', '/auth/discord/callback'], authRateLimiter);
+app.use(['/commands/list', '/commands/slashes/list', '/warnings/list'], listApiRateLimiter);
+app.use(mutatingRouteRateLimiter);
+
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((user, done) => {
     const { email, accessToken, ...safeUser } = user;
@@ -84,21 +128,6 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
-  if (req.method !== 'GET') {
-    const { method, originalUrl } = req;
-    const userId = req.session && req.session.user ? req.session.user.id : 9007;
-
-    logAudit({
-      userId,
-      action: originalUrl,
-      method,
-      timestamp: timestamp(),
-    });
-  }
-  next();
-});
-
-app.use((req, res, next) => {
   if (
     req.path.startsWith('/public') ||
     req.path === '/auth/login' ||
@@ -109,6 +138,35 @@ app.use((req, res, next) => {
     return next();
   }
   return checkSessionExpiration(req, res, next);
+});
+
+app.use((req, res, next) => {
+  const shouldAudit =
+    req.method !== 'GET' &&
+    req.method !== 'HEAD' &&
+    req.method !== 'OPTIONS' &&
+    req.session &&
+    req.session.user;
+
+  if (!shouldAudit) {
+    return next();
+  }
+
+  const { method, originalUrl } = req;
+  const userId = req.session.user.id;
+  res.on('finish', () => {
+    if (res.statusCode < 400) {
+      logAudit({
+        userId,
+        action: originalUrl,
+        method,
+        timestamp: timestamp(),
+      });
+      return;
+    }
+    logger.warn(`Denied authenticated mutation: user=${userId} method=${method} path=${originalUrl} status=${res.statusCode}`);
+  });
+  next();
 });
 
 app.get('/docs/farm', (req, res) => {
@@ -245,6 +303,24 @@ app.get('/', (req, res) => {
   res.render('index', { username: req.session.user.username,  avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar), csrfToken: req.session.csrf });
 });
 
+app.use((req, res) => {
+  if (shouldSendJsonError(req)) {
+    return res.status(404).json({ message: 'Not found' });
+  }
+  res.status(404).send('Not found');
+});
+
+app.use((err, req, res, next) => {
+  logger.error('Unhandled web route error', err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  if (shouldSendJsonError(req)) {
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+  res.status(500).send('Internal server error');
+});
+
 async function start() {
   if (!config.session.secret) {
     logger.error('Missing required environment variable: SESSION_SECRET. Set it in .env (see .env.example).');
@@ -257,7 +333,60 @@ async function start() {
     logger.error('Redis connection failed', err);
     process.exit(1);
   }
-  app.listen(config.port, () => logger.startup(`Web panel started. Running on port ${config.port}`));
+  server = app.listen(config.port, () => logger.startup(`Web panel started. Running on port ${config.port}`));
 }
 
 start();
+
+async function closeHttpServer() {
+  if (!server) return;
+  await new Promise((resolve, reject) => {
+    server.close((err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
+
+async function shutdown(signal) {
+  if (shuttingDown) {
+    logger.warn(`Received ${signal} while web shutdown is already in progress.`);
+    return;
+  }
+  shuttingDown = true;
+  logger.info(`Received ${signal}. Shutting down web panel gracefully...`);
+
+  try {
+    await closeHttpServer();
+  } catch (err) {
+    logger.error('Error closing HTTP server:', err);
+  }
+
+  try {
+    if (redisClient.isOpen) {
+      await redisClient.quit();
+    }
+  } catch (err) {
+    logger.error('Error closing Redis client:', err);
+  }
+
+  try {
+    await appDb.end();
+  } catch (err) {
+    logger.error('Error closing Knex pool:', err);
+  }
+
+  if (typeof logger.shutdownWebhook === 'function') {
+    logger.shutdownWebhook();
+  }
+
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => {
+  shutdown('SIGTERM');
+});
+
+process.on('SIGINT', () => {
+  shutdown('SIGINT');
+});
