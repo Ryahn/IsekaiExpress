@@ -3,6 +3,8 @@ const router = express.Router();
 const { getDiscordAvatarUrl } = require('../../../libs/utils');
 const db = require('../../../database/db');
 const config = require('../../../config');
+const requireCsrf = require('../middleware/requireCsrf');
+router.use(requireCsrf);
 
 function canEdit(req) {
 	return Boolean(req.session?.roles?.includes(config.roles.staff));
@@ -25,12 +27,8 @@ function baseView(req, extra = {}) {
 	};
 }
 
-function validateCsrf(req, res) {
-	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
-		res.status(403);
-		return false;
-	}
-	return true;
+function hasValidCsrf(req) {
+	return Boolean(req.session?.csrf && req.session.csrf === req.body?._csrf);
 }
 
 async function buildPageState(req, extra = {}) {
@@ -69,17 +67,16 @@ router.get('/', async (req, res, next) => {
 
 router.post('/save', async (req, res, next) => {
 	try {
-		const parsed = db.parseScamScanSettingsInput(req.body, { checkboxInput: true });
-		if (!validateCsrf(req, res)) {
+		if (!hasValidCsrf(req)) {
 			const state = await buildPageState(req, {
-				settings: parsed.settings,
 				errors: ['Invalid CSRF token.'],
 			});
 			if (wantsJson(req)) {
 				return res.status(403).json({ message: 'Invalid CSRF token.', errors: state.errors, settings: state.settings });
 			}
-			return res.render('scamScanSettings', state);
+			return res.status(403).render('scamScanSettings', state);
 		}
+		const parsed = db.parseScamScanSettingsInput(req.body, { checkboxInput: true });
 		if (!canEdit(req)) return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
 
 		if (!parsed.ok) {

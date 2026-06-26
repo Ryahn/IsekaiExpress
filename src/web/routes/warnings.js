@@ -4,6 +4,42 @@ const { timestamp, getDiscordAvatarUrl, generateUniqueId} = require("../../../li
 const db = require("../../../database/db");
 const crypto = require('crypto');
 const config = require('../../../config');
+const requireCsrf = require('../middleware/requireCsrf');
+router.use(requireCsrf);
+const WARNING_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+const DISCORD_USER_ID_PATTERN = /^\d{17,20}$/;
+const WARNING_USERNAME_MAX_LENGTH = 100;
+const WARNING_REASON_MAX_LENGTH = 2000;
+
+function validateWarningId(id) {
+	return WARNING_ID_PATTERN.test(String(id || ''));
+}
+
+function parseWarningCreateInput(body) {
+	const warnUserId = String(body.warn_user_id || '').trim();
+	const warnUser = String(body.warn_user || '').trim();
+	const warnReason = String(body.warn_reason || '').trim();
+
+	if (!DISCORD_USER_ID_PATTERN.test(warnUserId)) {
+		return { ok: false, message: 'Invalid Discord user ID' };
+	}
+	if (!warnUser || warnUser.length > WARNING_USERNAME_MAX_LENGTH) {
+		return { ok: false, message: 'Warning username must be 1-100 characters.' };
+	}
+	if (!warnReason || warnReason.length > WARNING_REASON_MAX_LENGTH) {
+		return { ok: false, message: 'Warning reason must be 1-2000 characters.' };
+	}
+
+	return { ok: true, warnUserId, warnUser, warnReason };
+}
+
+function parseWarningReason(body) {
+	const reason = String(body.reason || '').trim();
+	if (!reason || reason.length > WARNING_REASON_MAX_LENGTH) {
+		return { ok: false, message: 'Warning reason must be 1-2000 characters.' };
+	}
+	return { ok: true, reason };
+}
 
 router.get("/", (req, res) => {
 	const allowed = req.session.roles.includes(config.roles.staff);
@@ -22,25 +58,22 @@ router.get("/list", async (req, res) => {
 });
 
 router.post("/add", async (req, res) => {
-	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
-		return res.status(403).json({ message: 'Invalid CSRF token' });
-	}
 	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to add warnings' });
 	}
 
-	const { warn_user_id, warn_user, warn_reason } = req.body;
-	if (warn_user_id == null || warn_user == null || warn_user === '' || warn_reason == null || warn_reason === '') {
-		return res.status(400).json({ message: 'Missing required fields' });
+	const parsed = parseWarningCreateInput(req.body);
+	if (!parsed.ok) {
+		return res.status(400).json({ message: parsed.message });
 	}
 
 	let data = [];
 	data.push(generateUniqueId());  // warn_id
-	data.push(warn_user_id);        // warn_user_id
-	data.push(warn_user);           // warn_user
+	data.push(parsed.warnUserId);   // warn_user_id
+	data.push(parsed.warnUser);     // warn_user
 	data.push(req.session.user.id); // warn_by_id
 	data.push(req.session.user.username); // warn_by_user
-	data.push(warn_reason);         // warn_reason
+	data.push(parsed.warnReason);   // warn_reason
 	data.push(timestamp());         // created_at
 	data.push(timestamp());         // updated_at
 
@@ -54,20 +87,19 @@ router.post("/add", async (req, res) => {
 });
 
 router.post("/edit/:id", async (req, res) => {
-	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
-		return res.status(403).json({ message: 'Invalid CSRF token' });
-	}
 	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to edit warnings' });
 	}
-
-	const { reason } = req.body;
-	if (!reason) {
-		return res.status(400).json({ message: 'Missing required fields' });
+	if (!validateWarningId(req.params.id)) {
+		return res.status(400).json({ message: 'Invalid warning id' });
+	}
+	const parsed = parseWarningReason(req.body);
+	if (!parsed.ok) {
+		return res.status(400).json({ message: parsed.message });
 	}
 
 	try {
-		await db.sql('UPDATE warnings SET warn_reason = ?, updated_at = ? WHERE warn_id = ?', [reason, timestamp(), req.params.id]);
+		await db.sql('UPDATE warnings SET warn_reason = ?, updated_at = ? WHERE warn_id = ?', [parsed.reason, timestamp(), req.params.id]);
 		res.status(200).json({ message: 'Warning updated' });
 	} catch (error) {
 		console.error(error);
@@ -76,11 +108,11 @@ router.post("/edit/:id", async (req, res) => {
 });
 
 router.post("/delete/:id", async (req, res) => {
-    if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
-        return res.status(403).json({ message: 'Invalid CSRF token' });
-    }
 	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to delete warnings' });
+	}
+	if (!validateWarningId(req.params.id)) {
+		return res.status(400).json({ message: 'Invalid warning id' });
 	}
 
     try {

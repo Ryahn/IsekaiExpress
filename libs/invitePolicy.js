@@ -11,7 +11,10 @@ const INVITE_REGEX =
   /(?:https?:\/\/)?(?:www\.)?(?:discord(?:app)?\.com\/invite\/|discord\.gg\/|dsc\.gg\/)([a-zA-Z0-9-]+)/gi;
 
 const DEDUPE_MS = 5 * 60 * 1000;
+const MAX_INVITES_PER_MESSAGE = 10;
+const INVITE_RESOLUTION_CACHE_MS = 5 * 60 * 1000;
 const inviteDedupe = new Map();
+const inviteResolutionCache = new Map();
 
 function pruneDedupe(now) {
   for (const [key, ts] of inviteDedupe) {
@@ -35,7 +38,8 @@ function extractInviteCodes(content) {
   let m;
   const re = new RegExp(INVITE_REGEX.source, 'gi');
   while ((m = re.exec(content)) !== null) {
-    out.add(m[1]);
+    out.add(m[1].toLowerCase());
+    if (out.size >= MAX_INVITES_PER_MESSAGE) break;
   }
   return [...out];
 }
@@ -64,6 +68,12 @@ function inviteQueueChannelId(configRow) {
 const DISCORD_UNKNOWN_INVITE = 10006;
 
 async function resolveInvite(client, code) {
+  const normalizedCode = String(code || '').toLowerCase();
+  const cached = inviteResolutionCache.get(normalizedCode);
+  if (cached && Date.now() - cached.cachedAt < INVITE_RESOLUTION_CACHE_MS) {
+    return { ...cached.resolved };
+  }
+
   const failed = (unresolvable) => ({
     ok: false,
     guildId: null,
@@ -72,9 +82,10 @@ async function resolveInvite(client, code) {
     channelName: null,
     unresolvable,
   });
+  let resolved;
   try {
-    const inv = await client.fetchInvite(code);
-    return {
+    const inv = await client.fetchInvite(normalizedCode);
+    resolved = {
       ok: true,
       guildId: inv.guild?.id || null,
       guildName: inv.guild?.name || null,
@@ -85,13 +96,15 @@ async function resolveInvite(client, code) {
   } catch (e) {
     const apiCode = e.code ?? e.rawError?.code;
     if (apiCode === DISCORD_UNKNOWN_INVITE) {
-      return failed('unknown_invite');
+      resolved = failed('unknown_invite');
+    } else if (apiCode != null) {
+      resolved = failed(`api_${apiCode}`);
+    } else {
+      resolved = failed('error');
     }
-    if (apiCode != null) {
-      return failed(`api_${apiCode}`);
-    }
-    return failed('error');
   }
+  inviteResolutionCache.set(normalizedCode, { cachedAt: Date.now(), resolved });
+  return { ...resolved };
 }
 
 async function isBlacklistedCode(db, code) {
@@ -118,6 +131,48 @@ async function isWhitelistedGuild(db, homeGuildId, targetGuildId) {
     .where({ home_guild_id: homeGuildId, target_guild_id: targetGuildId })
     .first();
   return Boolean(row);
+}
+
+async function loadInvitePolicyMatches(db, homeGuildId, resolvedList) {
+  const codes = [...new Set(resolvedList.map(({ code }) => code.toLowerCase()))];
+  const guildIds = [...new Set(
+    resolvedList
+      .map(({ resolved }) => resolved.guildId)
+      .filter(Boolean),
+  )];
+
+  const [
+    blacklistedCodes,
+    blacklistedGuilds,
+    whitelistedCodes,
+    whitelistedGuilds,
+  ] = await Promise.all([
+    codes.length
+      ? db('blacklisted_invites').select('code').whereIn('code', codes)
+      : [],
+    guildIds.length
+      ? db('blacklisted_guilds').select('guild_id').whereIn('guild_id', guildIds)
+      : [],
+    codes.length
+      ? db('whitelisted_invites')
+        .select('code')
+        .where({ home_guild_id: homeGuildId })
+        .whereIn('code', codes)
+      : [],
+    guildIds.length
+      ? db('whitelisted_guilds')
+        .select('target_guild_id')
+        .where({ home_guild_id: homeGuildId })
+        .whereIn('target_guild_id', guildIds)
+      : [],
+  ]);
+
+  return {
+    blacklistedCodes: new Set(blacklistedCodes.map((row) => String(row.code).toLowerCase())),
+    blacklistedGuilds: new Set(blacklistedGuilds.map((row) => String(row.guild_id))),
+    whitelistedCodes: new Set(whitelistedCodes.map((row) => String(row.code).toLowerCase())),
+    whitelistedGuilds: new Set(whitelistedGuilds.map((row) => String(row.target_guild_id))),
+  };
 }
 
 function buildEvidenceEmbed(message, matchedOn) {
@@ -259,7 +314,10 @@ async function processMemberMessageInvites(client, message, staffRoleId, modRole
 
   let member;
   try {
-    member = await message.guild.members.fetch(message.author.id);
+    member =
+      message.member ||
+      message.guild.members.cache.get(message.author.id) ||
+      await message.guild.members.fetch(message.author.id);
   } catch {
     return;
   }
@@ -272,18 +330,17 @@ async function processMemberMessageInvites(client, message, staffRoleId, modRole
     return;
   }
 
-  const resolvedList = [];
-  for (const code of codes) {
-    const resolved = await resolveInvite(client, code);
-    resolvedList.push({ code, resolved });
-  }
+  const resolvedList = await Promise.all(
+    codes.map(async (code) => ({ code, resolved: await resolveInvite(client, code) })),
+  );
+  const policy = await loadInvitePolicyMatches(db, homeId, resolvedList);
 
   for (const { code, resolved } of resolvedList) {
-    if (await isBlacklistedCode(db, code)) {
+    if (policy.blacklistedCodes.has(code)) {
       await enforceBlacklist(client, message, `code:${code}`, staffRoleId, modRoleId);
       return;
     }
-    if (resolved.guildId && (await isBlacklistedGuild(db, resolved.guildId))) {
+    if (resolved.guildId && policy.blacklistedGuilds.has(resolved.guildId)) {
       await enforceBlacklist(client, message, `guild:${resolved.guildId}`, staffRoleId, modRoleId);
       return;
     }
@@ -291,8 +348,8 @@ async function processMemberMessageInvites(client, message, staffRoleId, modRole
 
   let needsQueue = false;
   for (const { code, resolved } of resolvedList) {
-    if (await isWhitelistedCode(db, homeId, code)) continue;
-    if (resolved.guildId && (await isWhitelistedGuild(db, homeId, resolved.guildId))) continue;
+    if (policy.whitelistedCodes.has(code)) continue;
+    if (resolved.guildId && policy.whitelistedGuilds.has(resolved.guildId)) continue;
     needsQueue = true;
     break;
   }
@@ -325,8 +382,8 @@ async function processMemberMessageInvites(client, message, staffRoleId, modRole
   if (!queueCh || !queueCh.isTextBased()) return;
 
   for (const { code, resolved } of resolvedList) {
-    if (await isWhitelistedCode(db, homeId, code)) continue;
-    if (resolved.guildId && (await isWhitelistedGuild(db, homeId, resolved.guildId))) continue;
+    if (policy.whitelistedCodes.has(code)) continue;
+    if (resolved.guildId && policy.whitelistedGuilds.has(resolved.guildId)) continue;
 
     if (shouldSkipDedupe(homeId, message.author.id, code)) continue;
 

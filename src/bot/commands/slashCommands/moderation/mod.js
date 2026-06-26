@@ -46,6 +46,7 @@ const {
   reviewRevokeUserExecute,
 } = require('./handlers/modHandlersReview');
 const { helpDocsExecute } = require('./handlers/modHandlersHelp');
+const { pruneExecute } = require('./handlers/modHandlersPrune');
 
 async function buildModData(client) {
   const b = new SlashCommandBuilder()
@@ -208,6 +209,47 @@ async function buildModData(client) {
           .setName('delwarn')
           .setDescription('Delete a warning by id')
           .addStringOption((o) => o.setName('warn_id').setDescription('12-char warning id').setRequired(true)),
+      ),
+  );
+
+  b.addSubcommandGroup((g) =>
+    g
+      .setName('moderation')
+      .setDescription('Message moderation utilities')
+      .addSubcommand((s) =>
+        s
+          .setName('prune')
+          .setDescription('Delete recent messages from a channel')
+          .addChannelOption((o) =>
+            o
+              .setName('channel')
+              .setDescription('Channel to prune')
+              .setRequired(true)
+              .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+          )
+          .addStringOption((o) =>
+            o
+              .setName('type')
+              .setDescription('Message type to prune')
+              .setRequired(true)
+              .addChoices(
+                { name: 'All', value: 'all' },
+                { name: 'Bot', value: 'bot' },
+                { name: 'User', value: 'user' },
+                { name: 'Embed', value: 'embed' },
+                { name: 'Attachment', value: 'attachment' },
+              ),
+          )
+          .addIntegerOption((o) =>
+            o
+              .setName('number')
+              .setDescription('Number of matching messages to delete')
+              .setMinValue(1)
+              .setMaxValue(50),
+          )
+          .addUserOption((o) =>
+            o.setName('user').setDescription('Only delete messages from this user'),
+          ),
       ),
   );
 
@@ -436,6 +478,7 @@ async function execute(client, interaction) {
     'warnings:warn': warnExecute,
     'warnings:warnings': warningsListExecute,
     'warnings:delwarn': delwarnExecute,
+    'moderation:prune': pruneExecute,
     'bans:list': bansListExecute,
     'bans:unban': unbanExecute,
     'cage:apply': cageApplyExecute,

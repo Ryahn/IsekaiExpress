@@ -1,22 +1,46 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { REST } = require('@discordjs/rest');
+const { Routes } = require('discord-api-types/v10');
+const config = require('../../../config');
 const router = express.Router();
 const routesPath = path.join(__dirname);
+const ROLE_REVALIDATE_MS = 2 * 60 * 1000;
+const rest = new REST({ version: '10' }).setToken(config.discord.botToken);
 
 const checkRoles = (requiredRoles) => {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     if (!requiredRoles || requiredRoles.length === 0) {
       return next();
     }
-    const userRoles = req.session.roles ? req.session.roles : [];
+
+    if (!req.session?.user?.id) {
+      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    }
+
+    const now = Date.now();
+    const rolesValidatedAt = Number(req.session.rolesValidatedAt || 0);
+    if (!Array.isArray(req.session.roles) || now - rolesValidatedAt > ROLE_REVALIDATE_MS) {
+      try {
+        const member = await rest.get(Routes.guildMember(config.discord.guildId, req.session.user.id));
+        req.session.roles = Array.isArray(member.roles) ? member.roles : [];
+        req.session.rolesValidatedAt = now;
+      } catch (error) {
+        return req.session.destroy(() => {
+          res.status(403).json({ message: 'Access denied. Please sign in again.' });
+        });
+      }
+    }
+
+    const userRoles = Array.isArray(req.session.roles) ? req.session.roles : [];
     const hasRequiredRole = requiredRoles.some(role => userRoles.includes(role));
 
-    if (hasRequiredRole) {
-      next();
-    } else {
-      res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    if (!hasRequiredRole) {
+      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
+
+    next();
   };
 };
 

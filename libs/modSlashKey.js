@@ -44,6 +44,7 @@ const MOD_COMMAND_LOGICAL_KEYS = [
   'mod:warnings:warn',
   'mod:warnings:warnings',
   'mod:warnings:delwarn',
+  'mod:moderation:prune',
   'mod:bans:list',
   'mod:bans:unban',
   'mod:cage:apply',
