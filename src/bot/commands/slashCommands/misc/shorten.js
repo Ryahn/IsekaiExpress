@@ -57,6 +57,6 @@ module.exports = {
       return interaction.editReply('I could not shorten that URL. Please try again later.');
     }
 
-    return interaction.editReply(shortenedUrl);
+    return interaction.editReply(`<${shortenedUrl}>`);
   },
 };
