@@ -1,4 +1,4 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } = require('discord.js');
+const { MessageFlags } = require('discord.js');
 const { hasGuildAdminOrModRole } = require('../src/bot/utils/guildPrivileges');
 const { enforceBlacklist } = require('./invitePolicy');
 
@@ -107,18 +107,42 @@ async function handleInviteQueueButton(client, interaction, action, pendingId) {
     await enforceBlacklist(client, pseudoMessage, `queue blacklist ${row.invite_code}`, staffRoleId, modRoleId);
   }
 
-  if (row.queue_message_id) {
-    const msg = await interaction.channel.messages.fetch(row.queue_message_id).catch(() => null);
-    if (msg && msg.embeds[0]) {
-      const embed = EmbedBuilder.from(msg.embeds[0])
-        .setColor(action === 'approve' ? 0x00ff00 : 0xff0000)
-        .addFields({
-          name: 'Resolution',
-          value: `${action === 'approve' ? 'Approved' : 'Blacklisted'} by ${interaction.user.tag}`,
-        });
-      await msg.edit({ embeds: [embed], components: [] }).catch(() => {});
-    }
-  }
+  await finalizeHistory(
+    client,
+    row.moderation_history_id,
+    {
+      guildId: row.home_guild_id,
+      eventType: 'invite_review',
+      subjectType: 'invite',
+      subjectId: row.invite_code,
+      authorId: row.author_id,
+      channelId: row.channel_id,
+      queueMessageId: row.queue_message_id,
+      status: 'handled',
+      action: newStatus,
+      handledBy: interaction.user.id,
+      handledAt: new Date(),
+      summary: `Discord invite ${row.invite_code} ${newStatus} by ${interaction.user.tag}`,
+      metadata: {
+        pendingInviteId: row.id,
+        resolvedGuildId: row.resolved_guild_id || null,
+        resolvedGuildName: row.resolved_guild_name || null,
+      },
+    },
+    {
+      status: 'handled',
+      action: newStatus,
+      handledBy: interaction.user.id,
+      summary: `Discord invite ${row.invite_code} ${newStatus} by ${interaction.user.tag}`,
+      metadata: {
+        pendingInviteId: row.id,
+        resolvedGuildId: row.resolved_guild_id || null,
+        resolvedGuildName: row.resolved_guild_name || null,
+      },
+    },
+  );
+
+  await deleteQueueMessage(client, interaction.channel, row.queue_message_id, 'inviteQueue');
 }
 
 function resolutionLabel(action) {
@@ -127,27 +151,36 @@ function resolutionLabel(action) {
   return 'Dismissed';
 }
 
-async function annotateQueueMessage(client, channel, queueMessageId, resolutionText) {
+async function deleteQueueMessage(client, channel, queueMessageId, context) {
   if (!queueMessageId || !channel) return;
   let msg;
   try {
     msg = await channel.messages.fetch(queueMessageId);
   } catch (e) {
     client.logger.warn(
-      `imageReview: cannot fetch queue message ${queueMessageId} in channel ${channel.id} (code=${e?.code || 'unknown'}): ${e?.message || e}`,
+      `${context}: cannot fetch queue message ${queueMessageId} in channel ${channel.id} (code=${e?.code || 'unknown'}): ${e?.message || e}`,
     );
     return;
   }
   if (!msg) return;
-  const base = msg.embeds[0] ? EmbedBuilder.from(msg.embeds[0]) : new EmbedBuilder().setTitle('Image review');
-  base.addFields({ name: 'Resolution', value: resolutionText });
   try {
-    await msg.edit({ embeds: [base], components: [] });
+    await msg.delete();
   } catch (e) {
     client.logger.warn(
-      `imageReview: cannot edit queue message ${queueMessageId} in channel ${channel.id} (code=${e?.code || 'unknown'}): ${e?.message || e}`,
+      `${context}: cannot delete queue message ${queueMessageId} in channel ${channel.id} (code=${e?.code || 'unknown'}): ${e?.message || e}`,
     );
   }
+}
+
+async function finalizeHistory(client, historyId, fallbackEntry, update) {
+  let targetHistoryId = historyId;
+  if (!targetHistoryId && fallbackEntry && typeof client.db.createModerationReviewHistory === 'function') {
+    targetHistoryId = await client.db.createModerationReviewHistory(fallbackEntry);
+  }
+  if (targetHistoryId && typeof client.db.finalizeModerationReviewHistory === 'function') {
+    await client.db.finalizeModerationReviewHistory(targetHistoryId, update);
+  }
+  return targetHistoryId;
 }
 
 async function handleImageReviewButton(client, interaction, action, pendingId) {
@@ -220,13 +253,73 @@ async function handleImageReviewButton(client, interaction, action, pendingId) {
     }
   }
 
-  const primaryResolution = `${resolutionLabel(action)} by ${interaction.user.tag}`;
-  await annotateQueueMessage(client, interaction.channel, row.queue_message_id, primaryResolution);
+  await finalizeHistory(
+    client,
+    row.moderation_history_id,
+    {
+      guildId: row.home_guild_id,
+      eventType: 'image_review',
+      subjectType: 'user',
+      subjectId: row.author_id,
+      authorId: row.author_id,
+      channelId: row.channel_id,
+      queueMessageId: row.queue_message_id,
+      status: 'handled',
+      action: nextStatus,
+      handledBy: interaction.user.id,
+      handledAt: new Date(),
+      summary: `Image review ${nextStatus} by ${interaction.user.tag}`,
+      metadata: {
+        pendingImageReviewId: row.id,
+      },
+    },
+    {
+      status: 'handled',
+      action: nextStatus,
+      handledBy: interaction.user.id,
+      summary: `Image review ${nextStatus} by ${interaction.user.tag}`,
+      metadata: {
+        pendingImageReviewId: row.id,
+      },
+    },
+  );
+  await deleteQueueMessage(client, interaction.channel, row.queue_message_id, 'imageReview');
 
   if (cascaded.length) {
     const cascadeResolution = `Auto-${resolutionLabel(action).toLowerCase()} (resolved with review #${pendingId} by ${interaction.user.tag})`;
     for (const other of cascaded) {
-      await annotateQueueMessage(client, interaction.channel, other.queue_message_id, cascadeResolution);
+      await finalizeHistory(
+        client,
+        other.moderation_history_id,
+        {
+          guildId: row.home_guild_id,
+          eventType: 'image_review',
+          subjectType: 'user',
+          subjectId: row.author_id,
+          authorId: row.author_id,
+          queueMessageId: other.queue_message_id,
+          status: 'handled',
+          action: `auto_${nextStatus}`,
+          handledBy: interaction.user.id,
+          handledAt: new Date(),
+          summary: cascadeResolution,
+          metadata: {
+            pendingImageReviewId: other.id,
+            resolvedWithPendingImageReviewId: pendingId,
+          },
+        },
+        {
+          status: 'handled',
+          action: `auto_${nextStatus}`,
+          handledBy: interaction.user.id,
+          summary: cascadeResolution,
+          metadata: {
+            pendingImageReviewId: other.id,
+            resolvedWithPendingImageReviewId: pendingId,
+          },
+        },
+      );
+      await deleteQueueMessage(client, interaction.channel, other.queue_message_id, 'imageReview');
     }
     try {
       await interaction.followUp({

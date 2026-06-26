@@ -830,6 +830,33 @@ function buildScamImageEvidenceEmbed(message, scanResult, attachmentIndex, attac
 /**
  * Ban + mod log (staff: log only), mirroring invite enforceBlacklist.
  */
+async function recordScamImageModerationHistory(client, message, scanResult, action, logMessageId = null) {
+  if (typeof client.db.createModerationReviewHistory !== 'function') return;
+  await client.db.createModerationReviewHistory({
+    guildId: message.guild.id,
+    eventType: 'scam_image_enforcement',
+    subjectType: 'user',
+    subjectId: message.author.id,
+    authorId: message.author.id,
+    channelId: message.channelId,
+    sourceMessageId: message.id,
+    queueMessageId: logMessageId,
+    status: 'handled',
+    action,
+    handledBy: 'bot',
+    handledAt: new Date(),
+    summary: `Scam image ${action.replace(/_/g, ' ')}`,
+    metadata: {
+      scanStatus: scanResult.status || null,
+      reasonCode: scanResult.reasonCode || scanResult.reason || null,
+      severity: scanResult.severity || null,
+      detail: scanResult.detail || null,
+      matchedRuleIds: (scanResult.matchedRules || []).map((rule) => rule.id).filter((id) => id != null),
+      matchedHashIds: (scanResult.matchedHashes || []).map((hash) => hash.id).filter((id) => id != null),
+    },
+  });
+}
+
 async function enforceScamImage(client, message, staffRoleId, modRoleId, scanResult, attachmentIndex, attachmentUrl) {
   const guild = message.guild;
   if (!guild) return;
@@ -842,19 +869,22 @@ async function enforceScamImage(client, message, staffRoleId, modRoleId, scanRes
   const embed = buildScamImageEvidenceEmbed(message, scanResult, attachmentIndex, attachmentUrl);
 
   if (isStaff || isMod) {
+    let logMessageId = null;
     if (logChannelId) {
       const ch =
         guild.channels.cache.get(logChannelId) ||
         (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
-        await ch.send(
+        const sent = await ch.send(
           withModLogRolePing(cfg, {
             content: 'Staff/mod posted scam-pattern image - no ban applied.',
             embeds: [embed],
           }),
-        );
+        ).catch(() => null);
+        logMessageId = sent?.id || null;
       }
     }
+    await recordScamImageModerationHistory(client, message, scanResult, 'staff_log', logMessageId);
     return;
   }
 
@@ -865,26 +895,32 @@ async function enforceScamImage(client, message, staffRoleId, modRoleId, scanRes
     });
   } catch (e) {
     client.logger.error('scamImageScan enforce ban failed', e);
+    let logMessageId = null;
     if (logChannelId) {
       const ch =
         guild.channels.cache.get(logChannelId) ||
         (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
-        await ch
+        const sent = await ch
           .send(withModLogRolePing(cfg, { content: `Ban failed: ${e.message}`, embeds: [embed] }))
-          .catch(() => {});
+          .catch(() => null);
+        logMessageId = sent?.id || null;
       }
     }
+    await recordScamImageModerationHistory(client, message, scanResult, 'ban_failed', logMessageId);
     return;
   }
 
+  let logMessageId = null;
   if (logChannelId) {
     const ch =
       guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
     if (ch && ch.isTextBased()) {
-      await ch.send(withModLogRolePing(cfg, { embeds: [embed] })).catch(() => {});
+      const sent = await ch.send(withModLogRolePing(cfg, { embeds: [embed] })).catch(() => null);
+      logMessageId = sent?.id || null;
     }
   }
+  await recordScamImageModerationHistory(client, message, scanResult, 'banned', logMessageId);
 }
 
 module.exports = {

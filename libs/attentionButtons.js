@@ -1,4 +1,4 @@
-const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { hasGuildAdminOrStaffRole } = require('../src/bot/utils/guildPrivileges');
 const { archiveAttentionRequestMessage, getAttentionArchiveChannels } = require('./attentionArchive');
 
@@ -38,6 +38,44 @@ function statusPingWord(status) {
   if (status === 'rejected') return 'Rejected';
   if (status === 'dismissed') return 'Dismissed';
   return 'Updated';
+}
+
+async function finalizeAttentionHistory(client, row, status, interaction) {
+  let historyId = row.moderation_history_id;
+  if (!historyId && typeof client.db.createModerationReviewHistory === 'function') {
+    historyId = await client.db.createModerationReviewHistory({
+      guildId: row.guild_id,
+      eventType: 'attention_request',
+      subjectType: 'user',
+      subjectId: row.author_id,
+      authorId: row.author_id,
+      channelId: row.source_channel_id || row.queue_channel_id || interaction.channelId,
+      queueMessageId: row.queue_message_id,
+      status: 'handled',
+      action: status,
+      handledBy: interaction.user.id,
+      handledAt: new Date(),
+      summary: `Attention request ${status} by ${interaction.user.tag}`,
+      metadata: {
+        attentionRequestId: row.id,
+        lane: row.lane,
+        requestType: row.request_type || null,
+      },
+    });
+  }
+  if (historyId && typeof client.db.finalizeModerationReviewHistory === 'function') {
+    await client.db.finalizeModerationReviewHistory(historyId, {
+      status: 'handled',
+      action: status,
+      handledBy: interaction.user.id,
+      summary: `Attention request ${status} by ${interaction.user.tag}`,
+      metadata: {
+        attentionRequestId: row.id,
+        lane: row.lane,
+        requestType: row.request_type || null,
+      },
+    });
+  }
 }
 
 /**
@@ -116,18 +154,7 @@ async function handleAttentionButton(client, interaction) {
     );
   }
 
-  if (queueChannel && queueChannel.isTextBased() && row.queue_message_id) {
-    const msg = await queueChannel.messages.fetch(row.queue_message_id).catch(() => null);
-    if (msg && msg.embeds[0]) {
-      const embed = EmbedBuilder.from(msg.embeds[0]).addFields({
-        name: 'Resolution',
-        value: `${word} by ${interaction.user.tag}`,
-      });
-      await msg.edit({ embeds: [embed], components: [] }).catch((e) =>
-        client.logger.warn(`attention: edit queue message failed: ${e?.message || e}`),
-      );
-    }
-  }
+  await finalizeAttentionHistory(client, row, status, interaction);
 
   const archiveChannels = await getAttentionArchiveChannels(client, interaction.guild).catch((e) => {
     client.logger.warn(`attention: could not load archive config for request ${id}: ${e?.message || e}`);

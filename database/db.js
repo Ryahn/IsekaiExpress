@@ -13,6 +13,7 @@ const guildRepository = require('./repositories/guildRepository');
 const commandSettingsRepository = require('./repositories/commandSettingsRepository');
 const imageReviewRepository = require('./repositories/imageReviewRepository');
 const attentionRepository = require('./repositories/attentionRepository');
+const moderationReviewHistoryRepository = require('./repositories/moderationReviewHistoryRepository');
 
 module.exports = {
   query: db,
@@ -31,4 +32,5 @@ module.exports = {
   ...commandSettingsRepository,
   ...imageReviewRepository,
   ...attentionRepository,
+  ...moderationReviewHistoryRepository,
 };

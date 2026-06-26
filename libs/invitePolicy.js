@@ -397,6 +397,31 @@ async function processMemberMessageInvites(client, message, staffRoleId, modRole
       status: 'pending',
     });
 
+    const moderationHistoryId =
+      typeof client.db.createModerationReviewHistory === 'function'
+        ? await client.db.createModerationReviewHistory({
+          guildId: homeId,
+          eventType: 'invite_review',
+          subjectType: 'invite',
+          subjectId: code.toLowerCase(),
+          authorId: message.author.id,
+          channelId: message.channelId,
+          sourceMessageId: message.id,
+          status: 'pending',
+          action: 'review_pending',
+          summary: `Discord invite ${code.toLowerCase()} queued for staff review`,
+          metadata: {
+            pendingInviteId: pendingId,
+            resolvedGuildId: resolved.guildId || null,
+            resolvedGuildName: resolved.guildName || null,
+            messageContent: (message.content || '').slice(0, 500),
+          },
+        })
+        : null;
+    if (moderationHistoryId && typeof client.db.setPendingInviteModerationHistoryId === 'function') {
+      await client.db.setPendingInviteModerationHistoryId(pendingId, moderationHistoryId);
+    }
+
     const { embed, row } = buildQueueEmbed({
       pendingId,
       code,
@@ -411,6 +436,9 @@ async function processMemberMessageInvites(client, message, staffRoleId, modRole
     });
     if (qMsg) {
       await client.db.updatePendingInviteQueueMessage(pendingId, qMsg.id);
+      if (moderationHistoryId && typeof client.db.updateModerationReviewHistoryQueueMessage === 'function') {
+        await client.db.updateModerationReviewHistoryQueueMessage(moderationHistoryId, qMsg.id);
+      }
     }
   }
 }

@@ -667,6 +667,149 @@
 				},
 			};
 		});
+
+		window.Alpine.data('moderationReviewHistoryPanel', function(config) {
+			function initialFilters(filters) {
+				const source = filters || {};
+				return {
+					range: source.range || '24h',
+					eventType: source.eventType || '',
+					subjectType: source.subjectType || '',
+					status: source.status || '',
+					action: source.action || '',
+					handledState: source.handledState || '',
+					userId: source.userId || '',
+					channelId: source.channelId || '',
+					page: Number(source.page || 1),
+				};
+			}
+
+			return {
+				filters: initialFilters(config.filters),
+				metrics: config.metrics || {},
+				events: config.events || [],
+				page: config.page || { page: 1, limit: 25, hasMore: false },
+				details: { title: 'Moderation details', text: '' },
+				isLoading: false,
+				isRefreshing: false,
+				pollTimer: null,
+
+				init: function() {
+					const self = this;
+					this.pollTimer = window.setInterval(function() {
+						self.refresh({ silent: true });
+					}, pollIntervalMs);
+				},
+
+				destroy: function() {
+					if (this.pollTimer) {
+						window.clearInterval(this.pollTimer);
+						this.pollTimer = null;
+					}
+				},
+
+				metricCards: function() {
+					return [
+						{ label: 'Total events', value: this.valueOrDash(this.metrics.total) },
+						{ label: 'Pending', value: this.valueOrDash(this.metrics.pending) },
+						{ label: 'Handled', value: this.valueOrDash(this.metrics.handled) },
+						{ label: 'Event types', value: this.entries(this.metrics.byEventType).length },
+						{ label: 'Subject types', value: this.entries(this.metrics.bySubjectType).length },
+						{ label: 'Actions', value: this.entries(this.metrics.byAction).length },
+					];
+				},
+
+				entries: function(value) {
+					return Object.entries(value || {});
+				},
+
+				valueOrDash: function(value) {
+					return value == null || value === '' ? '-' : value;
+				},
+
+				displayWithId: function(display, id) {
+					return display || this.valueOrDash(id);
+				},
+
+				subjectLabel: function(event) {
+					const type = event.subject_type || 'subject';
+					const display = event.subject_display || event.subject_id || '-';
+					return type + ': ' + display;
+				},
+
+				openDetails: function(event) {
+					this.details = {
+						title: event.event_type ? 'Details for ' + event.event_type : 'Moderation details',
+						text: JSON.stringify({
+							id: event.id,
+							event_type: event.event_type,
+							subject_type: event.subject_type,
+							subject_id: event.subject_id,
+							author_id: event.author_id,
+							channel_id: event.channel_id,
+							source_message_id: event.source_message_id,
+							queue_message_id: event.queue_message_id,
+							status: event.status,
+							action: event.action,
+							handled_by: event.handled_by,
+							handled_at: event.handled_at,
+							summary: event.summary,
+							metadata: event.metadata || {},
+						}, null, 2),
+					};
+					showBootstrapModal('#moderationReviewDetailsModal');
+				},
+
+				queryString: function() {
+					const params = new URLSearchParams();
+					params.set('range', this.filters.range || '24h');
+					if (this.filters.eventType) params.set('event_type', this.filters.eventType);
+					if (this.filters.subjectType) params.set('subject_type', this.filters.subjectType);
+					if (this.filters.status) params.set('status', this.filters.status);
+					if (this.filters.action) params.set('action', this.filters.action);
+					if (this.filters.handledState) params.set('handled_state', this.filters.handledState);
+					if (this.filters.userId) params.set('user_id', this.filters.userId);
+					if (this.filters.channelId) params.set('channel_id', this.filters.channelId);
+					if (Number(this.filters.page) > 1) params.set('page', String(this.filters.page));
+					return params.toString();
+				},
+
+				applyFilters: async function() {
+					this.filters.page = 1;
+					await this.refresh({ silent: false, updateUrl: true });
+				},
+
+				nextPage: async function() {
+					this.filters.page = Number(this.page.page || this.filters.page || 1) + 1;
+					await this.refresh({ silent: false, updateUrl: true });
+				},
+
+				refresh: async function(options) {
+					const settings = options || {};
+					if (this.isRefreshing) return;
+					this.isRefreshing = true;
+					this.isLoading = true;
+					try {
+						const query = this.queryString();
+						const response = await requestJson('/moderation-review-history' + (query ? '?' + query : ''));
+						this.filters = initialFilters(response.filters);
+						this.metrics = response.metrics || {};
+						this.events = response.events || [];
+						this.page = response.page || { page: 1, limit: 25, hasMore: false };
+						if (settings.updateUrl && window.history && window.history.replaceState) {
+							window.history.replaceState(null, '', '/moderation-review-history' + (query ? '?' + query : ''));
+						}
+					} catch (error) {
+						if (!settings.silent) {
+							notify('error', error.message || 'Failed to refresh moderation review history.');
+						}
+					} finally {
+						this.isLoading = false;
+						this.isRefreshing = false;
+					}
+				},
+			};
+		});
 	}
 
 	function formatUnixTimestamp(timestamp) {

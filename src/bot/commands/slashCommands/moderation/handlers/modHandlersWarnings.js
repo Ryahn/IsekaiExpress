@@ -2,6 +2,29 @@ const { EmbedBuilder, MessageFlags } = require('discord.js');
 const moment = require('moment');
 const { requireModerator } = require('../../../../utils/permissionGuards');
 
+async function recordWarningHistory(client, interaction, targetUser, warningId, reason, logMessageId = null) {
+  if (typeof client.db.createModerationReviewHistory !== 'function') return;
+  await client.db.createModerationReviewHistory({
+    guildId: interaction.guildId,
+    eventType: 'user_moderation',
+    subjectType: 'user',
+    subjectId: targetUser.id,
+    authorId: targetUser.id,
+    channelId: interaction.channelId,
+    queueMessageId: logMessageId,
+    status: 'handled',
+    action: 'warned',
+    handledBy: interaction.user.id,
+    handledAt: new Date(),
+    summary: `User warned by ${interaction.user.tag}`,
+    metadata: {
+      warningId,
+      targetUsername: targetUser.username,
+      reason,
+    },
+  });
+}
+
 async function warnExecute(client, interaction) {
   if (!client.config.warningSystem.enabled) {
     return interaction.editReply('The warning system is not enabled.');
@@ -43,6 +66,7 @@ async function warnExecute(client, interaction) {
     await interaction.followUp({ embeds: [embed] });
 
     const modChannel = interaction.guild.channels.cache.find((ch) => ch.name === 'moderator-chat');
+    let logMessageId = null;
     if (modChannel) {
       const modEmbed = new EmbedBuilder()
         .setColor(0xe74c3c)
@@ -53,10 +77,12 @@ async function warnExecute(client, interaction) {
           { name: 'Reason', value: reason, inline: false },
         ])
         .setTimestamp();
-      await modChannel.send({ embeds: [modEmbed] });
+      const sent = await modChannel.send({ embeds: [modEmbed] }).catch(() => null);
+      logMessageId = sent?.id || null;
     } else {
       client.logger.error('Moderator chat channel not found!');
     }
+    await recordWarningHistory(client, interaction, targetUser, warningId, reason, logMessageId);
   } catch (err) {
     client.logger.error(err);
     await interaction.followUp('An error occurred while trying to warn the user.');

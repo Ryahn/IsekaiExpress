@@ -106,7 +106,7 @@ function isIncompleteScan(scan) {
 async function recordScanHistory(client, message, attachment, scan, options = {}) {
   if (typeof client.db.recordScamScanHistory !== 'function') return;
   try {
-    await client.db.recordScamScanHistory({
+    return await client.db.recordScamScanHistory({
       guildId: message.guild.id,
       channelId: message.channelId,
       channelName: message.channel?.name || null,
@@ -132,6 +132,7 @@ async function recordScanHistory(client, message, attachment, scan, options = {}
   } catch (e) {
     client.logger.warn('imageReview: failed to record scam scan history:', e);
   }
+  return null;
 }
 
 function reviewEvidenceTitle(scan, attachmentIndex, totalAttachments) {
@@ -163,6 +164,37 @@ async function queueImageReview(client, message, attachments, member, cfg, chId,
     message_content: content.slice(0, 1900),
     status: 'pending',
   });
+
+  const moderationHistoryId =
+    typeof client.db.createModerationReviewHistory === 'function'
+      ? await client.db.createModerationReviewHistory({
+        guildId: gid,
+        eventType: 'image_review',
+        subjectType: 'user',
+        subjectId: message.author.id,
+        authorId: message.author.id,
+        channelId: message.channelId,
+        sourceMessageId: message.id,
+        status: 'pending',
+        action: 'review_pending',
+        summary: hasScan
+          ? `Image scam scan ${scan.status || 'hit'} queued for review`
+          : 'Image queued for staff review',
+        metadata: {
+          pendingImageReviewId: pendingId,
+          attachmentCount: attachments.length,
+          attachmentIndex: typeof scanIndex === 'number' ? scanIndex : null,
+          scanStatus: scan?.status || null,
+          scanReasonCode: scan?.reasonCode || scan?.reason || null,
+          scanSeverity: scan?.severity || null,
+          matchedRuleIds: (scan?.matchedRules || []).map((rule) => rule.id).filter((id) => id != null),
+          matchedHashIds: (scan?.matchedHashes || []).map((hash) => hash.id).filter((id) => id != null),
+        },
+      })
+      : null;
+  if (moderationHistoryId && typeof client.db.setPendingImageReviewModerationHistoryId === 'function') {
+    await client.db.setPendingImageReviewModerationHistoryId(pendingId, moderationHistoryId);
+  }
 
   const created = message.author.createdAt;
   const joined = member.joinedAt;
@@ -248,6 +280,9 @@ async function queueImageReview(client, message, attachments, member, cfg, chId,
     });
   if (qMsg) {
     await client.db.updatePendingImageReviewQueueMessage(pendingId, qMsg.id);
+    if (moderationHistoryId && typeof client.db.updateModerationReviewHistoryQueueMessage === 'function') {
+      await client.db.updateModerationReviewHistoryQueueMessage(moderationHistoryId, qMsg.id);
+    }
     return true;
   }
   return false;

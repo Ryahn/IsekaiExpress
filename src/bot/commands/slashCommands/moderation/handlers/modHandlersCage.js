@@ -2,6 +2,28 @@ const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js'
 const moment = require('moment');
 const { requireModerator } = require('../../../../utils/permissionGuards');
 
+async function recordCageHistory(client, interaction, targetUser, action, metadata = {}, logMessageId = null) {
+  if (typeof client.db.createModerationReviewHistory !== 'function') return;
+  await client.db.createModerationReviewHistory({
+    guildId: interaction.guildId,
+    eventType: 'user_moderation',
+    subjectType: 'user',
+    subjectId: targetUser.id,
+    authorId: targetUser.id,
+    channelId: interaction.channelId,
+    queueMessageId: logMessageId,
+    status: 'handled',
+    action,
+    handledBy: interaction.user.id,
+    handledAt: new Date(),
+    summary: `User ${action.replace(/_/g, ' ')} by ${interaction.user.tag}`,
+    metadata: {
+      targetUsername: targetUser.username,
+      ...metadata,
+    },
+  });
+}
+
 async function cageApplyExecute(client, interaction) {
   // Moderation action — honor configured mod/staff roles (mirrors cage remove).
   if (!(await requireModerator(client, interaction))) return;
@@ -96,11 +118,19 @@ async function cageApplyExecute(client, interaction) {
     ])
     .setTimestamp();
 
+  let logMessageId = null;
   if (modChannel) {
-    await modChannel.send({ embeds: [modEmbed] });
+    const sent = await modChannel.send({ embeds: [modEmbed] }).catch(() => null);
+    logMessageId = sent?.id || null;
   } else {
     client.logger.error('Moderator chat channel not found!');
   }
+  await recordCageHistory(client, interaction, userToCage, 'caged', {
+    expires,
+    reason,
+    roleId: cageValue,
+    roleName: cageName.name,
+  }, logMessageId);
 }
 
 async function cageRemoveExecute(client, interaction) {
@@ -136,6 +166,9 @@ async function cageRemoveExecute(client, interaction) {
     .setColor('#00FF00');
 
   await interaction.editReply({ embeds: [embed] });
+  await recordCageHistory(client, interaction, userToUncage, 'uncaged', {
+    roleId: cageRoleId,
+  });
 }
 
 async function cageListExecute(client, interaction) {

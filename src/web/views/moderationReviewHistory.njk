@@ -1,0 +1,167 @@
+{% extends "layout.njk" %}
+
+{% block content %}
+<script type="application/json" id="moderationReviewHistoryState">{{ alpineStateJson | safe }}</script>
+<div class="container-fluid py-4" x-data="moderationReviewHistoryPanel(JSON.parse(document.getElementById('moderationReviewHistoryState').textContent))" x-init="init()">
+  <div class="row mb-4">
+    <div class="col">
+      <h2 class="mb-1">Moderation Review History</h2>
+      <p class="text-body-secondary mb-0">
+        Staff-only history for handled review queues, scam/domain enforcement, and user moderation actions.
+      </p>
+    </div>
+  </div>
+
+  <form class="card mb-4" method="get" action="/moderation-review-history" @submit.prevent="applyFilters">
+    <div class="card-body row g-3">
+      <div class="col-md-2">
+        <label class="form-label" for="range">Range</label>
+        <select class="form-select" id="range" name="range" x-model="filters.range">
+          <option value="24h">24h</option>
+          <option value="7d">7d</option>
+          <option value="30d">30d</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="event_type">Event type</label>
+        <input class="form-control" id="event_type" name="event_type" x-model.trim="filters.eventType" placeholder="invite_review">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="subject_type">Subject type</label>
+        <input class="form-control" id="subject_type" name="subject_type" x-model.trim="filters.subjectType" placeholder="user">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="status">Status</label>
+        <input class="form-control" id="status" name="status" x-model.trim="filters.status" placeholder="handled">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="action">Action</label>
+        <input class="form-control" id="action" name="action" x-model.trim="filters.action" placeholder="approved">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="handled_state">Handled</label>
+        <select class="form-select" id="handled_state" name="handled_state" x-model="filters.handledState">
+          <option value="">All</option>
+          <option value="pending">Pending</option>
+          <option value="handled">Handled</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="user_id">User ID</label>
+        <input class="form-control" id="user_id" name="user_id" x-model.trim="filters.userId">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="channel_id">Channel ID</label>
+        <input class="form-control" id="channel_id" name="channel_id" x-model.trim="filters.channelId">
+      </div>
+      <div class="col-12 d-flex align-items-center gap-3">
+        <button type="submit" class="btn btn-primary" :disabled="isLoading">
+          <span x-text="isLoading ? 'Refreshing...' : 'Apply Filters'"></span>
+        </button>
+        <span class="text-body-secondary small" x-show="isLoading" x-cloak>Refreshing history...</span>
+      </div>
+    </div>
+  </form>
+
+  <div class="row g-3 mb-4">
+    <template x-for="card in metricCards()" :key="card.label">
+      <div class="col-sm-6 col-xl-3" x-cloak>
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="text-body-secondary small" x-text="card.label"></div>
+            <div class="fs-5 fw-bold" x-text="card.value"></div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h5 class="mb-0">Event Types</h5></div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <template x-for="entry in entries(metrics.byEventType)" :key="entry[0]">
+                <tr><td x-text="entry[0]"></td><td class="text-end" x-text="entry[1]"></td></tr>
+              </template>
+              <tr x-show="!entries(metrics.byEventType).length"><td colspan="2">No data</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h5 class="mb-0">Actions</h5></div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <template x-for="entry in entries(metrics.byAction)" :key="entry[0]">
+                <tr><td x-text="entry[0]"></td><td class="text-end" x-text="entry[1]"></td></tr>
+              </template>
+              <tr x-show="!entries(metrics.byAction).length"><td colspan="2">No data</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h5 class="mb-0">Recent Moderation Events</h5></div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>When</th><th>Event</th><th>Subject</th><th>Action</th><th>Status</th>
+            <th>User</th><th>Channel</th><th>Handled by</th><th>Handled at</th><th>Summary</th><th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="event in events" :key="event.id || [event.created_at, event.event_type, event.subject_id].join(':')">
+            <tr>
+              <td x-text="valueOrDash(event.created_at)"></td>
+              <td x-text="valueOrDash(event.event_type)"></td>
+              <td x-text="subjectLabel(event)"></td>
+              <td x-text="valueOrDash(event.action)"></td>
+              <td x-text="valueOrDash(event.status)"></td>
+              <td x-text="displayWithId(event.author_display, event.author_id)"></td>
+              <td x-text="displayWithId(event.channel_display, event.channel_id)"></td>
+              <td x-text="valueOrDash(event.handled_by)"></td>
+              <td x-text="valueOrDash(event.handled_at)"></td>
+              <td x-text="valueOrDash(event.summary)"></td>
+              <td>
+                <button class="btn btn-sm btn-info" type="button" @click="openDetails(event)">View</button>
+              </td>
+            </tr>
+          </template>
+          <tr x-show="!events.length"><td colspan="11">No moderation history for this filter.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer d-flex justify-content-between">
+      <span>Page <span x-text="page.page"></span></span>
+      <button class="btn btn-link p-0" type="button" x-show="page.hasMore" @click="nextPage" :disabled="isLoading">Next page</button>
+    </div>
+  </div>
+
+  <div class="modal fade" id="moderationReviewDetailsModal" tabindex="-1" aria-labelledby="moderationReviewDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="moderationReviewDetailsModalLabel" x-text="details.title"></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <pre class="mb-0 text-body" style="white-space: pre-wrap;" x-text="details.text"></pre>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

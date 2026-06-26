@@ -401,6 +401,33 @@ async function handleAttentionModalSubmit(client, interaction) {
     source_channel_id: interaction.channelId ? String(interaction.channelId) : null,
   });
 
+  const moderationHistoryId =
+    typeof client.db.createModerationReviewHistory === 'function'
+      ? await client.db.createModerationReviewHistory({
+        guildId: interaction.guildId,
+        eventType: 'attention_request',
+        subjectType: 'user',
+        subjectId: interaction.user.id,
+        authorId: interaction.user.id,
+        channelId: interaction.channelId ? String(interaction.channelId) : null,
+        status: 'pending',
+        action: 'review_pending',
+        summary: `${lane === 'mod' ? 'Mod' : 'Staff'} attention request queued`,
+        metadata: {
+          attentionRequestId: id,
+          lane,
+          requestType,
+          threadUrl,
+          ticketUrl,
+          profileUrl,
+          reason: reason.slice(0, 500),
+        },
+      })
+      : null;
+  if (moderationHistoryId && typeof client.db.setAttentionRequestModerationHistoryId === 'function') {
+    await client.db.setAttentionRequestModerationHistoryId(id, moderationHistoryId);
+  }
+
   const channel = await guild.channels.fetch(destId).catch(() => null);
   if (!channel || !channel.isTextBased()) {
     return interaction.editReply({
@@ -455,6 +482,9 @@ async function handleAttentionModalSubmit(client, interaction) {
   }
 
   await client.db.setAttentionRequestQueueMessage(id, msg.id, channel.id);
+  if (moderationHistoryId && typeof client.db.updateModerationReviewHistoryQueueMessage === 'function') {
+    await client.db.updateModerationReviewHistoryQueueMessage(moderationHistoryId, msg.id);
+  }
 
   return interaction.editReply({ content: `Posted to ${channel}.` });
 }

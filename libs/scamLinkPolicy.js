@@ -89,6 +89,30 @@ function buildLinkEvidenceEmbed(message, matchedOn) {
     .setTimestamp();
 }
 
+async function recordDomainModerationHistory(client, message, matchedOn, action, logMessageId = null) {
+  if (typeof client.db.createModerationReviewHistory !== 'function') return;
+  await client.db.createModerationReviewHistory({
+    guildId: message.guild.id,
+    eventType: 'domain_enforcement',
+    subjectType: 'domain',
+    subjectId: String(matchedOn || '').slice(0, 128),
+    authorId: message.author.id,
+    channelId: message.channelId,
+    sourceMessageId: message.id,
+    queueMessageId: logMessageId,
+    status: 'handled',
+    action,
+    handledBy: 'bot',
+    handledAt: new Date(),
+    summary: `Blacklisted domain/link ${action.replace(/_/g, ' ')}`,
+    metadata: {
+      matchedOn,
+      userTag: message.author.tag || null,
+      content: (message.content || '').slice(0, 500),
+    },
+  });
+}
+
 /**
  * @param {import('discord.js').Client} client
  * @param {import('discord.js').Message} message
@@ -106,17 +130,20 @@ async function enforceScamLink(client, message, matchedOn, staffRoleId, modRoleI
   const embed = buildLinkEvidenceEmbed(message, matchedOn);
 
   if (isStaff || isMod) {
+    let logMessageId = null;
     if (logChannelId) {
       const ch = guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
-        await ch.send(
+        const sent = await ch.send(
           withModLogRolePing(cfg, {
             content: 'Staff/mod posted a blacklisted link — no ban applied.',
             embeds: [embed],
           }),
-        );
+        ).catch(() => null);
+        logMessageId = sent?.id || null;
       }
     }
+    await recordDomainModerationHistory(client, message, matchedOn, 'staff_log', logMessageId);
     return;
   }
 
@@ -127,21 +154,27 @@ async function enforceScamLink(client, message, matchedOn, staffRoleId, modRoleI
     });
   } catch (e) {
     client.logger.error('scamLinkPolicy enforce ban failed', e);
+    let logMessageId = null;
     if (logChannelId) {
       const ch = guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
       if (ch && ch.isTextBased()) {
-        await ch.send({ content: `Ban failed: ${e.message}`, embeds: [embed] }).catch(() => {});
+        const sent = await ch.send({ content: `Ban failed: ${e.message}`, embeds: [embed] }).catch(() => null);
+        logMessageId = sent?.id || null;
       }
     }
+    await recordDomainModerationHistory(client, message, matchedOn, 'ban_failed', logMessageId);
     return;
   }
 
+  let logMessageId = null;
   if (logChannelId) {
     const ch = guild.channels.cache.get(logChannelId) || (await guild.channels.fetch(logChannelId).catch(() => null));
     if (ch && ch.isTextBased()) {
-      await ch.send(withModLogRolePing(cfg, { embeds: [embed] })).catch(() => {});
+      const sent = await ch.send(withModLogRolePing(cfg, { embeds: [embed] })).catch(() => null);
+      logMessageId = sent?.id || null;
     }
   }
+  await recordDomainModerationHistory(client, message, matchedOn, 'banned', logMessageId);
 }
 
 /**

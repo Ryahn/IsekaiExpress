@@ -32,6 +32,11 @@ async function hasScamScanHistoryTable() {
   return db.schema.hasTable('scam_scan_history');
 }
 
+async function hasColumn(tableName, columnName) {
+  const exists = await db.schema.hasTable(tableName);
+  return exists ? db.schema.hasColumn(tableName, columnName) : false;
+}
+
 function intOrNull(value) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.round(n) : null;
@@ -227,10 +232,14 @@ module.exports = {
   },
 
   listOtherPendingImageReviewsByAuthor: async (homeGuildId, authorId, exceptId) => {
+    const columns = ['id', 'queue_message_id'];
+    if (await hasColumn('pending_image_reviews', 'moderation_history_id')) {
+      columns.push('moderation_history_id');
+    }
     return db('pending_image_reviews')
       .where({ home_guild_id: homeGuildId, author_id: authorId, status: 'pending' })
       .andWhere('id', '!=', exceptId)
-      .select('id', 'queue_message_id');
+      .select(columns);
   },
 
   resolveOtherPendingImageReviewsByAuthor: async (homeGuildId, authorId, exceptId, status, reviewedBy) => {
