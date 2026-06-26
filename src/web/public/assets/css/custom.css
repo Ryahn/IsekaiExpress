@@ -910,5 +910,5 @@ body.voidstation-theme .search-input:focus {
 }
 
 .ocrPreviewModalBody {
-  color: #9fa6bc;
+  color: #9fa6bc !important;
 }
