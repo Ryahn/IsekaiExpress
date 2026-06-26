@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const migration = require('../migrations/20260811190000_scam_scan_rules');
 const settingsMigration = require('../migrations/20260811200000_scam_scan_settings');
+const historyMigration = require('../migrations/20260811210000_scam_scan_history');
 
 function makeFakeKnex(seed = {}) {
   const state = {
@@ -67,15 +68,21 @@ function makeFakeKnex(seed = {}) {
         nullable: () => chain,
         index: () => chain,
         unique: () => chain,
+        unsigned: () => chain,
+        references: () => chain,
+        inTable: () => chain,
+        onDelete: () => chain,
       };
       const tableBuilder = {
         increments: () => chain,
         string: () => chain,
+        integer: () => chain,
         boolean: () => chain,
         text: () => chain,
         timestamp: () => chain,
         index: () => chain,
         unique: () => chain,
+        foreign: () => chain,
       };
       build(tableBuilder);
     },
@@ -134,4 +141,17 @@ test('scam scan settings migration creates and drops settings table', async () =
 
   await settingsMigration.down(knex);
   assert.equal(knex._state.tables.has('scam_scan_settings'), false);
+});
+
+test('scam scan history migration creates and drops history tables', async () => {
+  const knex = makeFakeKnex();
+
+  await historyMigration.up(knex);
+  await historyMigration.up(knex);
+  assert.equal(knex._state.tables.has('scam_scan_history'), true);
+  assert.equal(knex._state.tables.has('scam_scan_history_rule_hits'), true);
+
+  await historyMigration.down(knex);
+  assert.equal(knex._state.tables.has('scam_scan_history_rule_hits'), false);
+  assert.equal(knex._state.tables.has('scam_scan_history'), false);
 });

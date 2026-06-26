@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const axios = require('axios');
+const sharp = require('sharp');
 
 const scamImageScan = require('../libs/scamImageScan');
 const { buildScamImageEvidenceEmbed } = require('../libs/scamImageScan');
@@ -8,6 +9,22 @@ const { processImageReview } = require('../libs/imageReview');
 
 const STAFF_ROLE = 'staff-role';
 const MOD_ROLE = 'mod-role';
+
+async function makePng(width = 120, height = 80) {
+  return sharp({ create: { width, height, channels: 3, background: { r: 255, g: 255, b: 255 } } })
+    .png()
+    .toBuffer();
+}
+
+function setFakeOcr({ text = '', confidence = 90, neverResolve = false } = {}) {
+  scamImageScan._internal.setOcrWorkerForTest({
+    recognize: () => {
+      if (neverResolve) return new Promise(() => {});
+      return Promise.resolve({ data: { text, confidence } });
+    },
+    terminate: async () => {},
+  });
+}
 
 function fakeRoleCache(roleIds = []) {
   const set = new Set(roleIds);
@@ -83,6 +100,7 @@ function fakeMessage({ member, attachmentSize, attachmentUrl = 'https://cdn.exam
 
 function fakeClient(overrides = {}) {
   const logs = [];
+  const history = [];
   return {
     config: { roles: { staff: STAFF_ROLE, mod: MOD_ROLE } },
     logger: {
@@ -104,10 +122,12 @@ function fakeClient(overrides = {}) {
       updatePendingImageReviewQueueMessage: async () => {},
       getImageTextBlacklistRows: async () => [],
       getImageHashBlacklistRows: async () => [],
+      recordScamScanHistory: async (entry) => history.push(entry),
       query: {},
       ...overrides.db,
     },
     _logs: logs,
+    _history: history,
   };
 }
 
@@ -128,6 +148,8 @@ test('failed/skipped scan queues review for non-staff non-mod users', async () =
   assert.equal(message._sent.length, 1, 'review queue message should be posted');
   assert.match(message._sent[0].embeds[0].data.title, /skipped/i);
   assert.equal(message._bans.length, 0, 'scan failure must not auto-ban');
+  assert.equal(client._history[0].status, 'skipped');
+  assert.equal(client._history[0].manualReviewQueued, true);
 });
 
 test('scanner disabled queues review when manual review fallback is enabled', async () => {
@@ -150,6 +172,8 @@ test('scanner disabled queues review when manual review fallback is enabled', as
   assert.equal(message._deleted.length, 1);
   assert.equal(message._sent.length, 1);
   assert.match(message._sent[0].embeds[0].data.fields.find((f) => f.name === 'Reason').value, /scanner_disabled/);
+  assert.equal(client._history[0].reasonCode, 'scanner_disabled');
+  assert.equal(client._history[0].manualReviewQueued, true);
 });
 
 test('manual review fallback disabled does not queue incomplete scans and logs clearly', async () => {
@@ -172,6 +196,8 @@ test('manual review fallback disabled does not queue incomplete scans and logs c
   assert.equal(message._deleted.length, 0);
   assert.equal(message._sent.length, 0);
   assert.ok(client._logs.some((entry) => entry.join(' ').includes('manual review fallback disabled')));
+  assert.equal(client._history[0].reasonCode, 'scanner_disabled');
+  assert.equal(client._history[0].manualReviewQueued, false);
 });
 
 test('staff timeout logs clearly but does not ban or queue', async () => {
@@ -194,9 +220,93 @@ test('staff timeout logs clearly but does not ban or queue', async () => {
       client._logs.some((entry) => entry.join(' ').includes('trusted uploader') && entry.join(' ').includes('timeout')),
       'trusted timeout should be logged clearly',
     );
+    assert.equal(client._history[0].status, 'timeout');
+    assert.equal(client._history[0].isStaffOrMod, true);
+    assert.equal(client._history[0].manualReviewQueued, false);
   } finally {
     axios.get = originalGet;
   }
+});
+
+test('clean scan records history without queueing review', async () => {
+  const originalGet = axios.get;
+  try {
+    const png = await makePng();
+    axios.get = async () => ({ data: png, headers: { 'content-length': String(png.length) } });
+    setFakeOcr({ text: 'ordinary screenshot', confidence: 90 });
+    const client = fakeClient();
+    const message = fakeMessage({
+      member: fakeMember(),
+      attachmentSize: png.length,
+    });
+
+    await processImageReview(client, message, STAFF_ROLE, MOD_ROLE);
+
+    assert.equal(message._sent.length, 0);
+    assert.equal(client._history.length, 1);
+    assert.equal(client._history[0].status, 'clean');
+    assert.equal(client._history[0].manualReviewQueued, false);
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
+test('scan hit records history with matched rules and queued review state', async () => {
+  const originalGet = axios.get;
+  try {
+    const png = await makePng();
+    axios.get = async () => ({ data: png, headers: { 'content-length': String(png.length) } });
+    setFakeOcr({ text: 'visit porewin casino', confidence: 90 });
+    const client = fakeClient({
+      db: {
+        getEnabledScamScanRules: async () => [{
+          id: 7,
+          type: 'keyword',
+          pattern: 'porewin',
+          normalized_pattern: 'porewin',
+          severity: 'review',
+          enabled: true,
+        }],
+      },
+    });
+    const message = fakeMessage({
+      member: fakeMember(),
+      attachmentSize: png.length,
+    });
+
+    await processImageReview(client, message, STAFF_ROLE, MOD_ROLE);
+
+    assert.equal(message._sent.length, 1);
+    assert.equal(client._history[0].status, 'hit');
+    assert.equal(client._history[0].matchedRules[0].id, 7);
+    assert.equal(client._history[0].manualReviewRequired, true);
+    assert.equal(client._history[0].manualReviewQueued, true);
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
+test('history write failure does not break moderation flow', async () => {
+  const client = fakeClient({
+    db: {
+      getScamScanSettings: async () => ({
+        ...scamImageScan.DEFAULT_SCAM_SCAN_SETTINGS,
+        scam_scan_enabled: false,
+      }),
+      recordScamScanHistory: async () => {
+        throw new Error('history write failed');
+      },
+    },
+  });
+  const message = fakeMessage({
+    member: fakeMember(),
+    attachmentSize: 1024,
+  });
+
+  await processImageReview(client, message, STAFF_ROLE, MOD_ROLE);
+
+  assert.equal(message._sent.length, 1);
+  assert.ok(client._logs.some((entry) => entry.join(' ').includes('failed to record scam scan history')));
 });
 
 test('scan evidence embed titles distinguish hit, timeout, failed, and skipped', () => {

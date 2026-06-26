@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const db = require('../knex');
 const {
   normalizeScamScanText,
@@ -17,6 +18,7 @@ const logger = require('../../libs/logger');
 
 let scamScanSettingsCache = { t: 0, settings: null };
 let scamScanSettingsInvalidRowsWarnedAt = 0;
+const SCAM_SCAN_HISTORY_RETENTION_DAYS = 30;
 
 async function hasScamScanRulesTable() {
   return db.schema.hasTable('scam_scan_rules');
@@ -24,6 +26,92 @@ async function hasScamScanRulesTable() {
 
 async function hasScamScanSettingsTable() {
   return db.schema.hasTable('scam_scan_settings');
+}
+
+async function hasScamScanHistoryTable() {
+  return db.schema.hasTable('scam_scan_history');
+}
+
+function intOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+function boolValue(value) {
+  return value ? 1 : 0;
+}
+
+function hashAttachmentUrl(url) {
+  if (!url) return null;
+  return crypto.createHash('sha256').update(String(url)).digest('hex');
+}
+
+function encodeArray(values) {
+  const cleaned = (values || [])
+    .filter((value) => value != null && value !== '')
+    .map((value) => String(value));
+  return cleaned.length ? JSON.stringify(cleaned) : null;
+}
+
+function decodeArray(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function compactScanHistoryRow(row) {
+  return {
+    ...row,
+    matched_rule_ids: decodeArray(row.matched_rule_ids),
+    matched_rule_types: decodeArray(row.matched_rule_types),
+    matched_hash_ids: decodeArray(row.matched_hash_ids),
+  };
+}
+
+function normalizeHistoryFilters(filters = {}) {
+  const page = Math.max(1, parseInt(filters.page || 1, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit || 25, 10) || 25));
+  return {
+    page,
+    limit,
+    status: filters.status || null,
+    reasonCode: filters.reasonCode || null,
+    failureStage: filters.failureStage || null,
+    manualReviewQueued: filters.manualReviewQueued == null ? null : Boolean(filters.manualReviewQueued),
+    from: filters.from || null,
+    to: filters.to || null,
+  };
+}
+
+function applyHistoryFilters(query, filters = {}) {
+  const f = normalizeHistoryFilters(filters);
+  if (f.status) query.where({ status: f.status });
+  if (f.reasonCode) query.where({ reason_code: f.reasonCode });
+  if (f.failureStage) query.where({ failure_stage: f.failureStage });
+  if (f.manualReviewQueued != null) query.where({ manual_review_queued: boolValue(f.manualReviewQueued) });
+  if (f.from) query.where('created_at', '>=', f.from);
+  if (f.to) query.where('created_at', '<=', f.to);
+  return query;
+}
+
+function average(values) {
+  const nums = values.filter((value) => typeof value === 'number' && Number.isFinite(value));
+  if (!nums.length) return null;
+  return Math.round(nums.reduce((sum, value) => sum + value, 0) / nums.length);
+}
+
+function maxOrNull(values) {
+  const nums = values.filter((value) => typeof value === 'number' && Number.isFinite(value));
+  return nums.length ? Math.max(...nums) : null;
+}
+
+function increment(map, key) {
+  const k = key || 'unknown';
+  map[k] = (map[k] || 0) + 1;
 }
 
 async function legacyImageTextRows() {
@@ -306,6 +394,177 @@ module.exports = {
   testScamScanRulesAgainstText: async (text) => {
     const rows = await module.exports.getEnabledScamScanRules();
     return testScamScanRulesAgainstTextRows(text, rows);
+  },
+
+  recordScamScanHistory: async (entry) => {
+    try {
+      if (!(await hasScamScanHistoryTable())) return null;
+      const matchedRules = entry.matchedRules || [];
+      const matchedHashes = entry.matchedHashes || [];
+      const row = {
+        guild_id: entry.guildId,
+        channel_id: entry.channelId,
+        message_id: entry.messageId,
+        attachment_id: entry.attachmentId || null,
+        attachment_index: intOrNull(entry.attachmentIndex) || 0,
+        attachment_url_hash: hashAttachmentUrl(entry.attachmentUrl),
+        user_id: entry.userId,
+        is_staff_or_mod: boolValue(entry.isStaffOrMod),
+        status: entry.status || 'failed',
+        reason_code: entry.reasonCode || null,
+        failure_stage: entry.failureStage || null,
+        manual_review_required: boolValue(entry.manualReviewRequired),
+        manual_review_queued: boolValue(entry.manualReviewQueued),
+        matched_rule_ids: encodeArray(matchedRules.map((rule) => rule.id)),
+        matched_rule_types: encodeArray(matchedRules.map((rule) => rule.type)),
+        matched_hash_ids: encodeArray(matchedHashes.map((hash) => hash.id)),
+        severity: entry.severity || null,
+        image_bytes: intOrNull(entry.image?.bytes),
+        image_width: intOrNull(entry.image?.width),
+        image_height: intOrNull(entry.image?.height),
+        image_format: entry.image?.format || null,
+        timing_download_ms: intOrNull(entry.timings?.downloadMs),
+        timing_preprocess_ms: intOrNull(entry.timings?.preprocessMs),
+        timing_ocr_ms: intOrNull(entry.timings?.ocrMs),
+        timing_rules_ms: intOrNull(entry.timings?.rulesMs),
+        timing_phash_ms: intOrNull(entry.timings?.phashMs),
+        timing_total_ms: intOrNull(entry.timings?.totalMs),
+        ocr_preview: entry.ocrPreview ? String(entry.ocrPreview).slice(0, 500) : null,
+        created_at: db.fn.now(),
+      };
+
+      return await db.transaction(async (trx) => {
+        const res = await trx('scam_scan_history').insert(row);
+        let id = Array.isArray(res) ? res[0] : res;
+        if (id == null) {
+          const r = await trx.raw('SELECT LAST_INSERT_ID() AS id');
+          const row0 = r && r[0];
+          id = (Array.isArray(row0) ? row0[0] : row0)?.id;
+        }
+        const historyId = Number(id);
+        if (historyId && matchedRules.length) {
+          for (const rule of matchedRules) {
+            await trx('scam_scan_history_rule_hits').insert({
+              scan_history_id: historyId,
+              rule_id: rule.id == null ? null : String(rule.id),
+              rule_type: rule.type || null,
+              severity: rule.severity || entry.severity || null,
+              created_at: trx.fn.now(),
+            });
+          }
+        }
+        return historyId || null;
+      });
+    } catch (e) {
+      logger.warn('Failed to record scam scan history:', e);
+      return null;
+    }
+  },
+
+  getScamScanHistoryPage: async (filters = {}) => {
+    if (!(await hasScamScanHistoryTable())) {
+      return { page: 1, limit: 25, rows: [], hasMore: false };
+    }
+    const f = normalizeHistoryFilters(filters);
+    const rows = await applyHistoryFilters(db('scam_scan_history').select('*'), f)
+      .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc')
+      .limit(f.limit + 1)
+      .offset((f.page - 1) * f.limit);
+    return {
+      page: f.page,
+      limit: f.limit,
+      rows: rows.slice(0, f.limit).map(compactScanHistoryRow),
+      hasMore: rows.length > f.limit,
+    };
+  },
+
+  getScamScanMetrics: async (filters = {}) => {
+    if (!(await hasScamScanHistoryTable())) {
+      return {
+        total: 0,
+        byStatus: {},
+        byReasonCode: {},
+        byFailureStage: {},
+        manualReviewQueued: 0,
+        averages: {},
+        max: {},
+        slowRecent: [],
+      };
+    }
+    const rows = await applyHistoryFilters(db('scam_scan_history').select('*'), filters)
+      .orderBy('created_at', 'desc');
+    const byStatus = {};
+    const byReasonCode = {};
+    const byFailureStage = {};
+    for (const row of rows) {
+      increment(byStatus, row.status);
+      increment(byReasonCode, row.reason_code);
+      increment(byFailureStage, row.failure_stage);
+    }
+    const timing = (key) => rows.map((row) => intOrNull(row[key])).filter((value) => value != null);
+    return {
+      total: rows.length,
+      byStatus,
+      byReasonCode,
+      byFailureStage,
+      manualReviewQueued: rows.filter((row) => Boolean(row.manual_review_queued)).length,
+      averages: {
+        totalMs: average(timing('timing_total_ms')),
+        downloadMs: average(timing('timing_download_ms')),
+        preprocessMs: average(timing('timing_preprocess_ms')),
+        ocrMs: average(timing('timing_ocr_ms')),
+        rulesMs: average(timing('timing_rules_ms')),
+        phashMs: average(timing('timing_phash_ms')),
+      },
+      max: {
+        totalMs: maxOrNull(timing('timing_total_ms')),
+        downloadMs: maxOrNull(timing('timing_download_ms')),
+        preprocessMs: maxOrNull(timing('timing_preprocess_ms')),
+        ocrMs: maxOrNull(timing('timing_ocr_ms')),
+        rulesMs: maxOrNull(timing('timing_rules_ms')),
+        phashMs: maxOrNull(timing('timing_phash_ms')),
+      },
+      slowRecent: rows
+        .slice()
+        .sort((a, b) => (Number(b.timing_total_ms) || 0) - (Number(a.timing_total_ms) || 0))
+        .slice(0, 10)
+        .map(compactScanHistoryRow),
+    };
+  },
+
+  getScamScanRuleHitMetrics: async (filters = {}) => {
+    if (!(await hasScamScanHistoryTable()) || !(await db.schema.hasTable('scam_scan_history_rule_hits'))) {
+      return [];
+    }
+    const f = normalizeHistoryFilters(filters);
+    let query = db('scam_scan_history_rule_hits').select('*');
+    if (f.from) query = query.where('created_at', '>=', f.from);
+    if (f.to) query = query.where('created_at', '<=', f.to);
+    const rows = await query.orderBy('created_at', 'desc');
+    const grouped = new Map();
+    for (const row of rows) {
+      const key = `${row.rule_id || 'unknown'}:${row.rule_type || 'unknown'}:${row.severity || ''}`;
+      const existing = grouped.get(key) || {
+        rule_id: row.rule_id || null,
+        rule_type: row.rule_type || null,
+        severity: row.severity || null,
+        hit_count: 0,
+        latest_hit_at: row.created_at,
+      };
+      existing.hit_count += 1;
+      if (String(row.created_at) > String(existing.latest_hit_at)) existing.latest_hit_at = row.created_at;
+      grouped.set(key, existing);
+    }
+    return [...grouped.values()].sort((a, b) => b.hit_count - a.hit_count).slice(0, 50);
+  },
+
+  deleteOldScamScanHistory: async ({ olderThanDays = SCAM_SCAN_HISTORY_RETENTION_DAYS } = {}) => {
+    if (!(await hasScamScanHistoryTable())) return 0;
+    const days = Math.max(1, parseInt(olderThanDays, 10) || SCAM_SCAN_HISTORY_RETENTION_DAYS);
+    return db('scam_scan_history')
+      .where('created_at', '<', db.raw('DATE_SUB(NOW(), INTERVAL ? DAY)', [days]))
+      .delete();
   },
 
   getScamScanSettingDefinitions: () => SCAM_SCAN_SETTING_DEFINITIONS,

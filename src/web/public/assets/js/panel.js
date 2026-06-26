@@ -521,6 +521,135 @@
 				},
 			};
 		});
+
+		window.Alpine.data('scamScanHistoryPanel', function(config) {
+			function initialFilters(filters) {
+				const source = filters || {};
+				return {
+					range: source.range || '24h',
+					status: source.status || '',
+					reasonCode: source.reasonCode || '',
+					failureStage: source.failureStage || '',
+					manualReviewQueued: source.manualReviewQueued == null ? '' : String(source.manualReviewQueued),
+					page: Number(source.page || 1),
+				};
+			}
+
+			return {
+				filters: initialFilters(config.filters),
+				metrics: config.metrics || {},
+				ruleHits: config.ruleHits || [],
+				scans: config.scans || [],
+				page: config.page || { page: 1, limit: 25, hasMore: false },
+				isLoading: false,
+				isRefreshing: false,
+				pollTimer: null,
+
+				init: function() {
+					const self = this;
+					this.pollTimer = window.setInterval(function() {
+						self.refresh({ silent: true });
+					}, pollIntervalMs);
+				},
+
+				destroy: function() {
+					if (this.pollTimer) {
+						window.clearInterval(this.pollTimer);
+						this.pollTimer = null;
+					}
+				},
+
+				metricCards: function() {
+					const byStatus = this.metrics.byStatus || {};
+					const averages = this.metrics.averages || {};
+					return [
+						{ label: 'Total scans', value: this.valueOrDash(this.metrics.total) },
+						{ label: 'Hits', value: this.valueOrDash(byStatus.hit) },
+						{ label: 'Clean', value: this.valueOrDash(byStatus.clean) },
+						{ label: 'Timeouts', value: this.valueOrDash(byStatus.timeout) },
+						{ label: 'Failed', value: this.valueOrDash(byStatus.failed) },
+						{ label: 'Skipped', value: this.valueOrDash(byStatus.skipped) },
+						{ label: 'Manual reviews queued', value: this.valueOrDash(this.metrics.manualReviewQueued) },
+						{ label: 'Avg total ms', value: this.valueOrDash(averages.totalMs) },
+						{ label: 'Avg OCR ms', value: this.valueOrDash(averages.ocrMs) },
+						{ label: 'Avg pHash ms', value: this.valueOrDash(averages.phashMs) },
+					];
+				},
+
+				entries: function(value) {
+					return Object.entries(value || {});
+				},
+
+				valueOrDash: function(value) {
+					return value == null || value === '' ? '-' : value;
+				},
+
+				reviewLabel: function(scan) {
+					if (scan.manual_review_queued) return 'queued';
+					if (scan.manual_review_required) return 'required';
+					return '-';
+				},
+
+				imageLabel: function(scan) {
+					return scan.image_width && scan.image_height ? scan.image_width + 'x' + scan.image_height : '-';
+				},
+
+				ruleIdsLabel: function(scan) {
+					return Array.isArray(scan.matched_rule_ids) && scan.matched_rule_ids.length
+						? scan.matched_rule_ids.join(', ')
+						: '-';
+				},
+
+				queryString: function() {
+					const params = new URLSearchParams();
+					params.set('range', this.filters.range || '24h');
+					if (this.filters.status) params.set('status', this.filters.status);
+					if (this.filters.reasonCode) params.set('reason_code', this.filters.reasonCode);
+					if (this.filters.failureStage) params.set('failure_stage', this.filters.failureStage);
+					if (this.filters.manualReviewQueued !== '') params.set('manual_review_queued', this.filters.manualReviewQueued);
+					if (Number(this.filters.page) > 1) params.set('page', String(this.filters.page));
+					return params.toString();
+				},
+
+				applyFilters: async function() {
+					this.filters.page = 1;
+					await this.refresh({ silent: false, updateUrl: true });
+				},
+
+				nextPage: async function() {
+					this.filters.page = Number(this.page.page || this.filters.page || 1) + 1;
+					await this.refresh({ silent: false, updateUrl: true });
+				},
+
+				refresh: async function(options) {
+					const settings = options || {};
+					if (this.isRefreshing) return;
+					this.isRefreshing = true;
+					this.isLoading = true;
+					try {
+						const query = this.queryString();
+						const response = await requestJson('/scam-scan-history' + (query ? '?' + query : ''));
+						this.filters = initialFilters(response.filters);
+						this.metrics = response.metrics || {};
+						this.ruleHits = response.ruleHits || [];
+						this.scans = response.scans || [];
+						this.page = response.page || { page: 1, limit: 25, hasMore: false };
+						if (settings.updateUrl && window.history && window.history.replaceState) {
+							window.history.replaceState(null, '', '/scam-scan-history' + (query ? '?' + query : ''));
+						}
+					}
+					catch (error) {
+						if (!settings.silent) {
+							notify('error', error.message || 'Failed to refresh scam scan history.');
+						}
+					}
+					finally {
+						this.isLoading = false;
+						this.isRefreshing = false;
+					}
+				},
+			};
+		});
 	}
 
 	function formatUnixTimestamp(timestamp) {

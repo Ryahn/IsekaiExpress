@@ -1,0 +1,210 @@
+{% extends "layout.njk" %}
+
+{% block content %}
+<script type="application/json" id="scamScanHistoryState">{{ alpineStateJson | safe }}</script>
+<div class="container-fluid py-4" x-data="scamScanHistoryPanel(JSON.parse(document.getElementById('scamScanHistoryState').textContent))" x-init="init()">
+  <div class="row mb-4">
+    <div class="col">
+      <h2 class="mb-1">Scam Scan History</h2>
+      <p class="text-body-secondary mb-0">
+        Staff-only scan outcomes, timings, review fallbacks, and rule-hit metrics. OCR preview is truncated and attachment URLs are not shown.
+      </p>
+    </div>
+  </div>
+
+  <form class="card mb-4" method="get" action="/scam-scan-history" @submit.prevent="applyFilters">
+    <div class="card-body row g-3">
+      <div class="col-md-2">
+        <label class="form-label" for="range">Range</label>
+        <select class="form-select" id="range" name="range" x-model="filters.range">
+          <option value="24h">24h</option>
+          <option value="7d">7d</option>
+          <option value="30d">30d</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="status">Status</label>
+        <select class="form-select" id="status" name="status" x-model="filters.status">
+          <option value="">All</option>
+          <option value="clean">clean</option>
+          <option value="hit">hit</option>
+          <option value="timeout">timeout</option>
+          <option value="failed">failed</option>
+          <option value="skipped">skipped</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="reason_code">Reason code</label>
+        <input class="form-control" id="reason_code" name="reason_code" x-model.trim="filters.reasonCode">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="failure_stage">Failure stage</label>
+        <input class="form-control" id="failure_stage" name="failure_stage" x-model.trim="filters.failureStage">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="manual_review_queued">Review queued</label>
+        <select class="form-select" id="manual_review_queued" name="manual_review_queued" x-model="filters.manualReviewQueued">
+          <option value="">All</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+      <div class="col-12 d-flex align-items-center gap-3">
+        <button type="submit" class="btn btn-primary" :disabled="isLoading">
+          <span x-text="isLoading ? 'Refreshing...' : 'Apply Filters'"></span>
+        </button>
+        <span class="text-body-secondary small" x-show="isLoading" x-cloak>Refreshing history...</span>
+      </div>
+    </div>
+  </form>
+
+  <div class="row g-3 mb-4">
+    <template x-for="card in metricCards()" :key="card.label">
+      <div class="col-sm-6 col-xl-3" x-cloak>
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="text-body-secondary small" x-text="card.label"></div>
+            <div class="fs-5 fw-bold" x-text="card.value"></div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header"><h5 class="mb-0">Status Counts</h5></div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <template x-for="entry in entries(metrics.byStatus)" :key="entry[0]">
+                <tr><td x-text="entry[0]"></td><td class="text-end" x-text="entry[1]"></td></tr>
+              </template>
+              <tr x-show="!entries(metrics.byStatus).length"><td colspan="2">No data</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header"><h5 class="mb-0">Reason Codes</h5></div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <template x-for="entry in entries(metrics.byReasonCode)" :key="entry[0]">
+                <tr><td x-text="entry[0]"></td><td class="text-end" x-text="entry[1]"></td></tr>
+              </template>
+              <tr x-show="!entries(metrics.byReasonCode).length"><td colspan="2">No data</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header"><h5 class="mb-0">Failure Stages</h5></div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <template x-for="entry in entries(metrics.byFailureStage)" :key="entry[0]">
+                <tr><td x-text="entry[0]"></td><td class="text-end" x-text="entry[1]"></td></tr>
+              </template>
+              <tr x-show="!entries(metrics.byFailureStage).length"><td colspan="2">No data</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-xl-6">
+      <div class="card h-100">
+        <div class="card-header"><h5 class="mb-0">Rule Hits</h5></div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Rule</th><th>Type</th><th>Severity</th><th>Hits</th><th>Latest</th></tr></thead>
+            <tbody>
+              <template x-for="hit in ruleHits" :key="[hit.rule_id, hit.rule_type, hit.severity].join(':')">
+                <tr>
+                  <td x-text="valueOrDash(hit.rule_id)"></td>
+                  <td x-text="valueOrDash(hit.rule_type)"></td>
+                  <td x-text="valueOrDash(hit.severity)"></td>
+                  <td x-text="valueOrDash(hit.hit_count)"></td>
+                  <td x-text="valueOrDash(hit.latest_hit_at)"></td>
+                </tr>
+              </template>
+              <tr x-show="!ruleHits.length"><td colspan="5">No rule hits</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-6">
+      <div class="card h-100">
+        <div class="card-header"><h5 class="mb-0">Slow Recent Scans</h5></div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>When</th><th>Status</th><th>Total</th><th>OCR</th><th>pHash</th><th>Reason</th></tr></thead>
+            <tbody>
+              <template x-for="scan in (metrics.slowRecent || [])" :key="scan.id || [scan.created_at, scan.message_id, scan.attachment_index].join(':')">
+                <tr>
+                  <td x-text="valueOrDash(scan.created_at)"></td>
+                  <td x-text="valueOrDash(scan.status)"></td>
+                  <td x-text="valueOrDash(scan.timing_total_ms)"></td>
+                  <td x-text="valueOrDash(scan.timing_ocr_ms)"></td>
+                  <td x-text="valueOrDash(scan.timing_phash_ms)"></td>
+                  <td x-text="valueOrDash(scan.reason_code)"></td>
+                </tr>
+              </template>
+              <tr x-show="!(metrics.slowRecent || []).length"><td colspan="6">No slow scans</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h5 class="mb-0">Recent Scans</h5></div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>When</th><th>Status</th><th>Reason</th><th>Stage</th><th>User</th><th>Channel</th>
+            <th>Message</th><th>Att</th><th>Review</th><th>Total</th><th>OCR</th><th>pHash</th><th>Rules</th><th>Image</th><th>OCR preview</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="scan in scans" :key="scan.id || [scan.created_at, scan.message_id, scan.attachment_index].join(':')">
+            <tr>
+              <td x-text="valueOrDash(scan.created_at)"></td>
+              <td x-text="valueOrDash(scan.status)"></td>
+              <td x-text="valueOrDash(scan.reason_code)"></td>
+              <td x-text="valueOrDash(scan.failure_stage)"></td>
+              <td x-text="valueOrDash(scan.user_id)"></td>
+              <td x-text="valueOrDash(scan.channel_id)"></td>
+              <td x-text="valueOrDash(scan.message_id)"></td>
+              <td x-text="valueOrDash(scan.attachment_index)"></td>
+              <td x-text="reviewLabel(scan)"></td>
+              <td x-text="valueOrDash(scan.timing_total_ms)"></td>
+              <td x-text="valueOrDash(scan.timing_ocr_ms)"></td>
+              <td x-text="valueOrDash(scan.timing_phash_ms)"></td>
+              <td x-text="ruleIdsLabel(scan)"></td>
+              <td x-text="imageLabel(scan)"></td>
+              <td x-text="valueOrDash(scan.ocr_preview)"></td>
+            </tr>
+          </template>
+          <tr x-show="!scans.length"><td colspan="15">No scan history for this filter.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer d-flex justify-content-between">
+      <span>Page <span x-text="page.page"></span></span>
+      <button class="btn btn-link p-0" type="button" x-show="page.hasMore" @click="nextPage" :disabled="isLoading">Next page</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

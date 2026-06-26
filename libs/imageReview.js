@@ -103,6 +103,35 @@ function isIncompleteScan(scan) {
   return scan && ['timeout', 'failed', 'skipped'].includes(scan.status);
 }
 
+async function recordScanHistory(client, message, attachment, scan, options = {}) {
+  if (typeof client.db.recordScamScanHistory !== 'function') return;
+  try {
+    await client.db.recordScamScanHistory({
+      guildId: message.guild.id,
+      channelId: message.channelId,
+      messageId: message.id,
+      attachmentId: attachment.id || null,
+      attachmentIndex: options.attachmentIndex || 0,
+      attachmentUrl: attachment.url,
+      userId: message.author.id,
+      isStaffOrMod: Boolean(options.isStaffOrMod),
+      status: scan.status,
+      reasonCode: scan.reasonCode || scan.reason || null,
+      failureStage: scan.failureStage || null,
+      manualReviewRequired: Boolean(options.manualReviewRequired),
+      manualReviewQueued: Boolean(options.manualReviewQueued),
+      matchedRules: scan.matchedRules || [],
+      matchedHashes: scan.matchedHashes || [],
+      severity: scan.severity || null,
+      image: scan.image || {},
+      timings: scan.timings || {},
+      ocrPreview: scan.ocrPreview || scan.ocrSnippet || null,
+    });
+  } catch (e) {
+    client.logger.warn('imageReview: failed to record scam scan history:', e);
+  }
+}
+
 function reviewEvidenceTitle(scan, attachmentIndex, totalAttachments) {
   const suffix = totalAttachments > 1 ? ` (attachment ${attachmentIndex + 1}/${totalAttachments})` : '';
   if (!scan) return `Image flagged for review${suffix}`;
@@ -197,13 +226,13 @@ async function queueImageReview(client, message, attachments, member, cfg, chId,
   }
   if (!reviewCh) {
     client.logger.warn(`imageReview: review channel ${chId} not found in guild ${message.guild.id}`);
-    return;
+    return false;
   }
   if (!reviewCh.isTextBased()) {
     client.logger.warn(
       `imageReview: review channel ${describeChannel(reviewCh, chId)} is not text-based; cannot queue`,
     );
-    return;
+    return false;
   }
 
   const row = buildImageReviewComponents(pendingId);
@@ -217,7 +246,9 @@ async function queueImageReview(client, message, attachments, member, cfg, chId,
     });
   if (qMsg) {
     await client.db.updatePendingImageReviewQueueMessage(pendingId, qMsg.id);
+    return true;
   }
+  return false;
 }
 
 /**
@@ -264,6 +295,7 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
   let cleanScansCompleted = 0;
   let firstIncompleteScan = null;
   let firstIncompleteScanIndex = 0;
+  const incompleteScans = [];
   for (let i = 0; i < attachments.length; i++) {
     const att = attachments[i];
     try {
@@ -274,6 +306,12 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
       if (scan.hit) {
         if (isStaff || isMod) {
           await enforceScamImage(client, message, staffRoleId, modRoleId, scan, i, att.url);
+          await recordScanHistory(client, message, att, scan, {
+            attachmentIndex: i,
+            isStaffOrMod: true,
+            manualReviewRequired: false,
+            manualReviewQueued: false,
+          });
           return;
         }
         const shouldQueue = needsQueue || scan.severity === 'review';
@@ -282,15 +320,34 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
             client.logger.warn(
               `imageReview: scan hit (severity=${scan.severity}) but no review channel; skipping action`,
             );
+            await recordScanHistory(client, message, att, scan, {
+              attachmentIndex: i,
+              isStaffOrMod: false,
+              manualReviewRequired: true,
+              manualReviewQueued: false,
+            });
             return;
           }
-          await queueImageReview(client, message, attachments, member, cfg, chId, { scan, scanIndex: i });
+          const queued = await queueImageReview(client, message, attachments, member, cfg, chId, { scan, scanIndex: i });
+          await recordScanHistory(client, message, att, scan, {
+            attachmentIndex: i,
+            isStaffOrMod: false,
+            manualReviewRequired: true,
+            manualReviewQueued: queued,
+          });
           return;
         }
         await enforceScamImage(client, message, staffRoleId, modRoleId, scan, i, att.url);
+        await recordScanHistory(client, message, att, scan, {
+          attachmentIndex: i,
+          isStaffOrMod: false,
+          manualReviewRequired: false,
+          manualReviewQueued: false,
+        });
         return;
       }
       if (isIncompleteScan(scan)) {
+        incompleteScans.push({ scan, attachment: att, index: i });
         if (manualReviewOnFailure && !firstIncompleteScan) {
           firstIncompleteScan = scan;
           firstIncompleteScanIndex = i;
@@ -309,6 +366,12 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
         continue;
       }
       cleanScansCompleted += 1;
+      await recordScanHistory(client, message, att, scan, {
+        attachmentIndex: i,
+        isStaffOrMod: isStaff || isMod,
+        manualReviewRequired: false,
+        manualReviewQueued: false,
+      });
     } catch (e) {
       if (e?.code === 'OVERSIZE_IMAGE') {
         client.logger.info(`imageReview attachment ${i + 1} skipped: ${e.message}`);
@@ -323,6 +386,14 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
   }
 
   if (isStaff || isMod) {
+    for (const item of incompleteScans) {
+      await recordScanHistory(client, message, item.attachment, item.scan, {
+        attachmentIndex: item.index,
+        isStaffOrMod: true,
+        manualReviewRequired: false,
+        manualReviewQueued: false,
+      });
+    }
     return;
   }
 
@@ -330,6 +401,14 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
     client.logger.warn(
       `imageReview: ${attachments.length - cleanScansCompleted} attachment scan(s) incomplete; manual review fallback disabled`,
     );
+    for (const item of incompleteScans) {
+      await recordScanHistory(client, message, item.attachment, item.scan, {
+        attachmentIndex: item.index,
+        isStaffOrMod: false,
+        manualReviewRequired: false,
+        manualReviewQueued: false,
+      });
+    }
     return;
   }
 
@@ -337,12 +416,28 @@ async function processImageReview(client, message, staffRoleId, modRoleId) {
     client.logger.warn(
       `imageReview: ${attachments.length - cleanScansCompleted} attachment scan(s) failed but no review channel`,
     );
+    for (const item of incompleteScans) {
+      await recordScanHistory(client, message, item.attachment, item.scan, {
+        attachmentIndex: item.index,
+        isStaffOrMod: false,
+        manualReviewRequired: true,
+        manualReviewQueued: false,
+      });
+    }
     return;
   }
 
-  await queueImageReview(client, message, attachments, member, cfg, chId, firstIncompleteScan
+  const queued = await queueImageReview(client, message, attachments, member, cfg, chId, firstIncompleteScan
     ? { scan: firstIncompleteScan, scanIndex: firstIncompleteScanIndex }
     : undefined);
+  for (const item of incompleteScans) {
+    await recordScanHistory(client, message, item.attachment, item.scan, {
+      attachmentIndex: item.index,
+      isStaffOrMod: false,
+      manualReviewRequired: true,
+      manualReviewQueued: queued,
+    });
+  }
 }
 
 module.exports = {
@@ -352,4 +447,5 @@ module.exports = {
   shouldFlagImageForReview,
   reviewChannelId,
   buildImageReviewComponents,
+  recordScanHistory,
 };
