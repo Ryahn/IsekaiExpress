@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  isProtectedInteractionReply,
   isBulkDeleteEligible,
   matchesPruneFilters,
   matchesPruneType,
@@ -42,4 +43,10 @@ test('rejects messages older than Discord bulk-delete limit', () => {
 
   assert.equal(isBulkDeleteEligible(message({ createdTimestamp: thirteenDaysOld }), now), true);
   assert.equal(isBulkDeleteEligible(message({ createdTimestamp: fourteenDaysOld }), now), false);
+});
+
+test('protects the deferred interaction reply from pruning', () => {
+  assert.equal(isProtectedInteractionReply(message({ id: 'reply-1' }), 'reply-1'), true);
+  assert.equal(isProtectedInteractionReply(message({ id: 'other-message' }), 'reply-1'), false);
+  assert.equal(isProtectedInteractionReply(message({ id: 'reply-1' }), null), false);
 });

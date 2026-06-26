@@ -33,9 +33,33 @@ function matchesPruneFilters(message, type, targetUser) {
   return message.author?.id === targetUser.id;
 }
 
+function isProtectedInteractionReply(message, interactionReplyId) {
+  return Boolean(interactionReplyId && message.id === interactionReplyId);
+}
+
 async function resolveBotMember(interaction) {
   if (interaction.guild.members.me) return interaction.guild.members.me;
   return interaction.guild.members.fetchMe();
+}
+
+async function fetchInteractionReplyId(interaction, channel) {
+  if (channel.id !== interaction.channelId) return null;
+
+  try {
+    const reply = await interaction.fetchReply();
+    return reply?.id ?? null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function sendPruneReply(interaction, payload) {
+  try {
+    await interaction.editReply(payload);
+  } catch (error) {
+    if (error?.code !== 10008) throw error;
+    await interaction.followUp(payload);
+  }
 }
 
 async function requireManageMessages(interaction, channel, member, subject) {
@@ -87,17 +111,19 @@ async function pruneExecute(client, interaction) {
     botMember = await resolveBotMember(interaction);
   } catch (error) {
     client.logger.error('Could not resolve bot member for prune command:', error);
-    await interaction.editReply('Could not verify my channel permissions. Please try again.');
+    await sendPruneReply(interaction, 'Could not verify my channel permissions. Please try again.');
     return;
   }
 
   if (!(await requireManageMessages(interaction, channel, botMember, 'I'))) return;
 
   try {
+    const interactionReplyId = await fetchInteractionReplyId(interaction, channel);
     const fetchedMessages = await channel.messages.fetch({ limit: FETCH_LIMIT });
     const now = Date.now();
     let skippedOldCount = 0;
     const matchingMessages = fetchedMessages.filter((message) => {
+      if (isProtectedInteractionReply(message, interactionReplyId)) return false;
       if (!matchesPruneFilters(message, type, targetUser)) return false;
       if (isBulkDeleteEligible(message, now)) return true;
       skippedOldCount += 1;
@@ -110,12 +136,13 @@ async function pruneExecute(client, interaction) {
         skippedOldCount > 0
           ? ` ${skippedOldCount} matching message${skippedOldCount === 1 ? ' was' : 's were'} too old for Discord bulk delete.`
           : '';
-      await interaction.editReply(`No matching recent messages found in ${channel}.${oldMessageNote}`);
+      await sendPruneReply(interaction, `No matching recent messages found in ${channel}.${oldMessageNote}`);
       return;
     }
 
     const deletedMessages = await channel.bulkDelete(messagesToDelete, true);
-    await interaction.editReply(
+    await sendPruneReply(
+      interaction,
       formatPruneSummary({
         deletedCount: deletedMessages.size,
         requestedCount,
@@ -128,12 +155,13 @@ async function pruneExecute(client, interaction) {
     );
   } catch (error) {
     client.logger.error('Error executing prune command:', error);
-    await interaction.editReply('An error occurred while pruning messages.');
+    await sendPruneReply(interaction, 'An error occurred while pruning messages.');
   }
 }
 
 module.exports = {
   pruneExecute,
+  isProtectedInteractionReply,
   matchesPruneFilters,
   matchesPruneType,
   isBulkDeleteEligible,
