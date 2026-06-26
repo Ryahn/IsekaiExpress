@@ -7,11 +7,12 @@ const RedisStore = require("connect-redis").default;
 const { createClient } = require("redis");
 const bodyParser = require("body-parser");
 const path = require('path');
-const { getDiscordAvatarUrl, timestamp, logAudit, checkSessionExpiration } = require('../../libs/utils');
+const { getDiscordAvatarUrl, timestamp, logAudit, checkSessionExpiration, daysToSeconds } = require('../../libs/utils');
 const nunjucks = require('nunjucks');
 const config = require('../../config');
 const logger = require('../../libs/logger');
 const appDb = require('../../database/db');
+const requireCsrf = require('./middleware/requireCsrf');
 
 logger.startup('Web Panel is starting....')
 
@@ -93,6 +94,7 @@ app.use(
       httpOnly: true,
       sameSite: 'lax', // allows the cookie on the top-level OAuth callback redirect
       secure: config.session.cookieSecure,
+      maxAge: daysToSeconds(config.session.expires),
     },
   })
 );
@@ -139,6 +141,8 @@ app.use((req, res, next) => {
   }
   return checkSessionExpiration(req, res, next);
 });
+
+app.use(requireCsrf);
 
 app.use((req, res, next) => {
   const shouldAudit =
@@ -324,6 +328,10 @@ app.use((err, req, res, next) => {
 async function start() {
   if (!config.session.secret) {
     logger.error('Missing required environment variable: SESSION_SECRET. Set it in .env (see .env.example).');
+    process.exit(1);
+  }
+  if (process.env.NODE_ENV === 'production' && !config.session.cookieSecure) {
+    logger.error('SESSION_COOKIE_SECURE must be true when NODE_ENV=production.');
     process.exit(1);
   }
   try {

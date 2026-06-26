@@ -10,6 +10,8 @@ const rest = new REST({ version: "10" }).setToken(
 const router = express.Router();
 const { daysToSeconds, generateCsrfToken } = require("../../../libs/utils");
 const db = require("../../../database/db");
+const requireCsrf = require('../middleware/requireCsrf');
+router.use(requireCsrf);
 passport.use(
 	new Strategy(
 	  {
@@ -34,6 +36,7 @@ router.get(
       const member = await rest.get(Routes.guildMember(config.discord.guildId, userId));
 
       req.session.roles = member.roles;
+      req.session.rolesValidatedAt = Date.now();
       req.session.loggedin = true;
       const { email, accessToken, ...safeUser } = req.user;
       req.session.user = safeUser;
@@ -61,10 +64,6 @@ router.get(
 );
 
 router.post('/logout', (req, res) => {
-	if (req.body._csrf !== req.session.csrf) {
-		console.error('Invalid CSRF token');
-		return res.status(403).json({ message: 'Invalid CSRF token' });
-	}
 	res.clearCookie('connect.sid'); 
 	req.session.destroy((err) => {
         if (err) {

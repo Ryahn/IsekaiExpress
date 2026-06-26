@@ -6,8 +6,32 @@ const { timestamp, getDiscordAvatarUrl } = require("../../../libs/utils");
 const db = require("../../../database/db");
 const crypto = require('crypto');
 const config = require('../../../config');
+const requireCsrf = require('../middleware/requireCsrf');
+router.use(requireCsrf);
 
 const slashCommandsPath = path.join(__dirname, '../../bot/commands/slashCommands');
+const COMMAND_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const COMMAND_CONTENT_MAX_LENGTH = 4000;
+const COMMAND_ID_PATTERN = /^\d+$/;
+
+function parseCommandInput(body) {
+	const name = String(body.name || '').trim();
+	const content = String(body.content || '').trim();
+	if (!COMMAND_NAME_PATTERN.test(name)) {
+		return {
+			ok: false,
+			message: 'Command name must be 1-64 characters and contain only letters, numbers, underscores, or hyphens.',
+		};
+	}
+	if (!content || content.length > COMMAND_CONTENT_MAX_LENGTH) {
+		return { ok: false, message: 'Command content must be 1-4000 characters.' };
+	}
+	return { ok: true, name, content };
+}
+
+function validateCommandId(id) {
+	return COMMAND_ID_PATTERN.test(String(id || ''));
+}
 
 function getSlashCommandFiles(dir) {
 	if (!fs.existsSync(dir)) {
@@ -70,18 +94,15 @@ router.get("/list", async (req, res) => {
 });
 
 router.post("/add", async (req, res) => {
-	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
-		return res.status(403).json({ message: 'Invalid CSRF token' });
-	}
-
 	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to add commands' });
 	}
 
-	const { name, content } = req.body;
-	if (!name || !content) {
-		return res.status(400).json({ message: 'Missing required fields' });
+	const parsed = parseCommandInput(req.body);
+	if (!parsed.ok) {
+		return res.status(400).json({ message: parsed.message });
 	}
+	const { name, content } = parsed;
 
 	let hash = crypto.createHash('md5').update(name.toLowerCase()).digest('hex');
 	const ts = timestamp();
@@ -98,18 +119,18 @@ router.post("/add", async (req, res) => {
 });
 
 router.post("/edit/:id", async (req, res) => {
-	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
-		return res.status(403).json({ message: 'Invalid CSRF token' });
-	}
-
 	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to edit commands' });
 	}
-
-	const { name, content } = req.body;
-	if (!name || !content) {
-		return res.status(400).json({ message: 'Missing required fields' });
+	if (!validateCommandId(req.params.id)) {
+		return res.status(400).json({ message: 'Invalid command id' });
 	}
+
+	const parsed = parseCommandInput(req.body);
+	if (!parsed.ok) {
+		return res.status(400).json({ message: parsed.message });
+	}
+	const { name, content } = parsed;
 
 	let hash = crypto.createHash('md5').update(name.toLowerCase()).digest('hex');
 	const data = [name, hash, content, req.session.user.id, timestamp(), req.params.id];
@@ -125,12 +146,11 @@ router.post("/edit/:id", async (req, res) => {
 });
 
 router.post("/delete/:id", async(req, res) => {
-	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
-		return res.status(403).json({ message: 'Invalid CSRF token' });
-	}
-
 	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
 		return res.status(403).json({ message: 'You do not have permission to delete commands' });
+	}
+	if (!validateCommandId(req.params.id)) {
+		return res.status(400).json({ message: 'Invalid command id' });
 	}
 
 	try {

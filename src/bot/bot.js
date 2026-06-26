@@ -121,7 +121,6 @@ let shuttingDown = false;
 
 	client.on('shardDisconnect', (_event, shardId) => {
 		logger.warn(`Bot shard ${shardId} disconnected from Discord`);
-		client.handleReconnect();
 	});
 
 	// Log client errors; avoid reconnecting on every generic `error` (can misfire and double-login / loop).
@@ -146,7 +145,6 @@ let shuttingDown = false;
 	client.on('debug', (info) => {
 		if (info.includes('Session invalidated') || info.includes('Connection reset by peer')) {
 			logger.warn('Session invalidated or connection reset');
-			client.handleReconnect();
 		}
 	});
 

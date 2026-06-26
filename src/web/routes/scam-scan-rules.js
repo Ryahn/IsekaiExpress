@@ -3,6 +3,8 @@ const router = express.Router();
 const { getDiscordAvatarUrl } = require('../../../libs/utils');
 const db = require('../../../database/db');
 const config = require('../../../config');
+const requireCsrf = require('../middleware/requireCsrf');
+router.use(requireCsrf);
 
 function canEdit(req) {
 	return Boolean(req.session?.roles?.includes(config.roles.staff));
@@ -20,6 +22,10 @@ function baseView(req, extra = {}) {
 		csrfToken: req.session.csrf,
 		...extra,
 	};
+}
+
+function hasValidCsrf(req) {
+	return Boolean(req.session?.csrf && req.session.csrf === req.body?._csrf);
 }
 
 async function buildPageState(req, extra = {}) {
@@ -53,14 +59,6 @@ async function buildPageState(req, extra = {}) {
 	};
 }
 
-function validateCsrf(req, res) {
-	if (!req.session.csrf || req.session.csrf !== req.body._csrf) {
-		res.status(403);
-		return false;
-	}
-	return true;
-}
-
 router.get('/', async (req, res, next) => {
 	try {
 		if (!canEdit(req)) return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
@@ -82,7 +80,7 @@ router.get('/', async (req, res, next) => {
 
 router.post('/save', async (req, res, next) => {
 	try {
-		if (!validateCsrf(req, res)) {
+		if (!hasValidCsrf(req)) {
 			const state = await buildPageState(req, {
 				rulesText: String(req.body.rules || ''),
 				errors: ['Invalid CSRF token.'],
@@ -90,7 +88,7 @@ router.post('/save', async (req, res, next) => {
 			if (wantsJson(req)) {
 				return res.status(403).json({ message: 'Invalid CSRF token.', errors: state.errors, rulesText: state.rulesText, ruleCount: state.ruleCount });
 			}
-			return res.render('scamScanRules', state);
+			return res.status(403).render('scamScanRules', state);
 		}
 		if (!canEdit(req)) return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
 
@@ -131,7 +129,7 @@ router.post('/save', async (req, res, next) => {
 
 router.post('/test', async (req, res, next) => {
 	try {
-		if (!validateCsrf(req, res)) {
+		if (!hasValidCsrf(req)) {
 			const state = await buildPageState(req, {
 				rulesText: String(req.body.rules || ''),
 				testText: String(req.body.test_text || ''),
