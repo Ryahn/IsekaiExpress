@@ -420,7 +420,7 @@ async function handleAttentionModalSubmit(client, interaction) {
           threadUrl,
           ticketUrl,
           profileUrl,
-          reason: reason.slice(0, 500),
+          reason: reason ? reason.slice(0, 500) : null,
         },
       })
       : null;

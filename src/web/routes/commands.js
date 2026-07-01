@@ -2,9 +2,8 @@ const express = require("express");
 const router = express.Router();
 const fs = require('node:fs');
 const path = require('node:path');
-const { timestamp, getDiscordAvatarUrl } = require("../../../libs/utils");
+const { getDiscordAvatarUrl } = require("../../../libs/utils");
 const db = require("../../../database/db");
-const crypto = require('crypto');
 const config = require('../../../config');
 const requireCsrf = require('../middleware/requireCsrf');
 router.use(requireCsrf);
@@ -102,15 +101,15 @@ router.post("/add", async (req, res) => {
 	if (!parsed.ok) {
 		return res.status(400).json({ message: parsed.message });
 	}
-	const { name, content } = parsed;
-
-	let hash = crypto.createHash('md5').update(name.toLowerCase()).digest('hex');
-	const ts = timestamp();
-	const data = [hash, name, content, req.session.user.id, req.session.user.id, ts, ts];
-
 	try {
-		await db.sql('INSERT INTO commands (hash, name, content, created_by, updated_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', data);
-		await db.bumpCustomCommandsRevision();
+		const result = await db.createCustomCommand({
+			name: parsed.name,
+			content: parsed.content,
+			userId: req.session.user.id,
+		});
+		if (!result.ok) {
+			return res.status(400).json({ message: result.message || 'Could not create command' });
+		}
 		res.status(201).json({ message: 'Command created' });
 	} catch (error) {
 		console.error(error);
@@ -130,14 +129,17 @@ router.post("/edit/:id", async (req, res) => {
 	if (!parsed.ok) {
 		return res.status(400).json({ message: parsed.message });
 	}
-	const { name, content } = parsed;
-
-	let hash = crypto.createHash('md5').update(name.toLowerCase()).digest('hex');
-	const data = [name, hash, content, req.session.user.id, timestamp(), req.params.id];
-
 	try {
-		await db.sql('UPDATE commands SET name = ?, hash = ?, content = ?, updated_by = ?, updated_at = ? WHERE id = ?', data);
-		await db.bumpCustomCommandsRevision();
+		const result = await db.updateCustomCommand({
+			identifier: req.params.id,
+			name: parsed.name,
+			content: parsed.content,
+			userId: req.session.user.id,
+		});
+		if (!result.ok) {
+			const status = result.reason === 'not_found' ? 404 : 400;
+			return res.status(status).json({ message: result.message || 'Could not update command' });
+		}
 		res.status(200).json({ message: 'Command updated' });
 	} catch (error) {
 		console.error(error);
@@ -154,8 +156,11 @@ router.post("/delete/:id", async(req, res) => {
 	}
 
 	try {
-		await db.sql('DELETE FROM commands WHERE id = ?', [req.params.id]);
-		await db.bumpCustomCommandsRevision();
+		const result = await db.deleteCustomCommand(req.params.id);
+		if (!result.ok) {
+			const status = result.reason === 'not_found' ? 404 : 400;
+			return res.status(status).json({ message: result.message || 'Could not delete command' });
+		}
 		res.status(200).json({ message: 'Command deleted' });
 	} catch (error) {
 		console.error(error);

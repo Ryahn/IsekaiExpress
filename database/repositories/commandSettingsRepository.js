@@ -37,6 +37,21 @@ function parseCustomCommandIdentifier(identifier) {
   return /^\d+$/.test(value) ? { id: value } : { name: value };
 }
 
+function isDuplicateKeyError(error) {
+  return error?.code === 'ER_DUP_ENTRY' || error?.errno === 1062;
+}
+
+function duplicateResult(command = null) {
+  return {
+    ok: false,
+    reason: 'duplicate',
+    message: command?.name
+      ? `A custom command named "${command.name}" already exists.`
+      : 'A custom command with that name already exists.',
+    command,
+  };
+}
+
 /**
  * Command channel settings + custom command content + app_state revision tracking.
  * Tables: command_settings, commands, app_state.
@@ -70,10 +85,10 @@ const self = (module.exports = {
     return db.table('commands').select('hash', 'content', 'usage').where({ hash: commandNameHash }).first();
   },
 
-  ensureAppStateRow: async () => {
-    const row = await db.table('app_state').where({ id: 1 }).first();
+  ensureAppStateRow: async (trx = db) => {
+    const row = await trx.table('app_state').where({ id: 1 }).first();
     if (!row) {
-      await db.table('app_state').insert({ id: 1, custom_commands_revision: 0 });
+      await trx.table('app_state').insert({ id: 1, custom_commands_revision: 0 });
     }
   },
 
@@ -83,9 +98,9 @@ const self = (module.exports = {
     return row ? Number(row.custom_commands_revision) : 0;
   },
 
-  bumpCustomCommandsRevision: async () => {
-    await self.ensureAppStateRow();
-    await db.table('app_state').where({ id: 1 }).increment('custom_commands_revision', 1);
+  bumpCustomCommandsRevision: async (trx = db) => {
+    await self.ensureAppStateRow(trx);
+    await trx.table('app_state').where({ id: 1 }).increment('custom_commands_revision', 1);
   },
 
   getAllCustomCommandsForCache: async () => {
@@ -112,13 +127,13 @@ const self = (module.exports = {
   getCustomCommandHash,
   parseCustomCommandIdentifier,
 
-  getCustomCommandByIdentifier: async (identifier) => {
+  getCustomCommandByIdentifier: async (identifier, trx = db) => {
     const parsed = parseCustomCommandIdentifier(identifier);
     if (!parsed) return null;
     if (parsed.id) {
-      return db.table('commands').select('*').where({ id: parsed.id }).first();
+      return trx.table('commands').select('*').where({ id: parsed.id }).first();
     }
-    return db
+    return trx
       .table('commands')
       .select('*')
       .whereRaw('LOWER(name) = ?', [normalizeCustomCommandName(parsed.name).toLowerCase()])
@@ -137,40 +152,38 @@ const self = (module.exports = {
     }
 
     const hash = getCustomCommandHash(nameCheck.name);
-    const duplicate = await db.table('commands').select('id', 'name').where({ hash }).first();
-    if (duplicate) {
-      return {
-        ok: false,
-        reason: 'duplicate',
-        message: `A custom command named "${duplicate.name}" already exists.`,
-        command: duplicate,
-      };
+    try {
+      return await db.transaction(async (trx) => {
+        const duplicate = await trx.table('commands').select('id', 'name').where({ hash }).first();
+        if (duplicate) {
+          return duplicateResult(duplicate);
+        }
+
+        const ts = nowUnix();
+        const [id] = await trx.table('commands').insert({
+          hash,
+          name: nameCheck.name,
+          content: normalizedContent,
+          created_by: userId,
+          updated_by: userId,
+          created_at: ts,
+          updated_at: ts,
+        });
+        await self.bumpCustomCommandsRevision(trx);
+
+        return {
+          ok: true,
+          command: await trx.table('commands').select('*').where({ id }).first(),
+        };
+      });
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) throw error;
+      const duplicate = await db.table('commands').select('id', 'name').where({ hash }).first();
+      return duplicateResult(duplicate);
     }
-
-    const ts = nowUnix();
-    const [id] = await db.table('commands').insert({
-      hash,
-      name: nameCheck.name,
-      content: normalizedContent,
-      created_by: userId,
-      updated_by: userId,
-      created_at: ts,
-      updated_at: ts,
-    });
-    await self.bumpCustomCommandsRevision();
-
-    return {
-      ok: true,
-      command: await db.table('commands').select('*').where({ id }).first(),
-    };
   },
 
   updateCustomCommand: async ({ identifier, name, content, userId }) => {
-    const existing = await self.getCustomCommandByIdentifier(identifier);
-    if (!existing) {
-      return { ok: false, reason: 'not_found', message: 'Custom command not found.' };
-    }
-
     const nameCheck = validateCustomCommandName(name);
     if (!nameCheck.ok) {
       return { ok: false, reason: 'validation', message: nameCheck.message };
@@ -182,40 +195,50 @@ const self = (module.exports = {
     }
 
     const hash = getCustomCommandHash(nameCheck.name);
-    const duplicate = await db.table('commands').select('id', 'name').where({ hash }).first();
-    if (duplicate && String(duplicate.id) !== String(existing.id)) {
-      return {
-        ok: false,
-        reason: 'duplicate',
-        message: `A custom command named "${duplicate.name}" already exists.`,
-        command: duplicate,
-      };
+    try {
+      return await db.transaction(async (trx) => {
+        const existing = await self.getCustomCommandByIdentifier(identifier, trx);
+        if (!existing) {
+          return { ok: false, reason: 'not_found', message: 'Custom command not found.' };
+        }
+
+        const duplicate = await trx.table('commands').select('id', 'name').where({ hash }).first();
+        if (duplicate && String(duplicate.id) !== String(existing.id)) {
+          return duplicateResult(duplicate);
+        }
+
+        await trx.table('commands').where({ id: existing.id }).update({
+          name: nameCheck.name,
+          hash,
+          content: normalizedContent,
+          updated_by: userId,
+          updated_at: nowUnix(),
+        });
+        await self.bumpCustomCommandsRevision(trx);
+
+        return {
+          ok: true,
+          command: await trx.table('commands').select('*').where({ id: existing.id }).first(),
+          previous: existing,
+        };
+      });
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) throw error;
+      const duplicate = await db.table('commands').select('id', 'name').where({ hash }).first();
+      return duplicateResult(duplicate);
     }
-
-    await db.table('commands').where({ id: existing.id }).update({
-      name: nameCheck.name,
-      hash,
-      content: normalizedContent,
-      updated_by: userId,
-      updated_at: nowUnix(),
-    });
-    await self.bumpCustomCommandsRevision();
-
-    return {
-      ok: true,
-      command: await db.table('commands').select('*').where({ id: existing.id }).first(),
-      previous: existing,
-    };
   },
 
   deleteCustomCommand: async (identifier) => {
-    const existing = await self.getCustomCommandByIdentifier(identifier);
-    if (!existing) {
-      return { ok: false, reason: 'not_found', message: 'Custom command not found.' };
-    }
+    return db.transaction(async (trx) => {
+      const existing = await self.getCustomCommandByIdentifier(identifier, trx);
+      if (!existing) {
+        return { ok: false, reason: 'not_found', message: 'Custom command not found.' };
+      }
 
-    await db.table('commands').where({ id: existing.id }).delete();
-    await self.bumpCustomCommandsRevision();
-    return { ok: true, command: existing };
+      await trx.table('commands').where({ id: existing.id }).delete();
+      await self.bumpCustomCommandsRevision(trx);
+      return { ok: true, command: existing };
+    });
   },
 });
