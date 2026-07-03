@@ -6,6 +6,7 @@ const {
 } = require('discord.js');
 const { hasGuildAdminOrStaffRole, hasGuildAdminOrModRole } = require('../src/bot/utils/guildPrivileges');
 const { withModLogRolePing } = require('./modLogNotify');
+const { recordModerationAction } = require('./moderationActionLog');
 
 const INVITE_REGEX =
   /(?:https?:\/\/)?(?:www\.)?(?:discord(?:app)?\.com\/invite\/|discord\.gg\/|dsc\.gg\/)([a-zA-Z0-9-]+)/gi;
@@ -217,6 +218,19 @@ async function enforceBlacklist(client, message, matchedOn, staffRoleId, modRole
     await guild.members.ban(message.author.id, {
       deleteMessageSeconds: 3600,
       reason: `Blacklisted invite: ${matchedOn}`,
+    });
+    await recordModerationAction(client, {
+      guild,
+      actionType: 'ban',
+      targetUserId: message.author.id,
+      targetUser: message.author,
+      targetMember: member,
+      moderatorUserId: client.user?.id,
+      channelId: message.channelId,
+      message,
+      reason: `Blacklisted invite: ${matchedOn}`,
+      source: 'bot_auto',
+      metadata: { matchedOn },
     });
   } catch (e) {
     client.logger.error('invitePolicy enforce ban failed', e);

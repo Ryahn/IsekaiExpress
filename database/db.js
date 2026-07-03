@@ -14,6 +14,7 @@ const commandSettingsRepository = require('./repositories/commandSettingsReposit
 const imageReviewRepository = require('./repositories/imageReviewRepository');
 const attentionRepository = require('./repositories/attentionRepository');
 const moderationReviewHistoryRepository = require('./repositories/moderationReviewHistoryRepository');
+const moderationActionLogRepository = require('./repositories/moderationActionLogRepository');
 
 module.exports = {
   query: db,
@@ -33,4 +34,5 @@ module.exports = {
   ...imageReviewRepository,
   ...attentionRepository,
   ...moderationReviewHistoryRepository,
+  ...moderationActionLogRepository,
 };

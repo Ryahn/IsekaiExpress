@@ -1,6 +1,7 @@
 const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const moment = require('moment');
 const { requireModerator } = require('../../../../utils/permissionGuards');
+const { recordModerationAction } = require('../../../../../../libs/moderationActionLog');
 
 async function recordCageHistory(client, interaction, targetUser, action, metadata = {}, logMessageId = null) {
   if (typeof client.db.createModerationReviewHistory !== 'function') return;
@@ -131,6 +132,23 @@ async function cageApplyExecute(client, interaction) {
     roleId: cageValue,
     roleName: cageName.name,
   }, logMessageId);
+  await recordModerationAction(client, {
+    guild: interaction.guild,
+    actionType: 'caged',
+    targetUserId: userToCage.id,
+    targetUser: userToCage,
+    targetMember: guildMember,
+    moderatorUserId: interaction.user.id,
+    moderatorUser: interaction.user,
+    channelId: interaction.channelId,
+    reason,
+    source: 'bot_command',
+    metadata: {
+      expires,
+      roleId: cageValue,
+      roleName: cageName.name,
+    },
+  });
 }
 
 async function cageRemoveExecute(client, interaction) {
@@ -168,6 +186,22 @@ async function cageRemoveExecute(client, interaction) {
   await interaction.editReply({ embeds: [embed] });
   await recordCageHistory(client, interaction, userToUncage, 'uncaged', {
     roleId: cageRoleId,
+  });
+  await recordModerationAction(client, {
+    guild: interaction.guild,
+    actionType: 'uncaged',
+    targetUserId: userToUncage.id,
+    targetUser: userToUncage,
+    targetMember: guildMember,
+    moderatorUserId: interaction.user.id,
+    moderatorUser: interaction.user,
+    channelId: interaction.channelId,
+    reason: 'Cage removed via /mod cage',
+    source: 'bot_command',
+    metadata: {
+      roleId: cageRoleId,
+      roleName: cageRole?.name || null,
+    },
   });
 }
 

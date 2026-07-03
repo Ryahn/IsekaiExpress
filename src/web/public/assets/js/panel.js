@@ -810,6 +810,159 @@
 				},
 			};
 		});
+
+		window.Alpine.data('moderationActionLogsPanel', function(config) {
+			function initialFilters(filters) {
+				const source = filters || {};
+				return {
+					range: source.range || '24h',
+					actionType: source.actionType || '',
+					targetUserId: source.targetUserId || '',
+					moderatorUserId: source.moderatorUserId || '',
+					search: source.search || '',
+					page: Number(source.page || 1),
+				};
+			}
+
+			return {
+				filters: initialFilters(config.filters),
+				metrics: config.metrics || {},
+				logs: config.logs || [],
+				page: config.page || { page: 1, limit: 25, hasMore: false },
+				actionTypes: config.actionTypes || [],
+				details: { title: 'Moderation action details', text: '' },
+				isLoading: false,
+				isRefreshing: false,
+				pollTimer: null,
+
+				init: function() {
+					const self = this;
+					this.pollTimer = window.setInterval(function() {
+						self.refresh({ silent: true });
+					}, pollIntervalMs);
+				},
+
+				destroy: function() {
+					if (this.pollTimer) {
+						window.clearInterval(this.pollTimer);
+						this.pollTimer = null;
+					}
+				},
+
+				metricCards: function() {
+					return [
+						{ label: 'Total actions', value: this.valueOrDash(this.metrics.total) },
+						{ label: 'Action types', value: this.entries(this.metrics.byActionType).length },
+					];
+				},
+
+				entries: function(value) {
+					return Object.entries(value || {});
+				},
+
+				valueOrDash: function(value) {
+					return value == null || value === '' ? '-' : value;
+				},
+
+				formatDate: function(value) {
+					if (!value) return '-';
+					const date = new Date(value);
+					return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+				},
+
+				previewContent: function(value) {
+					if (!value) return '-';
+					const text = String(value);
+					return text.length > 80 ? text.slice(0, 80) + '…' : text;
+				},
+
+				actionBadgeClass: function(actionType) {
+					const map = {
+						ban: 'text-bg-danger',
+						unban: 'text-bg-success',
+						kick: 'text-bg-warning',
+						timeout: 'text-bg-warning',
+						timeout_remove: 'text-bg-info',
+						caged: 'text-bg-secondary',
+						uncaged: 'text-bg-info',
+						uncaged_expired: 'text-bg-light text-dark',
+					};
+					return map[actionType] || 'text-bg-secondary';
+				},
+
+				openDetails: function(log) {
+					this.details = {
+						title: log.action_type ? 'Details for ' + log.action_type : 'Moderation action details',
+						text: JSON.stringify({
+							id: log.id,
+							created_at: log.created_at,
+							action_type: log.action_type,
+							source: log.source,
+							target_user_id: log.target_user_id,
+							target_username: log.target_username,
+							target_display_name: log.target_display_name,
+							moderator_user_id: log.moderator_user_id,
+							moderator_username: log.moderator_username,
+							moderator_display_name: log.moderator_display_name,
+							channel_id: log.channel_id,
+							source_message_id: log.source_message_id,
+							reason: log.reason,
+							deleted_content: log.deleted_content,
+							audit_log_entry_id: log.audit_log_entry_id,
+							metadata: log.metadata || {},
+						}, null, 2),
+					};
+					showBootstrapModal('#moderationActionDetailsModal');
+				},
+
+				queryString: function() {
+					const params = new URLSearchParams();
+					params.set('range', this.filters.range || '24h');
+					if (this.filters.actionType) params.set('action_type', this.filters.actionType);
+					if (this.filters.targetUserId) params.set('target_user_id', this.filters.targetUserId);
+					if (this.filters.moderatorUserId) params.set('moderator_user_id', this.filters.moderatorUserId);
+					if (this.filters.search) params.set('search', this.filters.search);
+					if (Number(this.filters.page) > 1) params.set('page', String(this.filters.page));
+					return params.toString();
+				},
+
+				applyFilters: async function() {
+					this.filters.page = 1;
+					await this.refresh({ silent: false, updateUrl: true });
+				},
+
+				nextPage: async function() {
+					this.filters.page = Number(this.page.page || this.filters.page || 1) + 1;
+					await this.refresh({ silent: false, updateUrl: true });
+				},
+
+				refresh: async function(options) {
+					const settings = options || {};
+					if (this.isRefreshing) return;
+					this.isRefreshing = true;
+					this.isLoading = true;
+					try {
+						const query = this.queryString();
+						const response = await requestJson('/moderation-action-logs' + (query ? '?' + query : ''));
+						this.filters = initialFilters(response.filters);
+						this.metrics = response.metrics || {};
+						this.logs = response.logs || [];
+						this.page = response.page || { page: 1, limit: 25, hasMore: false };
+						this.actionTypes = response.actionTypes || this.actionTypes;
+						if (settings.updateUrl && window.history && window.history.replaceState) {
+							window.history.replaceState(null, '', '/moderation-action-logs' + (query ? '?' + query : ''));
+						}
+					} catch (error) {
+						if (!settings.silent) {
+							notify('error', error.message || 'Failed to refresh moderation action logs.');
+						}
+					} finally {
+						this.isLoading = false;
+						this.isRefreshing = false;
+					}
+				},
+			};
+		});
 	}
 
 	function formatUnixTimestamp(timestamp) {

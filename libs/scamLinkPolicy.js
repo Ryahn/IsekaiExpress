@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 const { hasGuildAdminOrStaffRole, hasGuildAdminOrModRole } = require('../src/bot/utils/guildPrivileges');
 const { normalizeBlacklistedLinkHost } = require('./blacklistedLinkHostNormalize');
 const { withModLogRolePing } = require('./modLogNotify');
+const { recordModerationAction } = require('./moderationActionLog');
 
 const URL_RE = /https?:\/\/[^\s<>"'`)]+/gi;
 const DEDUPE_MS = 5 * 60 * 1000;
@@ -151,6 +152,19 @@ async function enforceScamLink(client, message, matchedOn, staffRoleId, modRoleI
     await guild.members.ban(message.author.id, {
       deleteMessageSeconds: 3600,
       reason: `Blacklisted link: ${matchedOn}`,
+    });
+    await recordModerationAction(client, {
+      guild,
+      actionType: 'ban',
+      targetUserId: message.author.id,
+      targetUser: message.author,
+      targetMember: member,
+      moderatorUserId: client.user?.id,
+      channelId: message.channelId,
+      message,
+      reason: `Blacklisted link: ${matchedOn}`,
+      source: 'bot_auto',
+      metadata: { matchedOn },
     });
   } catch (e) {
     client.logger.error('scamLinkPolicy enforce ban failed', e);

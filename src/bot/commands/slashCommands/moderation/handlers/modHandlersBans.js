@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const moment = require('moment');
 const { requireModerator } = require('../../../../utils/permissionGuards');
+const { recordModerationAction } = require('../../../../../../libs/moderationActionLog');
 
 async function getBans(db, page) {
   const itemsPerPage = 5;
@@ -72,6 +73,17 @@ async function unbanExecute(client, interaction) {
 
     await client.db.removeBan(userId);
     await interaction.guild.members.unban(userId);
+    await recordModerationAction(client, {
+      guild: interaction.guild,
+      actionType: 'unban',
+      targetUserId: userId,
+      targetUser: targetUser || undefined,
+      moderatorUserId: interaction.user.id,
+      moderatorUser: interaction.user,
+      channelId: interaction.channelId,
+      reason: 'Unbanned via /mod bans unban',
+      source: 'bot_command',
+    });
     await interaction.followUp(`User <@${userId}> has been unbanned.`);
   } catch (err) {
     client.logger.error(err);

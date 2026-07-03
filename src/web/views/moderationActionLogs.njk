@@ -1,0 +1,146 @@
+{% extends "layout.njk" %}
+
+{% block content %}
+<script type="application/json" id="moderationActionLogsState">{{ alpineStateJson | safe }}</script>
+<div class="container-fluid py-4" x-data="moderationActionLogsPanel(JSON.parse(document.getElementById('moderationActionLogsState').textContent))" x-init="init()">
+  <div class="row mb-4">
+    <div class="col">
+      <h2 class="mb-1">Moderation Action Logs</h2>
+      <p class="text-body-secondary mb-0">
+        Staff-only audit trail for bans, kicks, timeouts, cage actions, and related moderation events.
+      </p>
+    </div>
+  </div>
+
+  <form class="card mb-4" method="get" action="/moderation-action-logs" @submit.prevent="applyFilters">
+    <div class="card-body row g-3">
+      <div class="col-md-2">
+        <label class="form-label" for="range">Range</label>
+        <select class="form-select" id="range" name="range" x-model="filters.range">
+          <option value="24h">24h</option>
+          <option value="7d">7d</option>
+          <option value="30d">30d</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="action_type">Action</label>
+        <select class="form-select" id="action_type" name="action_type" x-model="filters.actionType">
+          <option value="">All</option>
+          <template x-for="type in actionTypes" :key="type">
+            <option :value="type" x-text="type"></option>
+          </template>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="target_user_id">Target user ID</label>
+        <input class="form-control" id="target_user_id" name="target_user_id" x-model.trim="filters.targetUserId">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="moderator_user_id">Moderator user ID</label>
+        <input class="form-control" id="moderator_user_id" name="moderator_user_id" x-model.trim="filters.moderatorUserId">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="search">Search</label>
+        <input class="form-control" id="search" name="search" x-model.trim="filters.search" placeholder="reason / content">
+      </div>
+      <div class="col-12 d-flex align-items-center gap-3">
+        <button type="submit" class="btn btn-primary" :disabled="isLoading">
+          <span x-text="isLoading ? 'Refreshing...' : 'Apply Filters'"></span>
+        </button>
+        <span class="text-body-secondary small" x-show="isLoading" x-cloak>Refreshing logs...</span>
+      </div>
+    </div>
+  </form>
+
+  <div class="row g-3 mb-4">
+    <template x-for="card in metricCards()" :key="card.label">
+      <div class="col-sm-6 col-xl-3" x-cloak>
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="text-body-secondary small" x-text="card.label"></div>
+            <div class="fs-5 fw-bold" x-text="card.value"></div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h5 class="mb-0">By Action Type</h5></div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <template x-for="entry in entries(metrics.byActionType)" :key="entry[0]">
+                <tr><td x-text="entry[0]"></td><td class="text-end" x-text="entry[1]"></td></tr>
+              </template>
+              <tr x-show="!entries(metrics.byActionType).length"><td colspan="2">No data</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h5 class="mb-0">Recent Moderation Actions</h5></div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Action</th>
+            <th>Target</th>
+            <th>Moderator</th>
+            <th>Channel</th>
+            <th>Reason</th>
+            <th>Content</th>
+            <th>Source</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="log in logs" :key="log.id || [log.created_at, log.action_type, log.target_user_id].join(':')">
+            <tr>
+              <td x-text="formatDate(log.created_at)"></td>
+              <td><span class="badge" :class="actionBadgeClass(log.action_type)" x-text="valueOrDash(log.action_type)"></span></td>
+              <td x-text="valueOrDash(log.target_display)"></td>
+              <td x-text="valueOrDash(log.moderator_display)"></td>
+              <td x-text="valueOrDash(log.channel_display)"></td>
+              <td class="text-truncate" style="max-width: 12rem;" x-text="valueOrDash(log.reason)"></td>
+              <td class="text-truncate" style="max-width: 14rem;" x-text="previewContent(log.deleted_content)"></td>
+              <td x-text="valueOrDash(log.source)"></td>
+              <td>
+                <button class="btn btn-sm btn-info" type="button" @click="openDetails(log)">View</button>
+              </td>
+            </tr>
+          </template>
+          <tr x-show="!logs.length"><td colspan="9">No moderation actions for this filter.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer d-flex justify-content-between">
+      <span>Page <span x-text="page.page"></span></span>
+      <button class="btn btn-link p-0" type="button" x-show="page.hasMore" @click="nextPage" :disabled="isLoading">Next page</button>
+    </div>
+  </div>
+
+  <div class="modal fade" id="moderationActionDetailsModal" tabindex="-1" aria-labelledby="moderationActionDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="moderationActionDetailsModalLabel" x-text="details.title"></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <pre class="mb-0 text-body" style="white-space: pre-wrap;" x-text="details.text"></pre>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

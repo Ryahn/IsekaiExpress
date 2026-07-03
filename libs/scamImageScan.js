@@ -7,6 +7,7 @@ const { hasGuildAdminOrStaffRole, hasGuildAdminOrModRole } = require('../src/bot
 const { extractHttpUrls, getBlacklistedLinkHostsList, hostMatchesBlacklistedDomain } = require('./scamLinkPolicy');
 const { normalizeBlacklistedLinkHost } = require('./blacklistedLinkHostNormalize');
 const { withModLogRolePing } = require('./modLogNotify');
+const { recordModerationAction } = require('./moderationActionLog');
 const {
   normalizeScamScanText,
   testScamScanRulesAgainstTextRows,
@@ -892,6 +893,24 @@ async function enforceScamImage(client, message, staffRoleId, modRoleId, scanRes
     await guild.members.ban(message.author.id, {
       deleteMessageSeconds: 3600,
       reason: `Scam image: ${scanResult.detail}`.slice(0, 500),
+    });
+    await recordModerationAction(client, {
+      guild,
+      actionType: 'ban',
+      targetUserId: message.author.id,
+      targetUser: message.author,
+      targetMember: member,
+      moderatorUserId: client.user?.id,
+      channelId: message.channelId,
+      message,
+      reason: `Scam image: ${scanResult.detail}`.slice(0, 500),
+      source: 'bot_auto',
+      metadata: {
+        attachmentIndex,
+        attachmentUrl,
+        scanStatus: scanResult.status,
+        scanDetail: scanResult.detail,
+      },
     });
   } catch (e) {
     client.logger.error('scamImageScan enforce ban failed', e);

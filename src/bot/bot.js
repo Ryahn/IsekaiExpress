@@ -11,6 +11,7 @@ const process = require('process');
 const cooldownManager = require('./utils/cooldownManager');
 const rateLimitHandler = require('./utils/rateLimitHandler');
 const { createNonOverlappingJob } = require('./utils/nonOverlappingJob');
+const { recordModerationAction } = require('../../libs/moderationActionLog');
 
 // Connection management constants
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -81,6 +82,7 @@ const client = new BotClient({
 		GatewayIntentBits.MessageContent,
 		GatewayIntentBits.GuildMembers,
 		GatewayIntentBits.GuildBans,
+		GatewayIntentBits.GuildModeration,
 		GatewayIntentBits.GuildPresences,
 	],
 });
@@ -174,6 +176,18 @@ let shuttingDown = false;
 						if (member) {
 							await member.roles.remove(user.role_id);
 							await db.removeCage(user.discord_id);
+							await recordModerationAction(client, {
+								guild,
+								actionType: 'uncaged_expired',
+								targetUserId: user.discord_id,
+								targetMember: member,
+								moderatorUserId: client.user?.id,
+								reason: 'Cage expired (scheduled cleanup)',
+								source: 'scheduled',
+								metadata: {
+									roleId: user.role_id,
+								},
+							});
 							logger.info(`[SCHEDULE] Removed cage from user ${user.discord_id}`);
 						}
 					}

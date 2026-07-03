@@ -1,6 +1,7 @@
 const { MessageFlags } = require('discord.js');
 const { hasGuildAdminOrModRole } = require('../src/bot/utils/guildPrivileges');
 const { enforceBlacklist } = require('./invitePolicy');
+const { recordModerationAction } = require('./moderationActionLog');
 
 function canModerateQueue(member, staffRoleId, modRoleId) {
   return hasGuildAdminOrModRole(member, staffRoleId, modRoleId);
@@ -217,6 +218,21 @@ async function handleImageReviewButton(client, interaction, action, pendingId) {
       await interaction.guild.members.ban(row.author_id, {
         deleteMessageSeconds: 3600,
         reason: 'Image review: banned by moderator',
+      });
+      const deletedParts = [];
+      if (row.message_content) deletedParts.push(String(row.message_content));
+      if (row.attachment_url) deletedParts.push(`[image] ${row.attachment_url}`);
+      await recordModerationAction(client, {
+        guild: interaction.guild,
+        actionType: 'ban',
+        targetUserId: row.author_id,
+        moderatorUserId: interaction.user.id,
+        moderatorUser: interaction.user,
+        channelId: row.channel_id,
+        deletedContent: deletedParts.length ? deletedParts.join('\n') : null,
+        reason: 'Image review: banned by moderator',
+        source: 'bot_command',
+        metadata: { pendingImageReviewId: row.id },
       });
     } catch (e) {
       client.logger.error(
