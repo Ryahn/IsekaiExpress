@@ -9,5 +9,5 @@ sources.** To create or verify a database see `../README.md` (`npm run migrate`,
 
 What still lives in this folder (NOT schema snapshots):
 
-- `commands.json`, `dmca.json`, `games.json` — seed/reference data.
+- `commands.json`, `dmca.json`, `games.json` — seed/reference data. Import custom commands with `npm run import:commands -- --dry-run` (see `scripts/importCommands.js`).
 - `nginx.conf` — unrelated service config.

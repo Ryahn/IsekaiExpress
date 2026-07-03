@@ -41,6 +41,7 @@
           <div class="form-group">
             <label for="commandContent">Content</label>
             <textarea class="form-control" id="commandContent" x-model="edit.content" placeholder="Enter content" rows="8"></textarea>
+            <div class="form-text">Use <code>{random~option one~option two}</code> for random replies. Commas inside an option are fine. Weighted picks: <code>{random~70|common reply~10|rare reply}</code>.</div>
           </div>
         </form>
       </div>
@@ -73,6 +74,7 @@
           <div class="form-group">
             <label for="addCommandContent">Content</label>
             <textarea class="form-control" id="addCommandContent" x-model="add.content" placeholder="Enter content" rows="6"></textarea>
+            <div class="form-text">Use <code>{random~option one~option two}</code> for random replies. Commas inside an option are fine. Weighted picks: <code>{random~70|common reply~10|rare reply}</code>.</div>
           </div>
         </form>
       </div>

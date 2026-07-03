@@ -10,6 +10,7 @@
     "start:bot": "node src/bot/bot.js",
     "start:web": "node src/web/app.js",
     "import:chatdump": "node scripts/importChatdump.js",
+    "import:commands": "node scripts/importCommands.js",
     "migrate": "npx knex migrate:latest",
     "verify:schema": "node scripts/verify_schema.js",
     "farm:limits-sanity": "node scripts/farmLimitsSanity.js",

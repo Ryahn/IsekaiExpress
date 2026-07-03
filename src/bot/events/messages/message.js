@@ -13,19 +13,7 @@ const { processMemberMessageInvites } = require('../../../../libs/invitePolicy')
 const { processMemberMessageScamLinks } = require('../../../../libs/scamLinkPolicy');
 const { processImageReview } = require('../../../../libs/imageReview');
 const { isConfiguredGuild, logUnexpectedGuildOnce } = require('../../utils/singleGuildGuard');
-
-function parseCommandContent(content, message) {
-    const randomPattern = /\{random:(.*?)\}/g;
-    content = content.replace(randomPattern, (match, options) => {
-        const optionList = options.split(/[,~]/);
-        const randomIndex = Math.floor(Math.random() * optionList.length);
-        return optionList[randomIndex].trim();
-    });
-
-    content = content.replace('{mention}', `<@${message.author.id}>`);
-
-    return content;
-}
+const { parseCommandContent } = require('../../../../libs/customCommandParser');
 
 module.exports = class MessageEvent extends BaseEvent {
     constructor() {
