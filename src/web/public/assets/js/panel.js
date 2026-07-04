@@ -132,12 +132,29 @@
 
 			initTable: function() {
 				const self = this;
+				if (this.table) {
+					this.table.destroy();
+					this.table = null;
+				}
+				if (this.pollTimer) {
+					window.clearInterval(this.pollTimer);
+					this.pollTimer = null;
+				}
 				this.table = new Tabulator(options.selector, Object.assign({}, options.tabulator, {
 					ajaxURL: undefined,
 					data: [],
 				}));
 				this.table.element.__panelComponent = this;
-				bindLiveTableSearch(this);
+				if (!this._searchBound) {
+					bindLiveTableSearch(this);
+					this._searchBound = true;
+				}
+				if (!this._alpineDestroyBound && this.$el) {
+					this._alpineDestroyBound = true;
+					this.$el.addEventListener('alpine:destroy', function() {
+						self.destroy();
+					});
+				}
 				this.refresh({ silent: true });
 				this.pollTimer = window.setInterval(function() {
 					self.refresh({ silent: true, poll: true });
@@ -149,6 +166,10 @@
 					window.clearInterval(this.pollTimer);
 					this.pollTimer = null;
 				}
+				if (this.table) {
+					this.table.destroy();
+					this.table = null;
+				}
 			},
 
 			refresh: async function(refreshOptions) {
@@ -159,7 +180,15 @@
 				try {
 					const response = await requestJson(options.url);
 					const rows = options.rows(response);
-					this.table.replaceData(rows);
+					if (this.table) {
+						this.table.blockRedraw();
+						try {
+							await this.table.replaceData(rows);
+						}
+						finally {
+							this.table.restoreRedraw();
+						}
+					}
 					this.applySearch();
 				}
 				catch (error) {
@@ -248,18 +277,8 @@
 							hozAlign: 'center',
 							formatter: function(cell) {
 								if (!config.canEdit) return '';
-								return '<button class="btn btn-sm btn-primary editButton" data-id="' + cell.getValue() + '">Edit</button> ' +
-                  '<button class="btn btn-sm btn-danger deleteButton" data-id="' + cell.getValue() + '">Delete</button>';
-							},
-							cellClick: function(event, cell) {
-								const panel = cell.getTable().element.__panelComponent;
-								const rowData = cell.getRow().getData();
-								if (event.target.classList.contains('editButton')) {
-									panel.openEdit(rowData);
-								}
-								if (event.target.classList.contains('deleteButton')) {
-									panel.deleteCommand(rowData.id);
-								}
+								return '<button type="button" class="btn btn-sm btn-primary editButton" data-id="' + cell.getValue() + '">Edit</button> ' +
+                  '<button type="button" class="btn btn-sm btn-danger deleteButton" data-id="' + cell.getValue() + '">Delete</button>';
 							},
 						},
 					],
@@ -280,6 +299,30 @@
 				init: function() {
 					this.initTable();
 					syncModalClosed(this, ['#editModal', '#addModal', '#rehostModal']);
+					this.bindCommandActions();
+				},
+
+				bindCommandActions: function() {
+					if (this._actionsBound || !config.canEdit) return;
+					const tableRoot = document.querySelector('#commandsTable');
+					if (!tableRoot) return;
+					this._actionsBound = true;
+					const self = this;
+					tableRoot.addEventListener('click', function(event) {
+						const editBtn = event.target.closest('.editButton');
+						const deleteBtn = event.target.closest('.deleteButton');
+						const btn = editBtn || deleteBtn;
+						if (!btn || !self.table) return;
+						event.preventDefault();
+						event.stopPropagation();
+						const row = self.table.getRows().find(function(entry) {
+							return String(entry.getData().id) === String(btn.getAttribute('data-id'));
+						});
+						if (!row) return;
+						const rowData = row.getData();
+						if (editBtn) self.openEdit(rowData);
+						if (deleteBtn) self.deleteCommand(rowData.id);
+					});
 				},
 
 				openRehost: function() {
