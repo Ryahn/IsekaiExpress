@@ -5,7 +5,7 @@
 
 {% block content %}
 
-<div x-data="chatCommandsPanel({{ prefix | dump | safe }})" x-init="init()">
+<div x-data="chatCommandsPanel()" x-init="init()">
 <div class="vs-page-header">
   <h3 class="vs-page-title">Chat Commands</h3>
   <p class="vs-page-subtitle">Built-in prefix commands (default <code>{{ prefix }}name</code>). Farm minigame commands use a separate prefix and are documented on the <a href="/docs/farm">farm docs</a> page.</p>
