@@ -141,7 +141,7 @@ function parseDiscordAttachmentUrl(url) {
     if (!match) return null;
     return {
       channelId: match[1],
-      messageId: match[2],
+      attachmentId: match[2],
       filename: decodeURIComponent(match[3]),
     };
   } catch {
@@ -158,7 +158,13 @@ function discordAttachmentNeedsRefresh(url) {
   }
 }
 
-function findDiscordAttachment(attachments, filename) {
+function findDiscordAttachment(attachments, filename, attachmentId = null) {
+  if (attachmentId != null) {
+    const id = String(attachmentId);
+    const byId = (attachments || []).find((attachment) => String(attachment.id) === id);
+    if (byId) return byId;
+  }
+
   const target = filename.toLowerCase();
   return (attachments || []).find((attachment) => {
     const name = String(attachment.filename || '').toLowerCase();
@@ -169,31 +175,79 @@ function findDiscordAttachment(attachments, filename) {
   });
 }
 
-async function fetchDiscordMessage(channelId, messageId, botToken, logger, cache) {
-  const cacheKey = `${channelId}:${messageId}`;
+function findAttachmentInMessages(messages, attachmentId, filename) {
+  const id = String(attachmentId);
+  for (const message of messages || []) {
+    const match = findDiscordAttachment(message.attachments, filename, id);
+    if (match) return match;
+  }
+  return null;
+}
+
+async function refreshDiscordAttachmentUrls(urls, botToken, logger) {
+  if (!urls.length || !botToken) {
+    return { ok: false, reason: 'discord_refresh_unavailable' };
+  }
+
+  try {
+    const response = await axios.post(
+      'https://discord.com/api/v10/attachments/refresh-urls',
+      { attachment_urls: urls },
+      {
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+        validateStatus: (status) => status >= 200 && status < 300,
+      },
+    );
+    return { ok: true, data: response.data };
+  } catch (error) {
+    const status = error.response?.status;
+    if (logger?.warn) {
+      logger.warn(`Discord attachment refresh failed: ${error.message}`);
+    }
+    if (status === 403) {
+      return { ok: false, reason: 'discord_channel_forbidden', error: error.message };
+    }
+    return { ok: false, reason: 'discord_refresh_failed', error: error.message, status };
+  }
+}
+
+function pickRefreshedUrl(refreshData, originalUrl) {
+  const entries = refreshData?.refreshed_urls;
+  if (!Array.isArray(entries) || !entries.length) return null;
+  const exact = entries.find((entry) => entry.original === originalUrl);
+  return exact?.refreshed || entries[0]?.refreshed || null;
+}
+
+async function fetchDiscordMessagesAround(channelId, snowflakeId, botToken, logger, cache) {
+  const cacheKey = `around:${channelId}:${snowflakeId}`;
   if (cache?.has(cacheKey)) {
     return cache.get(cacheKey);
   }
 
   try {
     const response = await axios.get(
-      `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
+      `https://discord.com/api/v10/channels/${channelId}/messages`,
       {
+        params: { around: snowflakeId, limit: 50 },
         headers: { Authorization: `Bot ${botToken}` },
         timeout: 15000,
         validateStatus: (status) => status >= 200 && status < 300,
       },
     );
-    const message = response.data;
-    if (cache) cache.set(cacheKey, message);
-    return { ok: true, message };
+    const result = { ok: true, messages: response.data };
+    if (cache) cache.set(cacheKey, result);
+    return result;
   } catch (error) {
     const status = error.response?.status;
     if (logger?.warn) {
-      logger.warn(`Discord message fetch failed for ${cacheKey}: ${error.message}`);
+      logger.warn(`Discord message search failed for ${channelId}/${snowflakeId}: ${error.message}`);
     }
     if (status === 404) {
-      return { ok: false, reason: 'discord_message_not_found', error: error.message };
+      return { ok: false, reason: 'discord_channel_not_found', error: error.message };
     }
     if (status === 403) {
       return { ok: false, reason: 'discord_channel_forbidden', error: error.message };
@@ -208,16 +262,51 @@ async function resolveDiscordAttachmentUrl(url, botToken, logger, cache) {
     return { ok: false, reason: 'discord_refresh_unavailable' };
   }
 
-  const fetched = await fetchDiscordMessage(parts.channelId, parts.messageId, botToken, logger, cache);
-  if (!fetched.ok) return fetched;
-
-  const attachment = findDiscordAttachment(fetched.message.attachments, parts.filename);
-  const freshUrl = attachment?.url || attachment?.proxy_url;
-  if (!freshUrl) {
-    return { ok: false, reason: 'discord_attachment_not_found' };
+  const refreshCacheKey = `refresh:${url}`;
+  if (cache?.has(refreshCacheKey)) {
+    return cache.get(refreshCacheKey);
   }
 
-  return { ok: true, url: freshUrl };
+  const refreshed = await refreshDiscordAttachmentUrls([url], botToken, logger);
+  if (refreshed.ok) {
+    const freshUrl = pickRefreshedUrl(refreshed.data, url);
+    if (freshUrl) {
+      const result = { ok: true, url: freshUrl };
+      if (cache) cache.set(refreshCacheKey, result);
+      return result;
+    }
+  }
+
+  const searched = await fetchDiscordMessagesAround(
+    parts.channelId,
+    parts.attachmentId,
+    botToken,
+    logger,
+    cache,
+  );
+  if (!searched.ok) {
+    const result = refreshed.ok
+      ? { ok: false, reason: 'discord_attachment_not_found' }
+      : searched;
+    if (cache) cache.set(refreshCacheKey, result);
+    return result;
+  }
+
+  const attachment = findAttachmentInMessages(
+    searched.messages,
+    parts.attachmentId,
+    parts.filename,
+  );
+  const freshUrl = attachment?.url || attachment?.proxy_url;
+  if (!freshUrl) {
+    const result = { ok: false, reason: 'discord_attachment_not_found' };
+    if (cache) cache.set(refreshCacheKey, result);
+    return result;
+  }
+
+  const result = { ok: true, url: freshUrl };
+  if (cache) cache.set(refreshCacheKey, result);
+  return result;
 }
 
 function resolveJsonPath(obj, dotPath) {
@@ -599,6 +688,9 @@ module.exports = {
   parseDiscordAttachmentUrl,
   discordAttachmentNeedsRefresh,
   findDiscordAttachment,
+  findAttachmentInMessages,
+  pickRefreshedUrl,
+  refreshDiscordAttachmentUrls,
   resolveJsonPath,
   replaceUrlsInContent,
   scanCommands,

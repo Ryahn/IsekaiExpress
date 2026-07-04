@@ -8,6 +8,8 @@ const {
   parseDiscordAttachmentUrl,
   discordAttachmentNeedsRefresh,
   findDiscordAttachment,
+  findAttachmentInMessages,
+  pickRefreshedUrl,
   resolveJsonPath,
   replaceUrlsInContent,
   scanCommands,
@@ -45,11 +47,11 @@ test('classifyUrl marks hosted, indirect, and candidate URLs', () => {
   assert.equal(classifyUrl('https://i.imgur.com/abc.png', skipHosts).status, 'candidate');
 });
 
-test('parseDiscordAttachmentUrl extracts channel, message, and filename', () => {
+test('parseDiscordAttachmentUrl extracts channel, attachment, and filename', () => {
   const url = 'https://cdn.discordapp.com/attachments/309355248575578113/1116689655006494771/pngwing.com.png';
   assert.deepEqual(parseDiscordAttachmentUrl(url), {
     channelId: '309355248575578113',
-    messageId: '1116689655006494771',
+    attachmentId: '1116689655006494771',
     filename: 'pngwing.com.png',
   });
   assert.equal(parseDiscordAttachmentUrl('https://example.com/a.png'), null);
@@ -66,13 +68,21 @@ test('discordAttachmentNeedsRefresh detects unsigned Discord CDN URLs', () => {
   );
 });
 
-test('findDiscordAttachment matches attachment filename', () => {
+test('findDiscordAttachment matches attachment id and filename', () => {
   const attachments = [
-    { filename: 'pngwing.com.png', url: 'https://cdn.discordapp.com/attachments/1/2/pngwing.com.png?ex=1' },
-    { filename: 'other.png', url: 'https://cdn.discordapp.com/attachments/1/2/other.png' },
+    { id: '1116689655006494771', filename: 'pngwing.com.png', url: 'https://cdn.discordapp.com/fresh.png?ex=1' },
+    { id: '2', filename: 'other.png', url: 'https://cdn.discordapp.com/other.png' },
   ];
-  const match = findDiscordAttachment(attachments, 'pngwing.com.png');
-  assert.equal(match.url.includes('pngwing.com.png'), true);
+  assert.equal(findDiscordAttachment(attachments, 'missing.png', '1116689655006494771').url.includes('fresh.png'), true);
+  assert.equal(findDiscordAttachment(attachments, 'pngwing.com.png').url.includes('fresh.png'), true);
+});
+
+test('pickRefreshedUrl reads Discord refresh-urls response', () => {
+  const original = 'https://cdn.discordapp.com/attachments/1/2/a.png';
+  const refreshed = pickRefreshedUrl({
+    refreshed_urls: [{ original, refreshed: 'https://cdn.discordapp.com/attachments/1/2/a.png?ex=1&hm=abc' }],
+  }, original);
+  assert.equal(refreshed.includes('ex=1'), true);
 });
 
 test('resolveJsonPath reads nested upload response paths', () => {
