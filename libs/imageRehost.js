@@ -14,6 +14,11 @@ const DIRECT_HOST_PATTERNS = [
   /(?:^|\.)thumbs\.gfycat\.com$/i,
 ];
 
+const DOWNLOAD_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+};
+
 function getRehostConfig(overrides = {}) {
   const base = config.imageRehost || {};
   return {
@@ -162,10 +167,14 @@ async function downloadImage(url, maxBytes, logger) {
       timeout: 30000,
       maxContentLength: maxBytes,
       maxBodyLength: maxBytes,
+      headers: DOWNLOAD_HEADERS,
       validateStatus: (status) => status >= 200 && status < 300,
     });
     const contentType = String(response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
     if (!contentType.startsWith('image/')) {
+      if (logger?.warn) {
+        logger.warn(`Image rehost download for ${url} returned non-image content-type: ${contentType || '(none)'}`);
+      }
       return { ok: false, reason: 'non_image_content_type', contentType };
     }
     return {

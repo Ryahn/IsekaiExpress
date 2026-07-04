@@ -450,9 +450,16 @@
 						if (response.changed) {
 							this.edit.content = response.newContent;
 						}
-						const replaced = response.replacements ? Object.keys(response.replacements).length : 0;
 						const flagged = Array.isArray(response.flagged) ? response.flagged.length : 0;
-						this.editRehostMessage = replaced + ' image(s) rehosted' + (flagged ? '; ' + flagged + ' flagged for manual export' : '') + '. Save to persist changes.';
+						let message = replaced + ' image(s) rehosted';
+						if (flagged) {
+							const reasons = response.flagged.map(function(item) {
+								return item.reason + (item.detail ? ' (' + item.detail + ')' : '');
+							}).join('; ');
+							message += '; ' + flagged + ' flagged: ' + reasons;
+						}
+						message += '. Save to persist changes.';
+						this.editRehostMessage = message;
 						if (flagged) {
 							this.rehostFlagged = response.flagged.map(function(item) {
 								return {
