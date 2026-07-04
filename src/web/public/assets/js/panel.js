@@ -461,6 +461,7 @@
 						if (response.changed) {
 							this.edit.content = response.newContent;
 						}
+						const replaced = response.replacements ? Object.keys(response.replacements).length : 0;
 						const flagged = Array.isArray(response.flagged) ? response.flagged.length : 0;
 						let message = replaced + ' image(s) rehosted';
 						if (flagged) {
