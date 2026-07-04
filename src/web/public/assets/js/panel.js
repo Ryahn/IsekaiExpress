@@ -208,9 +208,17 @@
 		};
 	}
 
+	function blurModalFocus(element) {
+		const active = document.activeElement;
+		if (active && element.contains(active) && typeof active.blur === 'function') {
+			active.blur();
+		}
+	}
+
 	function closeBootstrapModal(selector) {
 		const element = document.querySelector(selector);
 		if (!element || !window.bootstrap) return;
+		blurModalFocus(element);
 		const modal = window.bootstrap.Modal.getInstance(element);
 		if (modal) modal.hide();
 	}
@@ -225,6 +233,9 @@
 		selectors.forEach(function(selector) {
 			const element = document.querySelector(selector);
 			if (!element) return;
+			element.addEventListener('hide.bs.modal', function() {
+				blurModalFocus(element);
+			});
 			element.addEventListener('hidden.bs.modal', function() {
 				panel.modalOpen = false;
 			});
@@ -460,6 +471,10 @@
 						}
 						message += '. Save to persist changes.';
 						this.editRehostMessage = message;
+						this.$nextTick(function() {
+							const textarea = document.getElementById('commandContent');
+							if (textarea) textarea.focus();
+						});
 						if (flagged) {
 							this.rehostFlagged = response.flagged.map(function(item) {
 								return {
