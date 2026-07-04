@@ -53,7 +53,7 @@ function parseYear(value) {
 }
 
 function buildChannelFilters(query = {}) {
-	const mode = VALID_CHANNEL_MODES.has(query.channel_mode) ? query.channel_mode : 'today';
+	const mode = VALID_CHANNEL_MODES.has(query.channel_mode) ? query.channel_mode : 'all';
 	const channelPage = parsePage(query.channel_page);
 	let date = '';
 	let month = null;
@@ -111,7 +111,24 @@ function channelQueryParams(filters) {
 	};
 }
 
-async function buildChannelSection(filters) {
+function buildChannelEmptyHint(filters, coverage) {
+	if (!coverage?.rowCount) {
+		return 'No channel message stats have been recorded yet.';
+	}
+	if (filters.mode === 'today') {
+		return `No messages recorded for ${channelPeriodLabel(filters)}. `
+			+ `Stored stats span ${coverage.earliest} through ${coverage.latest}. `
+			+ 'Try All time or pick a date in that range.';
+	}
+	if (filters.mode === 'all') {
+		return 'No channel activity for this filter.';
+	}
+	return `No channel activity for ${channelPeriodLabel(filters)}. `
+		+ `Stored stats span ${coverage.earliest} through ${coverage.latest}. `
+		+ 'Try All time or another date in that range.';
+}
+
+async function buildChannelSection(filters, coverage) {
 	if (filters.error) {
 		return {
 			periodLabel: channelPeriodLabel(filters),
@@ -122,6 +139,8 @@ async function buildChannelSection(filters) {
 			page: filters.channelPage,
 			pages: 1,
 			error: filters.error,
+			emptyHint: '',
+			coverage,
 		};
 	}
 
@@ -140,22 +159,25 @@ async function buildChannelSection(filters) {
 		}),
 	]);
 	const pages = Math.max(1, Math.ceil(channelCount / CHANNEL_PAGE_SIZE));
+	const mappedRows = rows.map((row, index) => ({
+		rank: offset + index + 1,
+		channelName: row.channel_name || 'Unknown channel',
+		total: Number(row.total) || 0,
+		totalLabel: fmt(row.total),
+		shareLabel: pct(row.total, totalMessages),
+	}));
 
 	return {
 		periodLabel: channelPeriodLabel(filters),
 		totalMessages,
 		totalMessagesLabel: fmt(totalMessages),
 		channelCount,
-		rows: rows.map((row, index) => ({
-			rank: offset + index + 1,
-			channelName: row.channel_name || 'Unknown channel',
-			total: Number(row.total) || 0,
-			totalLabel: fmt(row.total),
-			shareLabel: pct(row.total, totalMessages),
-		})),
+		rows: mappedRows,
 		page: Math.min(filters.channelPage, pages),
 		pages,
 		error: '',
+		emptyHint: mappedRows.length ? '' : buildChannelEmptyHint(filters, coverage),
+		coverage,
 	};
 }
 
@@ -193,8 +215,9 @@ async function buildXpSection(xpPage) {
 async function buildServerStatsState(query = {}) {
 	const channelFilters = buildChannelFilters(query);
 	const xpPage = parsePage(query.xp_page);
+	const coverage = await db.getChannelStatsCoverage();
 	const [channel, xp] = await Promise.all([
-		buildChannelSection(channelFilters),
+		buildChannelSection(channelFilters, coverage),
 		buildXpSection(xpPage),
 	]);
 

@@ -192,6 +192,21 @@ module.exports = {
     return module.exports.listTopChannelsAllTime({ limit, offset });
   },
 
+  getChannelStatsCoverage: async () => {
+    const row = await db('channel_stats')
+      .select(
+        db.raw('MIN(month_day) as earliest'),
+        db.raw('MAX(month_day) as latest'),
+        db.raw('COUNT(*) as row_count'),
+      )
+      .first();
+    return {
+      earliest: row?.earliest || null,
+      latest: row?.latest || null,
+      rowCount: Number(row?.row_count ?? Object.values(row || {})[2] ?? 0) || 0,
+    };
+  },
+
   // --- Misc / utility: AFK users ---
   createAfkUser: async (userId, guildId, message, timestamp) => {
     await db.table('afk_users').insert({

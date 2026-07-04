@@ -19,10 +19,10 @@
         <div class="col-md-3">
           <label class="form-label" for="channel_mode">Period</label>
           <select class="form-select" id="channel_mode" name="channel_mode">
+            <option value="all"{% if channelFilters.mode == 'all' %} selected{% endif %}>All time</option>
             <option value="today"{% if channelFilters.mode == 'today' %} selected{% endif %}>Today</option>
             <option value="date"{% if channelFilters.mode == 'date' %} selected{% endif %}>Specific date</option>
             <option value="month"{% if channelFilters.mode == 'month' %} selected{% endif %}>Month</option>
-            <option value="all"{% if channelFilters.mode == 'all' %} selected{% endif %}>All time</option>
           </select>
         </div>
         <div class="col-md-3">
@@ -43,6 +43,12 @@
         <input type="hidden" name="xp_page" value="{{ xpPage }}">
       </div>
     </form>
+
+    {% if channel.coverage.rowCount %}
+    <p class="text-body-secondary small mb-3">
+      Stored channel stats cover {{ channel.coverage.earliest }} through {{ channel.coverage.latest }}.
+    </p>
+    {% endif %}
 
     {% if channel.error %}
     <div class="alert alert-warning">{{ channel.error }}</div>
@@ -97,7 +103,7 @@
             </tr>
             {% endfor %}
             {% if channel.rows | length == 0 %}
-            <tr><td colspan="4">No channel activity for this filter.</td></tr>
+            <tr><td colspan="4">{{ channel.emptyHint or 'No channel activity for this filter.' }}</td></tr>
             {% endif %}
           </tbody>
         </table>

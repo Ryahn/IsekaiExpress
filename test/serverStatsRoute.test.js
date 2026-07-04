@@ -68,14 +68,28 @@ test('server stats route denies non-staff access', async () => {
 	assert.equal(res.statusCode, 403);
 });
 
-test('server stats default today mode renders channel and xp sections', async () => {
+test('server stats default all-time mode renders channel and xp sections', async () => {
 	const restore = patchDb({
-		sumChannelMessagesForQuery: async () => 120,
-		countChannelStatsForQuery: async () => 2,
-		listChannelStatsForQuery: async () => ([
-			{ channel_name: 'general', total: 80 },
-			{ channel_name: 'off-topic', total: 40 },
-		]),
+		getChannelStatsCoverage: async () => ({
+			earliest: '2024-09-26',
+			latest: '2024-09-27',
+			rowCount: 28,
+		}),
+		sumChannelMessagesForQuery: async (mode) => {
+			assert.equal(mode, 'all');
+			return 120;
+		},
+		countChannelStatsForQuery: async (mode) => {
+			assert.equal(mode, 'all');
+			return 2;
+		},
+		listChannelStatsForQuery: async (mode) => {
+			assert.equal(mode, 'all');
+			return [
+				{ channel_name: 'general', total: 80 },
+				{ channel_name: 'off-topic', total: 40 },
+			];
+		},
 		getXpSummary: async () => ({ rankedUsers: 10, totalXp: 5000 }),
 		getLeaderboardPage: async () => ({
 			rows: [{ user_id: '1', username: 'Alice', xp: 900, level: 5, message_count: 100 }],
@@ -94,7 +108,7 @@ test('server stats default today mode renders channel and xp sections', async ()
 		const renderCall = res._calls.find((call) => call.type === 'render');
 		assert.ok(renderCall);
 		assert.equal(renderCall.view, 'serverStats');
-		assert.equal(renderCall.model.channelFilters.mode, 'today');
+		assert.equal(renderCall.model.channelFilters.mode, 'all');
 		assert.equal(renderCall.model.channel.rows.length, 2);
 		assert.equal(renderCall.model.channel.totalMessages, 120);
 		assert.equal(renderCall.model.xp.rows.length, 1);
@@ -105,9 +119,49 @@ test('server stats default today mode renders channel and xp sections', async ()
 	}
 });
 
+test('server stats today mode shows helpful empty hint when no rows match', async () => {
+	const restore = patchDb({
+		getChannelStatsCoverage: async () => ({
+			earliest: '2024-09-26',
+			latest: '2024-09-27',
+			rowCount: 28,
+		}),
+		sumChannelMessagesForQuery: async () => 0,
+		countChannelStatsForQuery: async () => 0,
+		listChannelStatsForQuery: async () => [],
+		getXpSummary: async () => ({ rankedUsers: 0, totalXp: 0 }),
+		getLeaderboardPage: async () => ({
+			rows: [],
+			total: 0,
+			page: 1,
+			pages: 1,
+			limit: 25,
+		}),
+	});
+
+	try {
+		const res = fakeRes();
+		await routeHandler('/', 'get')(fakeReq({
+			query: { channel_mode: 'today' },
+		}), res, assert.ifError);
+
+		const renderCall = res._calls.find((call) => call.type === 'render');
+		assert.match(renderCall.model.channel.emptyHint, /2024-09-26/);
+		assert.match(renderCall.model.channel.emptyHint, /All time/);
+	}
+	finally {
+		restore();
+	}
+});
+
 test('server stats date mode uses repository query with standardized date', async () => {
 	let listArgs = null;
 	const restore = patchDb({
+		getChannelStatsCoverage: async () => ({
+			earliest: '2024-09-26',
+			latest: '2024-09-27',
+			rowCount: 28,
+		}),
 		sumChannelMessagesForQuery: async (mode, params) => {
 			assert.equal(mode, 'date');
 			assert.equal(params.date, '2026-07-04');
@@ -146,6 +200,11 @@ test('server stats date mode uses repository query with standardized date', asyn
 
 test('server stats invalid date handled gracefully', async () => {
 	const restore = patchDb({
+		getChannelStatsCoverage: async () => ({
+			earliest: '2024-09-26',
+			latest: '2024-09-27',
+			rowCount: 28,
+		}),
 		sumChannelMessagesForQuery: async () => {
 			throw new Error('should not be called');
 		},
@@ -182,6 +241,11 @@ test('server stats invalid date handled gracefully', async () => {
 
 test('server stats xp pagination returns correct page metadata', async () => {
 	const restore = patchDb({
+		getChannelStatsCoverage: async () => ({
+			earliest: '2024-09-26',
+			latest: '2024-09-27',
+			rowCount: 28,
+		}),
 		sumChannelMessagesForQuery: async () => 0,
 		countChannelStatsForQuery: async () => 0,
 		listChannelStatsForQuery: async () => [],
