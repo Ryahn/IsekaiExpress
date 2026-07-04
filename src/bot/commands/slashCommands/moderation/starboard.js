@@ -115,20 +115,22 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand(false);
 
     try {
+      if (subcommandGroup === 'roles') {
+        if (!(await requireStarboardManager(client, interaction, settings))) return;
+        return handleRoles(client, interaction, settings, subcommand);
+      }
+
+      if (subcommandGroup === 'admin_role') {
+        if (!(await requireStarboardManager(client, interaction, settings))) return;
+        return handleAdminRoles(client, interaction, settings, subcommand);
+      }
+
       if (subcommand === 'add') {
         if (!(await requireStarboardAdmin(client, interaction, settings))) return;
         return addMessage(client, interaction, settings);
       }
 
       if (!(await requireStarboardManager(client, interaction, settings))) return;
-
-      if (subcommandGroup === 'roles') {
-        return handleRoles(client, interaction, settings, subcommand);
-      }
-
-      if (subcommandGroup === 'admin_role') {
-        return handleAdminRoles(client, interaction, settings, subcommand);
-      }
 
       switch (subcommand) {
         case 'view':
