@@ -27,15 +27,12 @@ module.exports = class Cat extends BaseCommand {
         });
       });
 
-      const breedName = image.breeds?.[0]?.name;
       const embed = new EmbedBuilder()
         .setColor(0xf5a623)
         .setTitle('Random cat')
-        .setImage(image.url);
-
-      if (breedName) {
-        embed.setFooter({ text: 'Usage: !cat for gif or !cat [static | img | image | pic | photo] for static image' });
-      }
+        .setImage(image.url)
+        .setFooter({ text: 'Usage: !cat for gif or !cat [static | img | image | pic | photo] for static image' });
+      
 
       await message.channel.send({ embeds: [embed] });
     } catch (error) {
