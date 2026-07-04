@@ -485,6 +485,68 @@
 			};
 		});
 
+		window.Alpine.data('starboardSettingsPanel', function(config) {
+			return {
+				csrfToken: config.csrfToken,
+				settings: Object.assign({ allowedRoleIds: [] }, config.settings || {}),
+				guildRoles: config.guildRoles || [],
+				textChannels: config.textChannels || [],
+				thresholdMin: config.thresholdMin || 1,
+				thresholdMax: config.thresholdMax || 50,
+				isSaving: false,
+
+				init: function() {
+					if (!Array.isArray(this.settings.allowedRoleIds)) {
+						this.settings.allowedRoleIds = [];
+					}
+					if (config.success) notify('success', config.success);
+					(config.errors || []).forEach(function(error) { notify('error', error); });
+				},
+
+				toggleRole: function(roleId, checked) {
+					const ids = this.settings.allowedRoleIds.slice();
+					const index = ids.indexOf(roleId);
+					if (checked && index === -1) ids.push(roleId);
+					if (!checked && index !== -1) ids.splice(index, 1);
+					this.settings.allowedRoleIds = ids;
+				},
+
+				saveSettings: async function() {
+					this.isSaving = true;
+					try {
+						const body = {
+							enabled: this.settings.enabled ? 'on' : '',
+							channelId: this.settings.channelId || '',
+							emoji: this.settings.emoji || '',
+							threshold: String(this.settings.threshold || ''),
+							allowedRoleIds: this.settings.allowedRoleIds.join(','),
+							_csrf: this.csrfToken,
+						};
+						const response = await requestJson('/starboard-settings/save', {
+							method: 'POST',
+							body: body,
+						});
+						this.settings = Object.assign({ allowedRoleIds: [] }, response.settings || this.settings);
+						if (!Array.isArray(this.settings.allowedRoleIds)) {
+							this.settings.allowedRoleIds = [];
+						}
+						notify('success', response.message || 'Saved starboard settings.');
+					}
+					catch (error) {
+						(error.data && error.data.errors ? error.data.errors : [error.message]).forEach(function(message) {
+							notify('error', message);
+						});
+						if (error.data && error.data.settings) {
+							this.settings = Object.assign({ allowedRoleIds: [] }, error.data.settings);
+						}
+					}
+					finally {
+						this.isSaving = false;
+					}
+				},
+			};
+		});
+
 		window.Alpine.data('scamScanSettingsPanel', function(config) {
 			return {
 				csrfToken: config.csrfToken,

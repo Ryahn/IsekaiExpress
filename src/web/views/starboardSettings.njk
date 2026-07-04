@@ -1,0 +1,90 @@
+{% extends "layout.njk" %}
+
+{% block content %}
+<script type="application/json" id="starboardSettingsState">{{ alpineStateJson | safe }}</script>
+<div class="container-fluid py-4" x-data="starboardSettingsPanel(JSON.parse(document.getElementById('starboardSettingsState').textContent))" x-init="init()">
+  <div class="row mb-4">
+    <div class="col">
+      <h2 class="mb-1">Starboard Settings</h2>
+      <p class="text-body-secondary mb-0">
+        Configure the starboard channel, emoji, threshold, and which roles may star messages.
+      </p>
+    </div>
+  </div>
+
+  <form method="post" action="/starboard-settings/save" @submit.prevent="saveSettings">
+    <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0">General</h5></div>
+      <div class="card-body">
+        <div class="form-check form-switch mb-4">
+          <input class="form-check-input" type="checkbox" id="enabled" name="enabled" x-model="settings.enabled">
+          <label class="form-check-label" for="enabled">Enable starboard</label>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="channelId">Starboard channel</label>
+            <select class="form-select" id="channelId" name="channelId" x-model="settings.channelId">
+              <option value="">— Select channel —</option>
+              <template x-for="channel in textChannels" :key="channel.id">
+                <option :value="channel.id" x-text="'#' + channel.name"></option>
+              </template>
+            </select>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label" for="emoji">Star emoji</label>
+            <input class="form-control" type="text" id="emoji" name="emoji" x-model="settings.emoji" placeholder="⭐ or custom emoji">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label" for="threshold">Star threshold</label>
+            <input
+              class="form-control"
+              type="number"
+              id="threshold"
+              name="threshold"
+              x-model.number="settings.threshold"
+              :min="thresholdMin"
+              :max="thresholdMax"
+              step="1">
+            <div class="form-text" x-text="'Range ' + thresholdMin + '-' + thresholdMax"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0">Allowed roles</h5></div>
+      <div class="card-body">
+        <p class="text-body-secondary">
+          Only members with these roles can add star reactions or manage starboard settings.
+          Leave empty to allow guild managers (staff/mod) until roles are configured.
+        </p>
+        <div class="row">
+          <template x-for="role in guildRoles" :key="role.id">
+            <div class="col-md-4">
+              <div class="form-check mb-2">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  :id="'role-' + role.id"
+                  :value="role.id"
+                  @change="toggleRole(role.id, $event.target.checked)"
+                  :checked="settings.allowedRoleIds.includes(role.id)">
+                <label class="form-check-label" :for="'role-' + role.id" x-text="role.name"></label>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary" :disabled="isSaving">
+      <span x-text="isSaving ? 'Saving...' : 'Save Settings'"></span>
+    </button>
+  </form>
+</div>
+{% endblock %}

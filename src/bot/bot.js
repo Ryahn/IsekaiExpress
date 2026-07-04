@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection, Events } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Events, Partials } = require('discord.js');
 const { registerCommands, registerEvents, populateBuiltinChatCommandKeys } = require('./utils/register');
 const schedule = require('node-schedule');
 const config = require('../../config');
@@ -84,7 +84,9 @@ const client = new BotClient({
 		GatewayIntentBits.GuildBans,
 		GatewayIntentBits.GuildModeration,
 		GatewayIntentBits.GuildPresences,
+		GatewayIntentBits.GuildMessageReactions,
 	],
+	partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
 let shuttingDown = false;

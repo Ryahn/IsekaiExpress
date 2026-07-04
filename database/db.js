@@ -15,6 +15,7 @@ const imageReviewRepository = require('./repositories/imageReviewRepository');
 const attentionRepository = require('./repositories/attentionRepository');
 const moderationReviewHistoryRepository = require('./repositories/moderationReviewHistoryRepository');
 const moderationActionLogRepository = require('./repositories/moderationActionLogRepository');
+const starboardRepository = require('./repositories/starboardRepository');
 
 module.exports = {
   query: db,
@@ -35,4 +36,5 @@ module.exports = {
   ...attentionRepository,
   ...moderationReviewHistoryRepository,
   ...moderationActionLogRepository,
+  ...starboardRepository,
 };
