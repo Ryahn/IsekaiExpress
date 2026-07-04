@@ -502,6 +502,7 @@
 					if (!Array.isArray(this.settings.adminRoleIds)) {
 						this.settings.adminRoleIds = [];
 					}
+					this.settings.channelId = this.settings.channelId ? String(this.settings.channelId) : '';
 					if (config.success) notify('success', config.success);
 					(config.errors || []).forEach(function(error) { notify('error', error); });
 				},
@@ -545,6 +546,7 @@
 						if (!Array.isArray(this.settings.adminRoleIds)) {
 							this.settings.adminRoleIds = [];
 						}
+						this.settings.channelId = this.settings.channelId ? String(this.settings.channelId) : '';
 						notify('success', response.message || 'Saved starboard settings.');
 					}
 					catch (error) {

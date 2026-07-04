@@ -110,7 +110,7 @@ function hydrateStarboardSettings(row = {}) {
   if (!row || typeof row !== 'object') return settings;
 
   settings.enabled = Boolean(row.starboard_enabled);
-  settings.channelId = row.starboard_channel_id ? String(row.starboard_channel_id) : null;
+  settings.channelId = row.starboard_channel_id ? String(row.starboard_channel_id).trim() : null;
   settings.emoji = row.starboard_emoji ? String(row.starboard_emoji) : null;
   settings.threshold = coerceThreshold(row.starboard_threshold ?? 3).ok
     ? coerceThreshold(row.starboard_threshold ?? 3).value

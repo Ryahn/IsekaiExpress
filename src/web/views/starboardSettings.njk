@@ -28,9 +28,9 @@
             <label class="form-label" for="channelId">Starboard channel</label>
             <select class="form-select" id="channelId" name="channelId" x-model="settings.channelId">
               <option value="">— Select channel —</option>
-              <template x-for="channel in textChannels" :key="channel.id">
-                <option :value="channel.id" x-text="'#' + channel.name"></option>
-              </template>
+              {% for channel in textChannels %}
+              <option value="{{ channel.id }}"{% if settings.channelId == channel.id %} selected{% endif %}># {{ channel.name }}</option>
+              {% endfor %}
             </select>
           </div>
 

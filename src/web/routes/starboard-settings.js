@@ -39,11 +39,42 @@ async function fetchGuildRoles() {
     .map((role) => ({ id: role.id, name: role.name, color: role.color }));
 }
 
-async function fetchTextChannels() {
+async function fetchGuildChannels() {
   const channels = await rest.get(Routes.guildChannels(config.discord.guildId));
-  return (Array.isArray(channels) ? channels : [])
-    .filter((ch) => ch.type === 0 || ch.type === 5)
-    .map((ch) => ({ id: ch.id, name: ch.name }));
+  return Array.isArray(channels) ? channels : [];
+}
+
+const STARBOARD_CHANNEL_TYPES = new Set([0, 5, 15, 16]);
+
+async function fetchTextChannels(configuredChannelId) {
+  const all = await fetchGuildChannels().catch(() => []);
+  const textChannels = all
+    .filter((ch) => STARBOARD_CHANNEL_TYPES.has(ch.type))
+    .map((ch) => ({ id: String(ch.id), name: ch.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (configuredChannelId) {
+    const id = String(configuredChannelId);
+    if (!textChannels.some((ch) => ch.id === id)) {
+      const match = all.find((ch) => String(ch.id) === id);
+      textChannels.push({ id, name: match?.name || `Channel ${id}` });
+      textChannels.sort((a, b) => a.name.localeCompare(b.name));
+    }
+  }
+
+  return textChannels;
+}
+
+function normalizeSettingsForPanel(settings = {}) {
+  return {
+    ...settings,
+    enabled: Boolean(settings.enabled),
+    channelId: settings.channelId ? String(settings.channelId) : '',
+    emoji: settings.emoji || '',
+    threshold: Number(settings.threshold) || 3,
+    allowedRoleIds: Array.isArray(settings.allowedRoleIds) ? settings.allowedRoleIds.map(String) : [],
+    adminRoleIds: Array.isArray(settings.adminRoleIds) ? settings.adminRoleIds.map(String) : [],
+  };
 }
 
 async function canManageStarboard(req, settings) {
@@ -76,10 +107,11 @@ function baseView(req, extra = {}) {
 }
 
 async function buildPageState(req, extra = {}) {
-  const settings = extra.settings || await db.getStarboardSettings(config.discord.guildId);
+  const rawSettings = extra.settings || await db.getStarboardSettings(config.discord.guildId);
+  const settings = normalizeSettingsForPanel(rawSettings);
   const [guildRoles, textChannels] = await Promise.all([
     fetchGuildRoles().catch(() => []),
-    fetchTextChannels().catch(() => []),
+    fetchTextChannels(settings.channelId).catch(() => []),
   ]);
   const state = baseView(req, { settings, guildRoles, textChannels, ...extra });
   return {
