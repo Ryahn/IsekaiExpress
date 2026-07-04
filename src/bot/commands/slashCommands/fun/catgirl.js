@@ -15,8 +15,6 @@ module.exports = {
             .setRequired(false)),
 
     async execute(client, interaction) {
-        const { getRandomColor } = client.utils;
-
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'catgirl');
         if (cooldownTime) {
             return interaction.editReply({
@@ -41,21 +39,13 @@ module.exports = {
             return interaction.editReply({ content: 'No results found', flags: MessageFlags.Ephemeral });
         }
 
-        const index = Math.floor(Math.random() * data.post.length);
-
-        const post = data.post[index];
-        const sourceUrl = post.source.startsWith('http://') || post.source.startsWith('https://')
-            ? post.source
-            : `https://${post.source}`;
+        const post = data.post[Math.floor(Math.random() * data.post.length)];
 
         const embed = new EmbedBuilder()
+            .setColor(0xf5a623)
             .setTitle('Catgirl')
-            .setDescription(`${interaction.user} wants ${query}`)
-            .addFields({ name: 'Tags', value: `${post.tags}`, inline: false })
-            .addFields({ name: 'Source', value: `[Click here](${sourceUrl})`, inline: false })
-            .setColor(`#${getRandomColor()}`);
+            .setImage(post.file_url);
 
         await interaction.editReply({ embeds: [embed] });
-        await interaction.followUp(`|| ${post.file_url} ||`);
     },
 };
