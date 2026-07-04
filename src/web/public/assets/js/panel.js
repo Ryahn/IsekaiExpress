@@ -266,16 +266,173 @@
 				},
 			}), {
 				csrfToken: config.csrfToken,
+				imageRehostEnabled: Boolean(config.imageRehostEnabled),
 				edit: { id: '', name: '', content: '' },
 				add: { name: '', content: '' },
+				rehostBusy: false,
+				rehostScanDone: false,
+				rehostSummary: null,
+				rehostRows: [],
+				rehostFlagged: [],
+				editRehostBusy: false,
+				editRehostMessage: '',
 
 				init: function() {
 					this.initTable();
-					syncModalClosed(this, ['#editModal', '#addModal']);
+					syncModalClosed(this, ['#editModal', '#addModal', '#rehostModal']);
+				},
+
+				openRehost: function() {
+					this.rehostScanDone = false;
+					this.rehostSummary = null;
+					this.rehostRows = [];
+					this.rehostFlagged = [];
+					this.modalOpen = true;
+					showBootstrapModal('#rehostModal');
+				},
+
+				buildRehostRows: function(commands) {
+					const rows = [];
+					for (const cmd of commands || []) {
+						for (const url of cmd.urls || []) {
+							const label = url.newUrl
+								? 'replaced → ' + url.newUrl
+								: (url.action || url.status || '') + (url.reason ? ' (' + url.reason + ')' : '');
+							rows.push({
+								key: String(cmd.id) + ':' + url.url,
+								commandName: cmd.name,
+								url: url.url,
+								label: label,
+							});
+						}
+					}
+					return rows;
+				},
+
+				scanRehost: async function() {
+					this.rehostBusy = true;
+					try {
+						const response = await requestJson('/commands/rehost/scan', {
+							method: 'POST',
+							body: { _csrf: this.csrfToken },
+						});
+						this.rehostSummary = response.summary || null;
+						this.rehostRows = this.buildRehostRows(response.commands);
+						this.rehostFlagged = Array.isArray(response.flagged) ? response.flagged : [];
+						this.rehostScanDone = true;
+						notify('success', 'Scan complete');
+					}
+					catch (error) {
+						notify('error', error.message);
+					}
+					finally {
+						this.rehostBusy = false;
+					}
+				},
+
+				applyRehost: async function() {
+					if (!window.confirm('Upload direct images and update affected commands in the database?')) return;
+					this.rehostBusy = true;
+					try {
+						const response = await requestJson('/commands/rehost/apply', {
+							method: 'POST',
+							body: { _csrf: this.csrfToken },
+						});
+						this.rehostSummary = response.summary || null;
+						this.rehostRows = this.buildRehostRows(response.commands);
+						this.rehostFlagged = Array.isArray(response.flagged) ? response.flagged : [];
+						const updatedCount = Array.isArray(response.updated) ? response.updated.length : 0;
+						const errorCount = Array.isArray(response.errors) ? response.errors.length : 0;
+						let message = 'Rehost applied. Updated ' + updatedCount + ' command(s).';
+						if (errorCount) message += ' ' + errorCount + ' error(s).';
+						notify(errorCount ? 'warning' : 'success', message);
+						await this.refresh({ silent: false });
+					}
+					catch (error) {
+						notify('error', error.message);
+					}
+					finally {
+						this.rehostBusy = false;
+					}
+				},
+
+				exportRehostFlagged: async function() {
+					if (!this.rehostFlagged.length) return;
+					try {
+						const response = await fetch('/commands/rehost/export', {
+							method: 'POST',
+							headers: {
+								Accept: 'application/json',
+								'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+								'X-Requested-With': 'XMLHttpRequest',
+							},
+							body: new URLSearchParams({
+								_csrf: this.csrfToken,
+								items: JSON.stringify(this.rehostFlagged),
+							}),
+						});
+						if (!response.ok) {
+							const data = await response.json().catch(function() { return {}; });
+							throw new Error(data.message || 'Export failed');
+						}
+						const blob = await response.blob();
+						const url = URL.createObjectURL(blob);
+						const link = document.createElement('a');
+						link.href = url;
+						link.download = 'flagged-image-urls.json';
+						document.body.appendChild(link);
+						link.click();
+						link.remove();
+						URL.revokeObjectURL(url);
+					}
+					catch (error) {
+						notify('error', error.message);
+					}
+				},
+
+				rehostEditContent: async function() {
+					if (!this.edit.content) return;
+					this.editRehostBusy = true;
+					this.editRehostMessage = '';
+					try {
+						const response = await requestJson('/commands/rehost/preview', {
+							method: 'POST',
+							body: {
+								_csrf: this.csrfToken,
+								content: this.edit.content,
+								commandId: this.edit.id,
+								commandName: this.edit.name,
+							},
+						});
+						if (response.changed) {
+							this.edit.content = response.newContent;
+						}
+						const replaced = response.replacements ? Object.keys(response.replacements).length : 0;
+						const flagged = Array.isArray(response.flagged) ? response.flagged.length : 0;
+						this.editRehostMessage = replaced + ' image(s) rehosted' + (flagged ? '; ' + flagged + ' flagged for manual export' : '') + '. Save to persist changes.';
+						if (flagged) {
+							this.rehostFlagged = response.flagged.map(function(item) {
+								return {
+									commandId: this.edit.id,
+									commandName: this.edit.name,
+									url: item.url,
+									reason: item.reason,
+									detail: item.detail,
+								};
+							}.bind(this));
+						}
+					}
+					catch (error) {
+						notify('error', error.message);
+					}
+					finally {
+						this.editRehostBusy = false;
+					}
 				},
 
 				openEdit: function(command) {
 					this.edit = { id: command.id, name: command.name || '', content: command.content || '' };
+					this.editRehostMessage = '';
 					this.modalOpen = true;
 					showBootstrapModal('#editModal');
 				},

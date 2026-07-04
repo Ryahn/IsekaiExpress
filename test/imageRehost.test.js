@@ -1,0 +1,96 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const {
+  extractUrls,
+  normalizeUrl,
+  classifyUrl,
+  resolveJsonPath,
+  replaceUrlsInContent,
+  scanCommands,
+  buildFlaggedExport,
+  isRehostConfigured,
+  getRehostConfig,
+} = require('../libs/imageRehost');
+
+const skipHosts = ['overlord.lordainz.xyz'];
+
+test('extractUrls finds URLs inside random blocks and weighted options', () => {
+  const content = '{random~https://cdn.discordapp.com/a.png~70|https://media.giphy.com/b.gif~https://overlord.lordainz.xyz/f/x.png}';
+  const urls = extractUrls(content);
+  assert.deepEqual(urls, [
+    'https://cdn.discordapp.com/a.png',
+    'https://media.giphy.com/b.gif',
+    'https://overlord.lordainz.xyz/f/x.png',
+  ]);
+});
+
+test('normalizeUrl trims trailing punctuation from copied Discord links', () => {
+  assert.equal(
+    normalizeUrl('https://cdn.discordapp.com/x.png?ex=1&hm=abc&'),
+    'https://cdn.discordapp.com/x.png?ex=1&hm=abc',
+  );
+});
+
+test('classifyUrl marks hosted, indirect, and candidate URLs', () => {
+  assert.equal(classifyUrl('https://overlord.lordainz.xyz/f/test.png', skipHosts).status, 'skip_hosted');
+  assert.equal(classifyUrl('https://www.youtube.com/watch?v=abc', skipHosts).status, 'flag_indirect');
+  assert.equal(classifyUrl('https://tenor.com/view/foo-gif-123', skipHosts).status, 'flag_indirect');
+  assert.equal(classifyUrl('https://cdn.discordapp.com/attachments/1/2/image.png', skipHosts).status, 'candidate');
+  assert.equal(classifyUrl('https://c.tenor.com/abc.gif', skipHosts).status, 'candidate');
+  assert.equal(classifyUrl('https://imgur.com/gallery/abc', skipHosts).status, 'flag_indirect');
+  assert.equal(classifyUrl('https://i.imgur.com/abc.png', skipHosts).status, 'candidate');
+});
+
+test('resolveJsonPath reads nested upload response paths', () => {
+  const payload = { file: { url: 'https://overlord.lordainz.xyz/f/new.png' } };
+  assert.equal(resolveJsonPath(payload, 'file.url'), 'https://overlord.lordainz.xyz/f/new.png');
+  assert.equal(resolveJsonPath(payload, 'file.missing'), null);
+});
+
+test('replaceUrlsInContent preserves random syntax while swapping URLs', () => {
+  const content = '{random~https://cdn.discordapp.com/old.png~https://cdn.discordapp.com/old2.gif}';
+  const next = replaceUrlsInContent(content, {
+    'https://cdn.discordapp.com/old.png': 'https://overlord.lordainz.xyz/f/a.png',
+    'https://cdn.discordapp.com/old2.gif': 'https://overlord.lordainz.xyz/f/b.gif',
+  });
+  assert.equal(
+    next,
+    '{random~https://overlord.lordainz.xyz/f/a.png~https://overlord.lordainz.xyz/f/b.gif}',
+  );
+});
+
+test('scanCommands summarizes candidates, flagged, and skipped URLs', async () => {
+  const commands = [
+    {
+      id: 1,
+      name: 'bacon',
+      content: '{random~https://www.youtube.com/watch?v=abc~https://cdn.discordapp.com/a.png~https://overlord.lordainz.xyz/f/x.png}',
+    },
+  ];
+  const result = await scanCommands(commands, { skipHosts });
+  assert.equal(result.commands.length, 1);
+  assert.equal(result.summary.flagged, 1);
+  assert.equal(result.summary.candidates, 1);
+  assert.equal(result.summary.skipped, 1);
+});
+
+test('buildFlaggedExport wraps items with timestamp', () => {
+  const payload = buildFlaggedExport([
+    { commandId: 1, commandName: 'test', url: 'https://tenor.com/view/x', reason: 'indirect_host' },
+  ]);
+  assert.ok(payload.generatedAt);
+  assert.equal(payload.items.length, 1);
+  assert.equal(payload.items[0].reason, 'indirect_host');
+});
+
+test('isRehostConfigured requires enabled flag and upload key', () => {
+  const cfg = getRehostConfig({
+    enabled: true,
+    uploadUrl: 'https://example.com/upload',
+    uploadKey: 'secret',
+  });
+  assert.equal(isRehostConfigured(cfg), true);
+  assert.equal(isRehostConfigured(getRehostConfig({ enabled: false, uploadKey: 'secret' })), false);
+  assert.equal(isRehostConfigured(getRehostConfig({ enabled: true, uploadKey: '' })), false);
+});

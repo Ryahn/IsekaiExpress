@@ -128,3 +128,67 @@ test('web command routes return clean errors from repository failures', async ()
     restore();
   }
 });
+
+test('rehost routes return 503 when image rehost is not configured', async () => {
+  const scanRes = fakeRes();
+  await routeHandler('/rehost/scan', 'post')(fakeReq({ body: { _csrf: 'token' } }), scanRes, assert.ifError);
+  assert.equal(scanRes.statusCode, 503);
+  assert.match(scanRes.body.message, /disabled or missing/i);
+
+  const applyRes = fakeRes();
+  await routeHandler('/rehost/apply', 'post')(fakeReq({ body: { _csrf: 'token' } }), applyRes, assert.ifError);
+  assert.equal(applyRes.statusCode, 503);
+
+  const previewRes = fakeRes();
+  await routeHandler('/rehost/preview', 'post')(fakeReq({
+    body: { _csrf: 'token', content: 'https://cdn.discordapp.com/a.png' },
+  }), previewRes, assert.ifError);
+  assert.equal(previewRes.statusCode, 503);
+});
+
+test('rehost routes require staff role', async () => {
+  const scanRes = fakeRes();
+  await routeHandler('/rehost/scan', 'post')(fakeReq({ body: { _csrf: 'token' }, staff: false }), scanRes, assert.ifError);
+  assert.equal(scanRes.statusCode, 403);
+
+  const exportRes = fakeRes();
+  await routeHandler('/rehost/export', 'post')(fakeReq({ body: { _csrf: 'token' }, staff: false }), exportRes, assert.ifError);
+  assert.equal(exportRes.statusCode, 403);
+});
+
+test('rehost export returns 400 when no flagged items exist', async () => {
+  const exportRes = fakeRes();
+  const req = fakeReq({ body: { _csrf: 'token' } });
+  req.session.lastRehostFlagged = [];
+  await routeHandler('/rehost/export', 'post')(req, exportRes, assert.ifError);
+  assert.equal(exportRes.statusCode, 400);
+  assert.match(exportRes.body.message, /No flagged URLs/i);
+});
+
+test('rehost scan works when configured', async () => {
+  const original = { ...config.imageRehost };
+  config.imageRehost.enabled = true;
+  config.imageRehost.uploadKey = 'test-key';
+
+  const restore = patchDb({
+    sql: async () => ([
+      {
+        id: 1,
+        name: 'test',
+        content: 'https://overlord.lordainz.xyz/f/x.png',
+      },
+    ]),
+  });
+
+  try {
+    const scanRes = fakeRes();
+    const req = fakeReq({ body: { _csrf: 'token' } });
+    await routeHandler('/rehost/scan', 'post')(req, scanRes, assert.ifError);
+    assert.equal(scanRes.statusCode, 200);
+    assert.equal(scanRes.body.summary.skipped, 1);
+    assert.ok(Array.isArray(scanRes.body.commands));
+  } finally {
+    Object.assign(config.imageRehost, original);
+    restore();
+  }
+});

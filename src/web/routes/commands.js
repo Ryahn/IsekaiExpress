@@ -6,6 +6,12 @@ const { getDiscordAvatarUrl } = require("../../../libs/utils");
 const db = require("../../../database/db");
 const config = require('../../../config');
 const requireCsrf = require('../middleware/requireCsrf');
+const {
+	isRehostConfigured,
+	scanCommands,
+	rehostCommands,
+	buildFlaggedExport,
+} = require('../../../libs/imageRehost');
 router.use(requireCsrf);
 
 const slashCommandsPath = path.join(__dirname, '../../bot/commands/slashCommands');
@@ -30,6 +36,52 @@ function parseCommandInput(body) {
 
 function validateCommandId(id) {
 	return COMMAND_ID_PATTERN.test(String(id || ''));
+}
+
+function requireStaff(req, res) {
+	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
+		res.status(403).json({ message: 'You do not have permission to manage commands' });
+		return false;
+	}
+	return true;
+}
+
+function rehostUnavailableResponse(res) {
+	return res.status(503).json({
+		message: 'Image rehost is disabled or missing IMAGE_REHOST_UPLOAD_KEY. Set IMAGE_REHOST_ENABLED=true and configure upload settings in .env.',
+	});
+}
+
+function parseCommandIds(body) {
+	if (!body || !Array.isArray(body.commandIds) || body.commandIds.length === 0) {
+		return null;
+	}
+	const ids = body.commandIds.map((id) => String(id)).filter((id) => validateCommandId(id));
+	return ids.length ? ids : null;
+}
+
+async function loadCommandsForRehost(commandIds) {
+	const query = `SELECT id, name, content FROM commands`;
+	if (commandIds) {
+		const placeholders = commandIds.map(() => '?').join(', ');
+		return db.sql(`${query} WHERE id IN (${placeholders})`, commandIds);
+	}
+	return db.sql(query);
+}
+
+function serializeCommandScanResult(cmd) {
+	return {
+		id: cmd.id,
+		name: cmd.name,
+		changed: cmd.changed,
+		urls: cmd.urls.map((url) => ({
+			url: url.url,
+			status: url.status,
+			reason: url.reason,
+			action: url.action,
+			newUrl: url.newUrl || null,
+		})),
+	};
 }
 
 function getSlashCommandFiles(dir) {
@@ -71,7 +123,13 @@ async function getSlashCommands() {
 
 router.get("/", (req, res) => {
 	const allowed = req.session.roles.includes(config.roles.staff);
-	res.render('commands', { username: req.session.user.username, avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar), csrfToken: req.session.csrf, allow: allowed });
+	res.render('commands', {
+		username: req.session.user.username,
+		avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar),
+		csrfToken: req.session.csrf,
+		allow: allowed,
+		imageRehostEnabled: isRehostConfigured(),
+	});
 });
 
 router.get("/list", async (req, res) => {
@@ -166,6 +224,161 @@ router.post("/delete/:id", async(req, res) => {
 		console.error(error);
 		res.status(500).json({ message: 'Internal server error' });
 	}
+});
+
+router.post('/rehost/scan', async (req, res) => {
+	if (!requireStaff(req, res)) return;
+	if (!isRehostConfigured()) return rehostUnavailableResponse(res);
+
+	try {
+		const commandIds = parseCommandIds(req.body);
+		const commands = await loadCommandsForRehost(commandIds);
+		const result = await scanCommands(commands);
+		req.session.lastRehostFlagged = result.commands.flatMap((cmd) =>
+			cmd.flagged.map((item) => ({
+				commandId: cmd.id,
+				commandName: cmd.name,
+				url: item.url,
+				reason: item.reason,
+				detail: item.detail || null,
+			})),
+		);
+		res.json({
+			summary: result.summary,
+			commands: result.commands.map(serializeCommandScanResult),
+			flagged: req.session.lastRehostFlagged,
+		});
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ message: 'Image rehost scan failed' });
+	}
+});
+
+router.post('/rehost/apply', async (req, res) => {
+	if (!requireStaff(req, res)) return;
+	if (!isRehostConfigured()) return rehostUnavailableResponse(res);
+
+	const dryRun = Boolean(req.body?.dryRun);
+	const persist = req.body?.persist !== false;
+
+	try {
+		const commandIds = parseCommandIds(req.body);
+		const commands = await loadCommandsForRehost(commandIds);
+		const result = await rehostCommands(commands, {
+			dryRun,
+			logger: console,
+		});
+
+		const updated = [];
+		const errors = [];
+
+		if (!dryRun && persist) {
+			for (const cmd of result.commands) {
+				if (!cmd.changed) continue;
+				if (cmd.newContent.length > COMMAND_CONTENT_MAX_LENGTH) {
+					errors.push({
+						commandId: cmd.id,
+						commandName: cmd.name,
+						message: 'Updated content exceeds 4000 character limit',
+					});
+					continue;
+				}
+				const updateResult = await db.updateCustomCommand({
+					identifier: cmd.id,
+					name: cmd.name,
+					content: cmd.newContent,
+					userId: req.session.user.id,
+				});
+				if (!updateResult.ok) {
+					errors.push({
+						commandId: cmd.id,
+						commandName: cmd.name,
+						message: updateResult.message || 'Could not update command',
+					});
+					continue;
+				}
+				updated.push({
+					id: cmd.id,
+					name: cmd.name,
+					replacementCount: Object.keys(cmd.replacements).length,
+				});
+			}
+		}
+
+		req.session.lastRehostFlagged = result.flagged;
+		res.json({
+			summary: result.summary,
+			updated,
+			errors,
+			flagged: result.flagged,
+			commands: result.commands.map((cmd) => ({
+				id: cmd.id,
+				name: cmd.name,
+				changed: cmd.changed,
+				newContent: cmd.newContent,
+				replacements: cmd.replacements,
+			})),
+		});
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ message: 'Image rehost apply failed' });
+	}
+});
+
+router.post('/rehost/preview', async (req, res) => {
+	if (!requireStaff(req, res)) return;
+	if (!isRehostConfigured()) return rehostUnavailableResponse(res);
+
+	const content = String(req.body?.content || '').trim();
+	if (!content || content.length > COMMAND_CONTENT_MAX_LENGTH) {
+		return res.status(400).json({ message: 'Content must be 1-4000 characters.' });
+	}
+
+	try {
+		const fakeCommand = { id: req.body?.commandId || null, name: req.body?.commandName || 'preview', content };
+		const result = await rehostCommands([fakeCommand], { logger: console });
+		const cmd = result.commands[0];
+		res.json({
+			summary: result.summary,
+			newContent: cmd.newContent,
+			changed: cmd.changed,
+			replacements: cmd.replacements,
+			flagged: cmd.flagged.map((item) => ({
+				url: item.url,
+				reason: item.reason,
+				detail: item.detail || null,
+			})),
+		});
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ message: 'Image rehost preview failed' });
+	}
+});
+
+router.post('/rehost/export', async (req, res) => {
+	if (!requireStaff(req, res)) return;
+
+	let items = [];
+	if (typeof req.body?.items === 'string' && req.body.items.trim()) {
+		try {
+			items = JSON.parse(req.body.items);
+		} catch {
+			return res.status(400).json({ message: 'Invalid flagged items payload.' });
+		}
+	} else if (Array.isArray(req.body?.items) && req.body.items.length) {
+		items = req.body.items;
+	} else if (Array.isArray(req.session.lastRehostFlagged) && req.session.lastRehostFlagged.length) {
+		items = req.session.lastRehostFlagged;
+	}
+
+	if (!items.length) {
+		return res.status(400).json({ message: 'No flagged URLs to export.' });
+	}
+
+	const payload = buildFlaggedExport(items);
+	res.setHeader('Content-Type', 'application/json; charset=utf-8');
+	res.setHeader('Content-Disposition', 'attachment; filename="flagged-image-urls.json"');
+	res.send(JSON.stringify(payload, null, 2));
 });
 
 router.get('/slashes', async (req, res) => {

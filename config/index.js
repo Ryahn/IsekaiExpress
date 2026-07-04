@@ -79,6 +79,21 @@ module.exports = {
     uploadToken: str('IMAGE_ARCHIVE_UPLOAD_TOKEN', '')
   },
 
+  /** ShareX-compatible uploader for rehosting custom command image URLs. */
+  imageRehost: {
+    enabled: bool('IMAGE_REHOST_ENABLED', false),
+    uploadUrl: str('IMAGE_REHOST_UPLOAD_URL', 'https://overlord.lordainz.xyz/upload'),
+    uploadKey: str('IMAGE_REHOST_UPLOAD_KEY', ''),
+    fileField: str('IMAGE_REHOST_FILE_FIELD', 'file'),
+    urlJsonPath: str('IMAGE_REHOST_URL_JSON_PATH', 'file.url'),
+    skipHosts: str('IMAGE_REHOST_SKIP_HOSTS', 'overlord.lordainz.xyz')
+      .split(',')
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean),
+    concurrency: int('IMAGE_REHOST_CONCURRENCY', 3),
+    maxBytes: int('IMAGE_REHOST_MAX_BYTES', 25 * 1024 * 1024),
+  },
+
   starboardArchive: {
     enabled: bool('STARBOARD_ARCHIVE_ENABLED', true),
     dir: str('STARBOARD_ARCHIVE_DIR', path.join(__dirname, '..', 'starboard-archive')),

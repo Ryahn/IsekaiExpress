@@ -5,7 +5,7 @@
 
 {% block content %}
 
-<div x-data="commandsPanel({ canEdit: {% if allow %}true{% else %}false{% endif %}, csrfToken: '{{ csrfToken }}' })" x-init="init()">
+<div x-data="commandsPanel({ canEdit: {% if allow %}true{% else %}false{% endif %}, csrfToken: '{{ csrfToken }}', imageRehostEnabled: {% if imageRehostEnabled %}true{% else %}false{% endif %} })" x-init="init()">
 <div class="vs-page-header">
   <h3 class="vs-page-title">Custom Commands</h3>
   <p class="vs-page-subtitle">Create and manage custom bot commands</p>
@@ -14,6 +14,7 @@
 <div class="search-box">
   <input class="form-control search-input" type="search" x-model="search" placeholder="Search commands..." aria-label="Search">
   {% if allow %}
+  <button class="btn btn-outline-secondary add-button" type="button" x-show="imageRehostEnabled" x-cloak @click="openRehost">Rehost Images</button>
   <button class="btn btn-primary add-button" type="button" @click="openAdd">Add Command</button>
   {% endif %}
 </div>
@@ -42,6 +43,13 @@
             <label for="commandContent">Content</label>
             <textarea class="form-control" id="commandContent" x-model="edit.content" placeholder="Enter content" rows="8"></textarea>
             <div class="form-text">Use <code>{random~option one~option two}</code> for random replies. Commas inside an option are fine. Weighted picks: <code>{random~70|common reply~10|rare reply}</code>.</div>
+            <div class="mt-2" x-show="imageRehostEnabled" x-cloak>
+              <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="editRehostBusy" @click="rehostEditContent">
+                <span x-show="!editRehostBusy">Rehost images in content</span>
+                <span x-show="editRehostBusy">Rehosting...</span>
+              </button>
+              <p class="form-text mb-0 mt-1" x-show="editRehostMessage" x-text="editRehostMessage"></p>
+            </div>
           </div>
         </form>
       </div>
@@ -81,6 +89,63 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-primary" @click="addCommand">Add Command</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Rehost Images Modal -->
+{% if allow %}
+<div class="modal fade" id="rehostModal" tabindex="-1" aria-labelledby="rehostModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="rehostModalLabel">Rehost Command Images</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-body-secondary small">Scans custom command content for image URLs, uploads direct images to your configured host, and flags page links (YouTube, Tenor views, etc.) for manual export.</p>
+
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <button type="button" class="btn btn-outline-primary" :disabled="rehostBusy" @click="scanRehost">Scan all commands</button>
+          <button type="button" class="btn btn-primary" :disabled="rehostBusy || !rehostScanDone" @click="applyRehost">Apply rehost</button>
+          <button type="button" class="btn btn-outline-secondary" :disabled="rehostBusy || !rehostFlagged.length" @click="exportRehostFlagged">Export flagged</button>
+        </div>
+
+        <p class="small mb-2" x-show="rehostBusy" x-cloak>Working...</p>
+
+        <div class="row g-2 mb-3" x-show="rehostSummary" x-cloak>
+          <div class="col-auto"><span class="badge text-bg-secondary">Commands: <span x-text="rehostSummary.totalCommands"></span></span></div>
+          <div class="col-auto"><span class="badge text-bg-info">Candidates: <span x-text="rehostSummary.candidates"></span></span></div>
+          <div class="col-auto"><span class="badge text-bg-success">Replaced: <span x-text="rehostSummary.replaced"></span></span></div>
+          <div class="col-auto"><span class="badge text-bg-warning">Flagged: <span x-text="rehostSummary.flagged"></span></span></div>
+          <div class="col-auto"><span class="badge text-bg-light text-dark">Skipped: <span x-text="rehostSummary.skipped"></span></span></div>
+        </div>
+
+        <div class="table-responsive" style="max-height: 360px; overflow-y: auto;" x-show="rehostRows.length" x-cloak>
+          <table class="table table-sm table-striped align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>URL</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="row in rehostRows" :key="row.key">
+                <tr>
+                  <td x-text="row.commandName"></td>
+                  <td class="small text-break" x-text="row.url"></td>
+                  <td class="small" x-text="row.label"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
