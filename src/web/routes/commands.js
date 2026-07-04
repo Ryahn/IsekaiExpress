@@ -12,6 +12,7 @@ const {
 	rehostCommands,
 	buildFlaggedExport,
 } = require('../../../libs/imageRehost');
+const { getChatCommands } = require('../../../libs/chatCommandCatalog');
 router.use(requireCsrf);
 
 const slashCommandsPath = path.join(__dirname, '../../bot/commands/slashCommands');
@@ -392,6 +393,28 @@ router.get('/slashes/list', async (req, res) => {
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ message: 'Error fetching slash commands' });
+	}
+});
+
+router.get('/chat', async (req, res) => {
+	res.render('chatCommands', {
+		username: req.session.user.username,
+		avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar),
+		csrfToken: req.session.csrf,
+		prefix: config.discord.prefix || '!',
+	});
+});
+
+router.get('/chat/list', async (req, res) => {
+	try {
+		const commands = getChatCommands();
+		res.json({
+			commands,
+			prefix: config.discord.prefix || '!',
+		});
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ message: 'Error fetching chat commands' });
 	}
 });
 

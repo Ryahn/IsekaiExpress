@@ -582,6 +582,47 @@
 			});
 		});
 
+		window.Alpine.data('chatCommandsPanel', function(defaultPrefix) {
+			const prefix = defaultPrefix || '!';
+
+			return Object.assign(createPollingTable({
+				selector: '#chatCommandsTable',
+				url: '/commands/chat/list',
+				searchFields: ['name', 'category', 'aliasesText', 'description', 'command'],
+				rows: function(response) {
+					const rowPrefix = response.prefix || prefix;
+					return (Array.isArray(response.commands) ? response.commands : []).map(function(row) {
+						const aliasesText = !Array.isArray(row.aliases) || !row.aliases.length
+							? '—'
+							: row.aliases.map(function(alias) { return rowPrefix + alias; }).join(', ');
+						return {
+							name: row.name,
+							command: rowPrefix + row.name,
+							category: row.category || '—',
+							aliasesText,
+							description: row.description || '—',
+						};
+					});
+				},
+				tabulator: {
+					pagination: 'local',
+					paginationSize: 15,
+					layout: 'fitColumns',
+					initialSort: [{ column: 'name', dir: 'asc' }],
+					columns: [
+						{ title: 'Command', field: 'command', width: 140 },
+						{ title: 'Category', field: 'category', width: 120 },
+						{ title: 'Aliases', field: 'aliasesText' },
+						{ title: 'Description', field: 'description' },
+					],
+				},
+			}), {
+				init: function() {
+					this.initTable();
+				},
+			});
+		});
+
 		window.Alpine.data('warningsPanel', function(config) {
 			return Object.assign(createPollingTable({
 				selector: '#warningTable',

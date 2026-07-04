@@ -59,6 +59,7 @@ function shouldSendJsonError(req) {
     req.method !== 'GET' ||
     req.path === '/commands/list' ||
     req.path === '/commands/slashes/list' ||
+    req.path === '/commands/chat/list' ||
     req.path === '/warnings/list' ||
     req.path.startsWith('/api/')
   );
@@ -106,7 +107,7 @@ app.set('views', path.join(__dirname, 'views'));
 app.set("view engine", "njk");
 
 app.use(['/auth/login', '/auth/discord/callback'], authRateLimiter);
-app.use(['/commands/list', '/commands/slashes/list', '/warnings/list'], listApiRateLimiter);
+app.use(['/commands/list', '/commands/slashes/list', '/commands/chat/list', '/warnings/list'], listApiRateLimiter);
 app.use(mutatingRouteRateLimiter);
 
 passport.serializeUser((user, done) => done(null, user));

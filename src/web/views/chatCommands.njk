@@ -1,0 +1,38 @@
+{% extends "layout.njk" %}
+{% block css %}
+<link href="https://unpkg.com/tabulator-tables@5.4.3/dist/css/tabulator.min.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+
+<div x-data="chatCommandsPanel({{ prefix | dump | safe }})" x-init="init()">
+<div class="vs-page-header">
+  <h3 class="vs-page-title">Chat Commands</h3>
+  <p class="vs-page-subtitle">Built-in prefix commands (default <code>{{ prefix }}name</code>). Farm minigame commands use a separate prefix and are documented on the <a href="/docs/farm">farm docs</a> page.</p>
+</div>
+
+<div class="search-box">
+  <input class="form-control search-input" type="search" x-model="search" placeholder="Search chat commands..." aria-label="Search">
+</div>
+
+<p class="text-body-secondary small" x-show="isLoading" x-cloak>Refreshing chat commands...</p>
+<div id="chatCommandsTable"></div>
+
+<footer class="footer mt-5">
+  <div class="row g-0 justify-content-between align-items-center">
+    <div class="col-12 col-sm-auto text-center">
+      <p>IsekaiExpress Bot &mdash; made for F95Zone by Ryahn</p>
+    </div>
+    <div class="col-12 col-sm-auto text-center">
+      <p>v1.13.0</p>
+    </div>
+  </div>
+</footer>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.4.3/dist/js/tabulator.min.js"></script>
+{% endblock %}
