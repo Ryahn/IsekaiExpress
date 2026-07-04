@@ -115,13 +115,15 @@
 
         <p class="small mb-2" x-show="rehostBusy" x-cloak>Working...</p>
 
-        <div class="row g-2 mb-3" x-show="rehostSummary" x-cloak>
-          <div class="col-auto"><span class="badge text-bg-secondary">Commands: <span x-text="rehostSummary.totalCommands"></span></span></div>
-          <div class="col-auto"><span class="badge text-bg-info">Candidates: <span x-text="rehostSummary.candidates"></span></span></div>
-          <div class="col-auto"><span class="badge text-bg-success">Replaced: <span x-text="rehostSummary.replaced"></span></span></div>
-          <div class="col-auto"><span class="badge text-bg-warning">Flagged: <span x-text="rehostSummary.flagged"></span></span></div>
-          <div class="col-auto"><span class="badge text-bg-light text-dark">Skipped: <span x-text="rehostSummary.skipped"></span></span></div>
-        </div>
+        <template x-if="rehostSummary">
+          <div class="row g-2 mb-3">
+            <div class="col-auto"><span class="badge text-bg-secondary">Commands: <span x-text="rehostSummary.totalCommands"></span></span></div>
+            <div class="col-auto"><span class="badge text-bg-info">Candidates: <span x-text="rehostSummary.candidates"></span></span></div>
+            <div class="col-auto"><span class="badge text-bg-success">Replaced: <span x-text="rehostSummary.replaced"></span></span></div>
+            <div class="col-auto"><span class="badge text-bg-warning">Flagged: <span x-text="rehostSummary.flagged"></span></span></div>
+            <div class="col-auto"><span class="badge text-bg-light text-dark">Skipped: <span x-text="rehostSummary.skipped"></span></span></div>
+          </div>
+        </template>
 
         <div class="table-responsive" style="max-height: 360px; overflow-y: auto;" x-show="rehostRows.length" x-cloak>
           <table class="table table-sm table-striped align-middle mb-0">
