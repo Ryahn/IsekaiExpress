@@ -13,13 +13,19 @@ module.exports = class RandMeme extends BaseCommand {
       const url = memeUrl(filename);
 
       if (isVideoMeme(filename)) {
-        await message.channel.send(url);
+        const embed = new EmbedBuilder()
+          .setColor(0xe74c3c)
+          .setTitle('Random F95 meme')
+          .setDescription(filename);
+
+        await message.channel.send({ content: url, embeds: [embed] });
         return;
       }
 
       const embed = new EmbedBuilder()
         .setColor(0xe74c3c)
         .setTitle('Random F95 meme')
+        .setDescription(filename)
         .setImage(url);
 
       await message.channel.send({ embeds: [embed] });
