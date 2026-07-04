@@ -106,6 +106,10 @@ module.exports = {
     userId: str('FEMBOY_USER_ID', '9455')
   },
 
+  theCatApi: {
+    apiKey: str('THE_CAT_API_KEY', ''),
+  },
+
   fluxpointApiKey: str('FLUXPOINT_API_KEY', ''),
 
   currencyApiKey: str('CURRENCY_API_KEY', ''),
