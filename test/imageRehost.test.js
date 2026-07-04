@@ -17,6 +17,8 @@ const {
   isRehostConfigured,
   getRehostConfig,
   isRehostableContentType,
+  isTenorViewUrl,
+  extractTenorMediaFromHtml,
 } = require('../libs/imageRehost');
 
 const skipHosts = ['overlord.lordainz.xyz'];
@@ -41,7 +43,8 @@ test('normalizeUrl trims trailing punctuation from copied Discord links', () => 
 test('classifyUrl marks hosted, indirect, and candidate URLs', () => {
   assert.equal(classifyUrl('https://overlord.lordainz.xyz/f/test.png', skipHosts).status, 'skip_hosted');
   assert.equal(classifyUrl('https://www.youtube.com/watch?v=abc', skipHosts).status, 'flag_indirect');
-  assert.equal(classifyUrl('https://tenor.com/view/foo-gif-123', skipHosts).status, 'flag_indirect');
+  assert.equal(classifyUrl('https://tenor.com/view/foo-gif-123', skipHosts).status, 'candidate');
+  assert.equal(classifyUrl('https://tenor.com/view/foo-gif-123', skipHosts).reason, 'tenor_view');
   assert.equal(classifyUrl('https://cdn.discordapp.com/attachments/1/2/image.png', skipHosts).status, 'candidate');
   assert.equal(classifyUrl('https://cdn.discordapp.com/attachments/1/2/clip.webm', skipHosts).status, 'candidate');
   assert.equal(classifyUrl('https://cdn.discordapp.com/attachments/1/2/clip.mp4', skipHosts).status, 'candidate');
@@ -128,6 +131,22 @@ test('buildFlaggedExport wraps items with timestamp', () => {
   assert.ok(payload.generatedAt);
   assert.equal(payload.items.length, 1);
   assert.equal(payload.items[0].reason, 'indirect_host');
+});
+
+test('isTenorViewUrl detects tenor view pages', () => {
+  assert.equal(isTenorViewUrl('https://tenor.com/view/post-nut-avatar-gif-20872956'), true);
+  assert.equal(isTenorViewUrl('https://c.tenor.com/abc.gif'), false);
+});
+
+test('extractTenorMediaFromHtml prefers direct gif links', () => {
+  const html = [
+    '<meta property="og:image" content="https://media1.tenor.com/m/WA7wwjvKtgYAAAAd/post-nut-avatar.gif">',
+    '<meta property="og:video" content="https://media.tenor.com/WA7wwjvKtgYAAAPo/post-nut-avatar.mp4">',
+  ].join('');
+  assert.equal(
+    extractTenorMediaFromHtml(html),
+    'https://media1.tenor.com/m/WA7wwjvKtgYAAAAd/post-nut-avatar.gif',
+  );
 });
 
 test('isRehostableContentType accepts image and video MIME types', () => {

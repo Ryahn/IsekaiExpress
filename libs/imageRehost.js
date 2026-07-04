@@ -95,7 +95,7 @@ function isIndirectHost(url) {
   }
 
   if (/tenor\.com$/i.test(host) && /\/view\//i.test(path)) {
-    return true;
+    return false;
   }
 
   if (/gfycat\.com$/i.test(host)) {
@@ -135,6 +135,9 @@ function classifyUrl(url, skipHosts) {
   }
   if (isIndirectHost(url)) {
     return { status: 'flag_indirect', reason: 'indirect_host' };
+  }
+  if (isTenorViewUrl(url)) {
+    return { status: 'candidate', reason: 'tenor_view' };
   }
   if (isDirectImageCandidate(url)) {
     return { status: 'candidate', reason: 'direct_image' };
@@ -318,6 +321,73 @@ async function resolveDiscordAttachmentUrl(url, botToken, logger, cache) {
   return result;
 }
 
+function isTenorViewUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return /tenor\.com$/i.test(parsed.hostname) && /\/view\//i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function extractTenorMediaFromHtml(html) {
+  const candidates = [];
+  const push = (raw) => {
+    const url = String(raw || '').replace(/\\\//g, '/').trim();
+    if (!/^https:\/\/(?:media\d*\.tenor\.com|c\.tenor\.com)\//i.test(url)) return;
+    if (candidates.includes(url)) return;
+    candidates.push(url);
+  };
+
+  const htmlText = String(html || '');
+  const patterns = [
+    /property="og:image"\s+content="([^"]+)"/gi,
+    /content="([^"]+)"\s+property="og:image"/gi,
+    /"contentUrl":"(https:\\\/\\\/media[^"]+)"/gi,
+    /rel="image_src"\s+href="([^"]+)"/gi,
+    /name="twitter:image"\s+content="([^"]+)"/gi,
+    /property="og:video"\s+content="([^"]+)"/gi,
+    /content="([^"]+)"\s+property="og:video"/gi,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of htmlText.matchAll(pattern)) {
+      push(match[1]);
+    }
+  }
+
+  const gif = candidates.find((candidate) => /\.gif(\?|$)/i.test(candidate));
+  if (gif) return gif;
+  const webm = candidates.find((candidate) => /\.webm(\?|$)/i.test(candidate));
+  if (webm) return webm;
+  const mp4 = candidates.find((candidate) => /\.mp4(\?|$)/i.test(candidate));
+  if (mp4) return mp4;
+  return candidates.find((candidate) => MEDIA_EXT_PATTERN.test(candidate)) || null;
+}
+
+async function resolveTenorViewUrl(url, logger) {
+  try {
+    const response = await axios.get(url, {
+      timeout: 15000,
+      headers: {
+        ...DOWNLOAD_HEADERS,
+        Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+      },
+      validateStatus: (status) => status >= 200 && status < 300,
+    });
+    const mediaUrl = extractTenorMediaFromHtml(String(response.data || ''));
+    if (!mediaUrl) {
+      return { ok: false, reason: 'tenor_media_not_found' };
+    }
+    return { ok: true, url: mediaUrl };
+  } catch (error) {
+    if (logger?.warn) {
+      logger.warn(`Tenor view resolve failed for ${url}: ${error.message}`);
+    }
+    return { ok: false, reason: 'tenor_resolve_failed', error: error.message };
+  }
+}
+
 function resolveJsonPath(obj, dotPath) {
   const parts = String(dotPath || '').split('.').filter(Boolean);
   let current = obj;
@@ -482,7 +552,24 @@ async function processUrl(url, commandMeta, cfg, logger, discordCache) {
     return { ...base, action: 'flagged' };
   }
 
-  const download = await downloadWithDiscordRefresh(url, cfg.maxBytes, logger, discordCache);
+  let downloadUrl = url;
+  if (isTenorViewUrl(url)) {
+    const resolved = await resolveTenorViewUrl(url, logger);
+    if (!resolved.ok) {
+      return {
+        ...base,
+        action: 'flagged',
+        status: 'flag_indirect',
+        reason: resolved.reason,
+        detail: resolved.error || null,
+      };
+    }
+    downloadUrl = resolved.url;
+  }
+
+  const download = downloadUrl === url
+    ? await downloadWithDiscordRefresh(url, cfg.maxBytes, logger, discordCache)
+    : await downloadImage(downloadUrl, cfg.maxBytes, logger);
   if (!download.ok) {
     return {
       ...base,
@@ -700,6 +787,9 @@ module.exports = {
   normalizeUrl,
   classifyUrl,
   isRehostableContentType,
+  isTenorViewUrl,
+  extractTenorMediaFromHtml,
+  resolveTenorViewUrl,
   parseDiscordAttachmentUrl,
   discordAttachmentNeedsRefresh,
   findDiscordAttachment,
