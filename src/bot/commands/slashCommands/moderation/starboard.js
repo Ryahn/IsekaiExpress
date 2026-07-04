@@ -269,7 +269,7 @@ async function addMessage(client, interaction, settings) {
 
   const sourceMessage = await channel.messages.fetch(parsed.messageId).catch(() => null);
   if (!sourceMessage) {
-    return interaction.editReply('Could not find that message. Check the ID, link, and channel.');
+    return interaction.editReply('Could not find that message. Check the ID, link, and channel. Make sure to run this command in the channel the message is in.');
   }
 
   try {
