@@ -39,7 +39,36 @@ function hasStarboardAccessByRoleIds(config, userRoleIds, settings) {
   return [roles.staff, roles.mod].some((roleId) => roleId && userRoleIds.includes(String(roleId)));
 }
 
+/**
+ * Whether the member may manually add messages via /starboard add.
+ * Administrator always passes. Empty admin list falls back to starboard managers.
+ */
+function hasStarboardAdminRole(client, member, settings) {
+  if (!member) return false;
+  if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
+
+  const adminRoleIds = settings?.adminRoleIds || [];
+  if (adminRoleIds.length > 0) {
+    return adminRoleIds.some((roleId) => member.roles.cache.has(String(roleId)));
+  }
+
+  return hasStarboardRole(client, member, settings);
+}
+
+function hasStarboardAdminAccessByRoleIds(config, userRoleIds, settings) {
+  if (!Array.isArray(userRoleIds)) return false;
+
+  const adminRoleIds = settings?.adminRoleIds || [];
+  if (adminRoleIds.length > 0) {
+    return adminRoleIds.some((roleId) => userRoleIds.includes(String(roleId)));
+  }
+
+  return hasStarboardAccessByRoleIds(config, userRoleIds, settings);
+}
+
 module.exports = {
   hasStarboardRole,
   hasStarboardAccessByRoleIds,
+  hasStarboardAdminRole,
+  hasStarboardAdminAccessByRoleIds,
 };

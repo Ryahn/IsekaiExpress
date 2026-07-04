@@ -42,6 +42,7 @@ const REQUIRED = {
     'starboard_emoji',
     'starboard_threshold',
     'starboard_allowed_role_ids',
+    'starboard_admin_role_ids',
   ],
   starboard_entries: [
     'id',

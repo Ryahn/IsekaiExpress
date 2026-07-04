@@ -7,7 +7,7 @@
     <div class="col">
       <h2 class="mb-1">Starboard Settings</h2>
       <p class="text-body-secondary mb-0">
-        Configure the starboard channel, emoji, threshold, and which roles may star messages.
+        Configure the starboard channel, emoji, threshold, star roles, and admin roles for manual adds.
       </p>
     </div>
   </div>
@@ -57,14 +57,14 @@
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><h5 class="mb-0">Allowed roles</h5></div>
+      <div class="card-header"><h5 class="mb-0">Star roles</h5></div>
       <div class="card-body">
         <p class="text-body-secondary">
           Only members with these roles can add star reactions or manage starboard settings.
           Leave empty to allow guild managers (staff/mod) until roles are configured.
         </p>
         <div class="row">
-          <template x-for="role in guildRoles" :key="role.id">
+          <template x-for="role in guildRoles" :key="'star-' + role.id">
             <div class="col-md-4">
               <div class="form-check mb-2">
                 <input
@@ -75,6 +75,32 @@
                   @change="toggleRole(role.id, $event.target.checked)"
                   :checked="settings.allowedRoleIds.includes(role.id)">
                 <label class="form-check-label" :for="'role-' + role.id" x-text="role.name"></label>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0">Admin roles</h5></div>
+      <div class="card-body">
+        <p class="text-body-secondary">
+          Roles that can manually add messages via <code>/starboard add</code>.
+          Leave empty to allow starboard managers until admin roles are configured.
+        </p>
+        <div class="row">
+          <template x-for="role in guildRoles" :key="'admin-' + role.id">
+            <div class="col-md-4">
+              <div class="form-check mb-2">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  :id="'admin-role-' + role.id"
+                  :value="role.id"
+                  @change="toggleAdminRole(role.id, $event.target.checked)"
+                  :checked="settings.adminRoleIds.includes(role.id)">
+                <label class="form-check-label" :for="'admin-role-' + role.id" x-text="role.name"></label>
               </div>
             </div>
           </template>

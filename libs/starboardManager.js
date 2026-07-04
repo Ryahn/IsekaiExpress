@@ -123,7 +123,7 @@ async function updateStarboardPost(client, guild, entry, sourceMessage, settings
 
 async function createStarboardPost(client, guild, sourceMessage, settings, starCount) {
   const starboardChannel = await fetchTextChannel(guild, settings.channelId);
-  if (!starboardChannel) return;
+  if (!starboardChannel) return null;
 
   const me = guild.members.me;
   const perms = starboardChannel.permissionsFor(me);
@@ -133,7 +133,7 @@ async function createStarboardPost(client, guild, sourceMessage, settings, starC
     !perms?.has(PermissionFlagsBits.EmbedLinks)
   ) {
     client.logger.warn('Starboard channel missing required bot permissions.');
-    return;
+    return null;
   }
 
   const payload = buildStarboardPayload(sourceMessage, starCount);
@@ -146,6 +146,8 @@ async function createStarboardPost(client, guild, sourceMessage, settings, starC
     starboardMessageId: sent.id,
     starCount,
   });
+
+  return sent;
 }
 
 async function syncStarboard(client, guild, sourceMessage, settings, starCount) {
@@ -205,9 +207,44 @@ async function handleReactionChange(client, reaction, user, added) {
   await syncStarboard(client, guild, message, settings, starCount);
 }
 
+/**
+ * Manually post or refresh a message on the starboard, bypassing the star threshold.
+ * @returns {{ starCount: number, updated: boolean }}
+ */
+async function manualAddToStarboard(client, guild, sourceMessage, settings) {
+  if (!settings.enabled) {
+    throw new Error('The starboard is not enabled.');
+  }
+  if (!settings.channelId) {
+    throw new Error('No starboard channel is configured.');
+  }
+  if (String(sourceMessage.channel.id) === String(settings.channelId)) {
+    throw new Error('Cannot add a message from the starboard channel itself.');
+  }
+
+  let starCount = settings.emoji ? await getStarCount(sourceMessage, settings) : 0;
+  if (starCount < settings.threshold) {
+    starCount = settings.threshold;
+  }
+
+  const entry = await client.db.getStarboardEntry(guild.id, sourceMessage.id);
+  if (entry) {
+    await updateStarboardPost(client, guild, entry, sourceMessage, settings, starCount);
+    return { starCount, updated: true };
+  }
+
+  const sent = await createStarboardPost(client, guild, sourceMessage, settings, starCount);
+  if (!sent) {
+    throw new Error('Could not post to the starboard channel. Check bot permissions.');
+  }
+
+  return { starCount, updated: false };
+}
+
 module.exports = {
   buildStarboardPayload,
   getStarCount,
   handleReactionChange,
   syncStarboard,
+  manualAddToStarboard,
 };

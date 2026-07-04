@@ -139,6 +139,12 @@ router.post('/save', async (req, res, next) => {
         ? req.body.allowedRoleIds.split(',').map((s) => s.trim()).filter(Boolean)
         : undefined;
 
+    const adminRoleIds = Array.isArray(req.body.adminRoleIds)
+      ? req.body.adminRoleIds
+      : typeof req.body.adminRoleIds === 'string' && req.body.adminRoleIds
+        ? req.body.adminRoleIds.split(',').map((s) => s.trim()).filter(Boolean)
+        : undefined;
+
     const parsed = db.parseStarboardSettingsInput(
       {
         enabled: req.body.enabled,
@@ -146,6 +152,7 @@ router.post('/save', async (req, res, next) => {
         emoji: req.body.emoji,
         threshold: req.body.threshold,
         allowedRoleIds,
+        adminRoleIds,
       },
       { checkboxInput: true },
     );

@@ -15,6 +15,7 @@ function defaultStarboardSettings() {
     emoji: null,
     threshold: 3,
     allowedRoleIds: [],
+    adminRoleIds: [],
   };
 }
 
@@ -115,6 +116,7 @@ function hydrateStarboardSettings(row = {}) {
     ? coerceThreshold(row.starboard_threshold ?? 3).value
     : 3;
   settings.allowedRoleIds = parseJsonArray(row.starboard_allowed_role_ids, []);
+  settings.adminRoleIds = parseJsonArray(row.starboard_admin_role_ids, []);
 
   return settings;
 }
@@ -167,7 +169,37 @@ function parseStarboardSettingsInput(input = {}, options = {}) {
     }
   }
 
+  if (input.adminRoleIds != null || input.starboard_admin_role_ids != null) {
+    const raw = input.adminRoleIds != null ? input.adminRoleIds : input.starboard_admin_role_ids;
+    if (Array.isArray(raw)) {
+      settings.adminRoleIds = raw.map(String).filter(Boolean);
+    } else if (typeof raw === 'string') {
+      settings.adminRoleIds = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+  }
+
   return { ok: errors.length === 0, errors, settings };
+}
+
+function parseMessageReference(input) {
+  const trimmed = String(input || '').trim();
+  if (!trimmed) return { ok: false, error: 'A message ID or link is required.' };
+
+  const linkMatch = trimmed.match(/discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)/);
+  if (linkMatch) {
+    return {
+      ok: true,
+      guildId: linkMatch[1],
+      channelId: linkMatch[2],
+      messageId: linkMatch[3],
+    };
+  }
+
+  if (/^\d{17,20}$/.test(trimmed)) {
+    return { ok: true, messageId: trimmed };
+  }
+
+  return { ok: false, error: 'Provide a valid message ID or Discord message link.' };
 }
 
 function validateEnableSettings(settings) {
@@ -196,4 +228,5 @@ module.exports = {
   parseStarboardSettingsInput,
   validateEnableSettings,
   getStarboardSettingDefinitions,
+  parseMessageReference,
 };

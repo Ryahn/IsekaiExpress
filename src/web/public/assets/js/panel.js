@@ -488,7 +488,7 @@
 		window.Alpine.data('starboardSettingsPanel', function(config) {
 			return {
 				csrfToken: config.csrfToken,
-				settings: Object.assign({ allowedRoleIds: [] }, config.settings || {}),
+				settings: Object.assign({ allowedRoleIds: [], adminRoleIds: [] }, config.settings || {}),
 				guildRoles: config.guildRoles || [],
 				textChannels: config.textChannels || [],
 				thresholdMin: config.thresholdMin || 1,
@@ -498,6 +498,9 @@
 				init: function() {
 					if (!Array.isArray(this.settings.allowedRoleIds)) {
 						this.settings.allowedRoleIds = [];
+					}
+					if (!Array.isArray(this.settings.adminRoleIds)) {
+						this.settings.adminRoleIds = [];
 					}
 					if (config.success) notify('success', config.success);
 					(config.errors || []).forEach(function(error) { notify('error', error); });
@@ -511,6 +514,14 @@
 					this.settings.allowedRoleIds = ids;
 				},
 
+				toggleAdminRole: function(roleId, checked) {
+					const ids = this.settings.adminRoleIds.slice();
+					const index = ids.indexOf(roleId);
+					if (checked && index === -1) ids.push(roleId);
+					if (!checked && index !== -1) ids.splice(index, 1);
+					this.settings.adminRoleIds = ids;
+				},
+
 				saveSettings: async function() {
 					this.isSaving = true;
 					try {
@@ -520,15 +531,19 @@
 							emoji: this.settings.emoji || '',
 							threshold: String(this.settings.threshold || ''),
 							allowedRoleIds: this.settings.allowedRoleIds.join(','),
+							adminRoleIds: this.settings.adminRoleIds.join(','),
 							_csrf: this.csrfToken,
 						};
 						const response = await requestJson('/starboard-settings/save', {
 							method: 'POST',
 							body: body,
 						});
-						this.settings = Object.assign({ allowedRoleIds: [] }, response.settings || this.settings);
+						this.settings = Object.assign({ allowedRoleIds: [], adminRoleIds: [] }, response.settings || this.settings);
 						if (!Array.isArray(this.settings.allowedRoleIds)) {
 							this.settings.allowedRoleIds = [];
+						}
+						if (!Array.isArray(this.settings.adminRoleIds)) {
+							this.settings.adminRoleIds = [];
 						}
 						notify('success', response.message || 'Saved starboard settings.');
 					}
@@ -537,7 +552,7 @@
 							notify('error', message);
 						});
 						if (error.data && error.data.settings) {
-							this.settings = Object.assign({ allowedRoleIds: [] }, error.data.settings);
+							this.settings = Object.assign({ allowedRoleIds: [], adminRoleIds: [] }, error.data.settings);
 						}
 					}
 					finally {

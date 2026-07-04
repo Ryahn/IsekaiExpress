@@ -14,6 +14,9 @@ function rowToPatch(settings) {
   if (settings.allowedRoleIds != null) {
     patch.starboard_allowed_role_ids = serializeRoleIds(settings.allowedRoleIds);
   }
+  if (settings.adminRoleIds != null) {
+    patch.starboard_admin_role_ids = serializeRoleIds(settings.adminRoleIds);
+  }
   return patch;
 }
 
