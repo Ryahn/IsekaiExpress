@@ -139,6 +139,9 @@ function classifyUrl(url, skipHosts) {
   if (isTenorViewUrl(url)) {
     return { status: 'candidate', reason: 'tenor_view' };
   }
+  if (isGiphyPageUrl(url)) {
+    return { status: 'candidate', reason: 'giphy_page' };
+  }
   if (isDirectImageCandidate(url)) {
     return { status: 'candidate', reason: 'direct_image' };
   }
@@ -388,6 +391,105 @@ async function resolveTenorViewUrl(url, logger) {
   }
 }
 
+function isGiphyPageUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return /giphy\.com$/i.test(parsed.hostname) && /\/(gifs|clips|stickers)\//i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function parseGiphyMediaId(url) {
+  try {
+    const parsed = new URL(url);
+    if (!/giphy\.com$/i.test(parsed.hostname)) return null;
+    const match = parsed.pathname.match(/\/(gifs|clips|stickers)\/([^/?#]+)/i);
+    if (!match) return null;
+    const slug = decodeURIComponent(match[2]);
+    const id = slug.includes('-') ? slug.slice(slug.lastIndexOf('-') + 1) : slug;
+    if (!/^[A-Za-z0-9]{6,}$/.test(id)) return null;
+    return { id, type: match[1].toLowerCase() };
+  } catch {
+    return null;
+  }
+}
+
+function buildGiphyDirectUrls(parsed) {
+  const { id, type } = parsed;
+  if (type === 'clips') {
+    return [
+      `https://media.giphy.com/media/${id}/giphy.mp4`,
+      `https://i.giphy.com/${id}.mp4`,
+    ];
+  }
+  return [
+    `https://media.giphy.com/media/${id}/giphy.gif`,
+    `https://i.giphy.com/${id}.gif`,
+  ];
+}
+
+function extractGiphyIdFromHtml(html) {
+  const match = String(html || '').match(/"gifId":"([A-Za-z0-9]+)"/);
+  return match ? match[1] : null;
+}
+
+async function resolveGiphyPageUrl(url, logger) {
+  let parsed = parseGiphyMediaId(url);
+  if (!parsed) {
+    try {
+      const response = await axios.get(url, {
+        timeout: 15000,
+        headers: {
+          ...DOWNLOAD_HEADERS,
+          Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+        },
+        validateStatus: (status) => status >= 200 && status < 300,
+      });
+      const gifId = extractGiphyIdFromHtml(String(response.data || ''));
+      if (gifId) {
+        parsed = { id: gifId, type: 'gifs' };
+      }
+    } catch (error) {
+      if (logger?.warn) {
+        logger.warn(`Giphy page resolve failed for ${url}: ${error.message}`);
+      }
+      return { ok: false, reason: 'giphy_resolve_failed', error: error.message };
+    }
+  }
+
+  if (!parsed) {
+    return { ok: false, reason: 'giphy_id_not_found' };
+  }
+
+  return { ok: true, url: buildGiphyDirectUrls(parsed)[0], fallbackUrls: buildGiphyDirectUrls(parsed).slice(1) };
+}
+
+async function resolveMediaDownloadUrl(url, logger) {
+  if (isTenorViewUrl(url)) {
+    return resolveTenorViewUrl(url, logger);
+  }
+  if (isGiphyPageUrl(url)) {
+    return resolveGiphyPageUrl(url, logger);
+  }
+  return { ok: true, url };
+}
+
+async function downloadResolvedMedia(url, resolved, cfg, logger, discordCache) {
+  const candidates = [resolved.url, ...(resolved.fallbackUrls || [])];
+  let lastFailure = null;
+
+  for (const candidate of candidates) {
+    const download = candidate === url
+      ? await downloadWithDiscordRefresh(url, cfg.maxBytes, logger, discordCache)
+      : await downloadImage(candidate, cfg.maxBytes, logger);
+    if (download.ok) return download;
+    lastFailure = download;
+  }
+
+  return lastFailure || { ok: false, reason: 'download_failed', error: 'No download candidates' };
+}
+
 function resolveJsonPath(obj, dotPath) {
   const parts = String(dotPath || '').split('.').filter(Boolean);
   let current = obj;
@@ -552,24 +654,23 @@ async function processUrl(url, commandMeta, cfg, logger, discordCache) {
     return { ...base, action: 'flagged' };
   }
 
-  let downloadUrl = url;
-  if (isTenorViewUrl(url)) {
-    const resolved = await resolveTenorViewUrl(url, logger);
-    if (!resolved.ok) {
+  let resolvedMedia = null;
+  if (isTenorViewUrl(url) || isGiphyPageUrl(url)) {
+    resolvedMedia = await resolveMediaDownloadUrl(url, logger);
+    if (!resolvedMedia.ok) {
       return {
         ...base,
         action: 'flagged',
         status: 'flag_indirect',
-        reason: resolved.reason,
-        detail: resolved.error || null,
+        reason: resolvedMedia.reason,
+        detail: resolvedMedia.error || null,
       };
     }
-    downloadUrl = resolved.url;
   }
 
-  const download = downloadUrl === url
-    ? await downloadWithDiscordRefresh(url, cfg.maxBytes, logger, discordCache)
-    : await downloadImage(downloadUrl, cfg.maxBytes, logger);
+  const download = resolvedMedia
+    ? await downloadResolvedMedia(url, resolvedMedia, cfg, logger, discordCache)
+    : await downloadWithDiscordRefresh(url, cfg.maxBytes, logger, discordCache);
   if (!download.ok) {
     return {
       ...base,
@@ -790,6 +891,11 @@ module.exports = {
   isTenorViewUrl,
   extractTenorMediaFromHtml,
   resolveTenorViewUrl,
+  isGiphyPageUrl,
+  parseGiphyMediaId,
+  buildGiphyDirectUrls,
+  resolveGiphyPageUrl,
+  resolveMediaDownloadUrl,
   parseDiscordAttachmentUrl,
   discordAttachmentNeedsRefresh,
   findDiscordAttachment,

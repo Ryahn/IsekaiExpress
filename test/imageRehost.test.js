@@ -19,6 +19,9 @@ const {
   isRehostableContentType,
   isTenorViewUrl,
   extractTenorMediaFromHtml,
+  isGiphyPageUrl,
+  parseGiphyMediaId,
+  buildGiphyDirectUrls,
 } = require('../libs/imageRehost');
 
 const skipHosts = ['overlord.lordainz.xyz'];
@@ -147,6 +150,19 @@ test('extractTenorMediaFromHtml prefers direct gif links', () => {
     extractTenorMediaFromHtml(html),
     'https://media1.tenor.com/m/WA7wwjvKtgYAAAAd/post-nut-avatar.gif',
   );
+});
+
+test('parseGiphyMediaId extracts gif id from giphy page slug', () => {
+  const url = 'https://giphy.com/gifs/breaking-bad-22DIoysaL9XvG';
+  assert.deepEqual(parseGiphyMediaId(url), { id: '22DIoysaL9XvG', type: 'gifs' });
+  assert.deepEqual(
+    buildGiphyDirectUrls(parseGiphyMediaId(url)),
+    [
+      'https://media.giphy.com/media/22DIoysaL9XvG/giphy.gif',
+      'https://i.giphy.com/22DIoysaL9XvG.gif',
+    ],
+  );
+  assert.equal(classifyUrl(url, skipHosts).reason, 'giphy_page');
 });
 
 test('isRehostableContentType accepts image and video MIME types', () => {
