@@ -2,17 +2,16 @@ const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageFlags } = require('discord.js');
 const axios = require('axios');
 const path = require('path');
+const config = require('../../../../../config');
+
+const FLUXPOINT_NEKO_GIF_URL = 'https://api.fluxpoint.dev/nsfw/gif/neko';
 
 module.exports = {
     category: path.basename(__dirname),
 
     data: new SlashCommandBuilder()
         .setName('catgirl')
-        .setDescription('catgirl')
-        .addStringOption((option) => option
-            .setName('tags')
-            .setDescription('Optional Gelbooru tags (defaults to catgirl)')
-            .setRequired(false)),
+        .setDescription('catgirl'),
 
     async execute(client, interaction) {
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'catgirl');
@@ -23,24 +22,48 @@ module.exports = {
             });
         }
 
-        const query = interaction.options.getString('tags') || 'catgirl';
-
-        const api = `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&limit=100&tags=${encodeURIComponent(query)}&api_key=${client.config.femboy.apiKey}&user_id=${client.config.femboy.userId}`;
-
-        const response = await client.rateLimitHandler.executeWithRateLimit('gelbooru-api', async () => {
-            return await axios.get(api, { timeout: 10000, validateStatus: () => true });
-        });
-        if (response.status < 200 || response.status >= 300) {
-            return interaction.editReply({ content: 'No results found', flags: MessageFlags.Ephemeral });
+        if (!config.fluxpointApiKey) {
+            return interaction.editReply({
+                content: 'This command needs `FLUXPOINT_API_KEY` in the environment.',
+                flags: MessageFlags.Ephemeral,
+            });
         }
 
-        const data = response.data;
-        if (!data.post || data.post.length <= 0) {
-            return interaction.editReply({ content: 'No results found', flags: MessageFlags.Ephemeral });
+        try {
+            const response = await client.rateLimitHandler.executeWithRateLimit('fluxpoint-nsfw-gif', async () => {
+                return await axios.get(FLUXPOINT_NEKO_GIF_URL, {
+                    headers: { Authorization: config.fluxpointApiKey },
+                    timeout: 10000,
+                    responseType: 'text',
+                    transformResponse: [(d) => d],
+                    validateStatus: () => true,
+                });
+            });
+
+            if (response.status < 200 || response.status >= 300) {
+                const snippet = String(response.data || '').slice(0, 200);
+                throw new Error(`Fluxpoint API ${response.status} ${response.statusText}: ${snippet}`);
+            }
+
+            const raw = String(response.data || '');
+            let data;
+            try {
+                data = JSON.parse(raw);
+            } catch {
+                throw new Error(`Fluxpoint API returned non-JSON (length ${raw.length})`);
+            }
+
+            if (typeof data?.file !== 'string' || !data.file) {
+                throw new Error('Fluxpoint API response missing file URL');
+            }
+
+            await interaction.editReply({ content: data.file });
+        } catch (error) {
+            client.logger.error('Error executing the catgirl command:', error);
+            await interaction.editReply({
+                content: 'Could not load the image (the external API may be down or changed).',
+                flags: MessageFlags.Ephemeral,
+            }).catch(() => {});
         }
-
-        const post = data.post[Math.floor(Math.random() * data.post.length)];
-
-        await interaction.editReply({ content: post.file_url });
     },
 };
