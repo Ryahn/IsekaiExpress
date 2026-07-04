@@ -53,10 +53,6 @@ function buildStarboardPayload(sourceMessage, starCount) {
     .setFooter({ text: `⭐ ${starCount} | #${channelName}` })
     .setTimestamp(sourceMessage.createdAt);
 
-  if (sourceMessage.channel?.nsfw) {
-    headerEmbed.setNSFW(true);
-  }
-
   if (imageAttachments.length) {
     headerEmbed.setImage(imageAttachments[0].url);
   }
