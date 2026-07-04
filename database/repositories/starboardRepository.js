@@ -54,6 +54,9 @@ module.exports = {
       star_count: Number(data.starCount) || 0,
       updated_at: db.fn.now(),
     };
+    if (data.archivePath !== undefined) {
+      row.archive_path = data.archivePath || null;
+    }
 
     if (existing) {
       await db.table('starboard_entries').where({ id: existing.id }).update(row);

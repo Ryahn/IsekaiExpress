@@ -79,6 +79,11 @@ module.exports = {
     uploadToken: str('IMAGE_ARCHIVE_UPLOAD_TOKEN', '')
   },
 
+  starboardArchive: {
+    enabled: bool('STARBOARD_ARCHIVE_ENABLED', true),
+    dir: str('STARBOARD_ARCHIVE_DIR', path.join(__dirname, '..', 'starboard-archive')),
+  },
+
   channelStats: {
     enabled: bool('CHANNEL_STATS_ENABLED', false)
   },

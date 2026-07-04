@@ -3,6 +3,11 @@ const path = require('path');
 const { requireStarboardManager, requireStarboardAdmin } = require('../../../utils/starboardGuards');
 const { manualAddToStarboard } = require('../../../../../libs/starboardManager');
 const {
+  restoreStarboardEntry,
+  restoreMissingStarboardEntries,
+  backupAllStarboardEntries,
+} = require('../../../../../libs/starboardArchive');
+const {
   formatEmojiForDisplay,
   normalizeEmojiInput,
   validateEnableSettings,
@@ -107,6 +112,37 @@ module.exports = {
         )
         .addSubcommand((sub) => sub.setName('clear').setDescription('Clear all starboard admin roles'))
         .addSubcommand((sub) => sub.setName('list').setDescription('List configured starboard admin roles')),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('restore')
+        .setDescription('Restore a starboard post from the local archive')
+        .addStringOption((opt) =>
+          opt
+            .setName('message_id')
+            .setDescription('Source message ID or Discord message link')
+            .setRequired(true),
+        )
+        .addBooleanOption((opt) =>
+          opt
+            .setName('force')
+            .setDescription('Repost even if the starboard message still exists on Discord'),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('restore_all')
+        .setDescription('Restore all starboard posts missing from Discord')
+        .addBooleanOption((opt) =>
+          opt
+            .setName('force')
+            .setDescription('Repost all archived entries, not only missing posts'),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('backup_all')
+        .setDescription('Archive all existing starboard entries that are not backed up yet'),
     ),
 
   async execute(client, interaction) {
@@ -128,6 +164,17 @@ module.exports = {
       if (subcommand === 'add') {
         if (!(await requireStarboardAdmin(client, interaction, settings))) return;
         return addMessage(client, interaction, settings);
+      }
+
+      if (subcommand === 'restore' || subcommand === 'restore_all' || subcommand === 'backup_all') {
+        if (!(await requireStarboardAdmin(client, interaction, settings))) return;
+        if (subcommand === 'restore') {
+          return restoreMessage(client, interaction, settings);
+        }
+        if (subcommand === 'restore_all') {
+          return restoreAllMessages(client, interaction, settings);
+        }
+        return backupAllMessages(client, interaction);
       }
 
       if (!(await requireStarboardManager(client, interaction, settings))) return;
@@ -244,6 +291,93 @@ async function setThreshold(client, interaction) {
     content: `Starboard threshold set to **${count}**.`,
     embeds: [buildSettingsEmbed(updated)],
   });
+}
+
+async function restoreMessage(client, interaction, settings) {
+  const raw = interaction.options.getString('message_id', true);
+  const force = interaction.options.getBoolean('force') || false;
+  const parsed = parseMessageReference(raw);
+  if (!parsed.ok) {
+    return interaction.editReply(parsed.error);
+  }
+
+  const sourceMessageId = parsed.messageId;
+  const entry =
+    (await client.db.getStarboardEntry(interaction.guildId, sourceMessageId)) || {
+      guild_id: interaction.guildId,
+      source_message_id: sourceMessageId,
+      source_channel_id: parsed.channelId || '',
+      starboard_message_id: '',
+      star_count: 0,
+    };
+
+  const result = await restoreStarboardEntry({
+    db: client.db,
+    logger: client.logger,
+    guild: interaction.guild,
+    rest: client.rest,
+    settings,
+    entry,
+    force,
+  });
+
+  if (!result.ok) {
+    return interaction.editReply(result.error || 'Could not restore starboard message.');
+  }
+
+  return interaction.editReply(
+    `Restored starboard post from archive (new message \`${result.messageId}\`).`,
+  );
+}
+
+async function restoreAllMessages(client, interaction, settings) {
+  const force = interaction.options.getBoolean('force') || false;
+  await interaction.editReply('Restoring starboard posts from archive…');
+
+  const summary = await restoreMissingStarboardEntries({
+    db: client.db,
+    guild: interaction.guild,
+    rest: client.rest,
+    settings,
+    logger: client.logger,
+    force,
+  });
+
+  const lines = [
+    `Processed **${summary.total}** archived entr${summary.total === 1 ? 'y' : 'ies'}.`,
+    `Restored **${summary.restored}**.`,
+  ];
+  if (summary.skipped) lines.push(`Skipped **${summary.skipped}** existing post(s).`);
+  if (summary.errors.length) {
+    lines.push('', 'Errors:', ...summary.errors.slice(0, 5).map((e) => `- ${e}`));
+  }
+
+  return interaction.editReply(lines.join('\n'));
+}
+
+async function backupAllMessages(client, interaction) {
+  await interaction.editReply('Archiving starboard entries without a local backup…');
+
+  const summary = await backupAllStarboardEntries({
+    db: client.db,
+    guild: interaction.guild,
+    logger: client.logger,
+  });
+
+  const lines = [
+    `Checked **${summary.total}** starboard entr${summary.total === 1 ? 'y' : 'ies'}.`,
+    `Newly archived **${summary.backedUp}**.`,
+    `Already archived **${summary.skipped}**.`,
+  ];
+  if (summary.failed) lines.push(`Failed **${summary.failed}**.`);
+  if (summary.errors.length) {
+    lines.push('', 'Details:', ...summary.errors.slice(0, 8).map((e) => `- ${e}`));
+    if (summary.errors.length > 8) {
+      lines.push(`- …and ${summary.errors.length - 8} more`);
+    }
+  }
+
+  return interaction.editReply(lines.join('\n'));
 }
 
 async function addMessage(client, interaction, settings) {

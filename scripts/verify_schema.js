@@ -51,6 +51,7 @@ const REQUIRED = {
     'source_message_id',
     'starboard_message_id',
     'star_count',
+    'archive_path',
     'created_at',
     'updated_at',
   ],

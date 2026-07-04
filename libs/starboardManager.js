@@ -1,6 +1,11 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { reactionEmojiMatches } = require('./starboardSettings');
 const { hasStarboardRole } = require('./starboardAuth');
+const {
+  archiveStarboardMessage,
+  updateArchiveStarCount,
+  manifestExists,
+} = require('./starboardArchive');
 
 const CONTENT_LIMIT = 2000;
 const DESCRIPTION_LIMIT = 4096;
@@ -108,12 +113,24 @@ async function updateStarboardPost(client, guild, entry, sourceMessage, settings
   const payload = buildStarboardPayload(sourceMessage, starCount);
   await starboardMessage.edit(payload);
 
+  let archivePath = entry.archive_path || null;
+  if (archivePath && await manifestExists(archivePath)) {
+    await updateArchiveStarCount(archivePath, starCount).catch(() => {});
+  } else {
+    try {
+      archivePath = await archiveStarboardMessage(client.logger, sourceMessage, starCount);
+    } catch (error) {
+      client.logger.error('Starboard archive backfill failed:', error);
+    }
+  }
+
   await client.db.upsertStarboardEntry({
     guildId: guild.id,
     sourceChannelId: sourceMessage.channel.id,
     sourceMessageId: sourceMessage.id,
     starboardMessageId: starboardMessage.id,
     starCount,
+    archivePath: archivePath || entry.archive_path || null,
   });
 }
 
@@ -135,12 +152,20 @@ async function createStarboardPost(client, guild, sourceMessage, settings, starC
   const payload = buildStarboardPayload(sourceMessage, starCount);
   const sent = await starboardChannel.send(payload);
 
+  let archivePath = null;
+  try {
+    archivePath = await archiveStarboardMessage(client.logger, sourceMessage, starCount);
+  } catch (error) {
+    client.logger.error('Starboard archive failed:', error);
+  }
+
   await client.db.upsertStarboardEntry({
     guildId: guild.id,
     sourceChannelId: sourceMessage.channel.id,
     sourceMessageId: sourceMessage.id,
     starboardMessageId: sent.id,
     starCount,
+    archivePath,
   });
 
   return sent;
@@ -243,4 +268,6 @@ module.exports = {
   handleReactionChange,
   syncStarboard,
   manualAddToStarboard,
+  createStarboardPost,
+  updateStarboardPost,
 };

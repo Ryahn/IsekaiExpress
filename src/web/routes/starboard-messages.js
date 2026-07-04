@@ -5,6 +5,11 @@ const config = require('../../../config');
 const requireCsrf = require('../middleware/requireCsrf');
 const { rest, canManageStarboard } = require('../utils/starboardAccess');
 const { removeStarboardEntry } = require('../../../libs/starboardRemoval');
+const {
+  restoreStarboardEntry,
+  restoreMissingStarboardEntries,
+  manifestExists,
+} = require('../../../libs/starboardArchive');
 
 router.use(requireCsrf);
 
@@ -42,6 +47,7 @@ function formatEntryRow(entry, guildId, settings, channelNames) {
     starboard_message_url: starboardChannelId
       ? `https://discord.com/channels/${guildId}/${starboardChannelId}/${starboardMessageId}`
       : null,
+    has_archive: false,
     created_at: formatTimestamp(entry.created_at),
     updated_at: formatTimestamp(entry.updated_at),
   };
@@ -79,8 +85,16 @@ router.get('/list', async (req, res, next) => {
     const channelNames = buildChannelNameMap(channels);
     const guildId = String(config.discord.guildId);
 
+    const formattedEntries = await Promise.all((entries || []).map(async (entry) => {
+      const row = formatEntryRow(entry, guildId, settings, channelNames);
+      row.has_archive = await manifestExists(
+        entry.archive_path || `${guildId}/${entry.source_message_id}`,
+      );
+      return row;
+    }));
+
     res.json({
-      entries: (entries || []).map((entry) => formatEntryRow(entry, guildId, settings, channelNames)),
+      entries: formattedEntries,
       starboardChannelId: settings.channelId || '',
     });
   } catch (e) {
@@ -115,6 +129,80 @@ router.post('/delete/:id', async (req, res, next) => {
     }
 
     return res.json({ message: 'Removed message from the starboard channel.' });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/restore/:id', async (req, res, next) => {
+  try {
+    const settings = await db.getStarboardSettings(config.discord.guildId);
+    if (!(await canManageStarboard(req, settings))) {
+      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    }
+
+    if (!req.session?.csrf || req.session.csrf !== req.body?._csrf) {
+      return res.status(403).json({ message: 'Invalid CSRF token.' });
+    }
+
+    const entryId = String(req.params.id || '').trim();
+    if (!ENTRY_ID_PATTERN.test(entryId)) {
+      return res.status(400).json({ message: 'Invalid starboard entry id.' });
+    }
+
+    const entry = await db.getStarboardEntryById(entryId);
+    if (!entry) {
+      return res.status(404).json({ message: 'Starboard entry not found.' });
+    }
+
+    const force = req.body?.force === 'true' || req.body?.force === true;
+    const result = await restoreStarboardEntry({
+      db,
+      rest,
+      settings,
+      entry,
+      force,
+    });
+
+    if (!result.ok) {
+      return res.status(400).json({ message: result.error || 'Could not restore starboard entry.' });
+    }
+
+    return res.json({
+      message: 'Restored starboard post from archive.',
+      starboardMessageId: result.messageId,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/restore-all', async (req, res, next) => {
+  try {
+    const settings = await db.getStarboardSettings(config.discord.guildId);
+    if (!(await canManageStarboard(req, settings))) {
+      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    }
+
+    if (!req.session?.csrf || req.session.csrf !== req.body?._csrf) {
+      return res.status(403).json({ message: 'Invalid CSRF token.' });
+    }
+
+    const force = req.body?.force === 'true' || req.body?.force === true;
+    const summary = await restoreMissingStarboardEntries({
+      db,
+      rest,
+      settings,
+      force,
+    });
+
+    return res.json({
+      message: `Restored ${summary.restored} of ${summary.total} archived entries.`,
+      restored: summary.restored,
+      skipped: summary.skipped,
+      total: summary.total,
+      errors: summary.errors.slice(0, 10),
+    });
   } catch (e) {
     next(e);
   }

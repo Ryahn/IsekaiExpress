@@ -55,6 +55,8 @@ services:
       - ./logs:/usr/src/app/logs
       # Host chat/exports: create ./chatdump on host, then: docker compose up -d --force-recreate bot
       - ./chatdump:/usr/src/app/chatdump
+      # Starboard disaster-recovery archives (images, text, embeds). Survives container rebuilds.
+      - ./starboard-archive:/usr/src/app/starboard-archive
 
   web:
     image: f95bot-app:latest
@@ -73,6 +75,8 @@ services:
       - mysql
       - redis
     restart: unless-stopped
+    volumes:
+      - ./starboard-archive:/usr/src/app/starboard-archive
     networks:
       - default
       - traefik-network

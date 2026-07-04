@@ -540,6 +540,7 @@
 					'starboard_message_id',
 					'created_at',
 					'updated_at',
+					'has_archive',
 				],
 				rows: function(response) { return Array.isArray(response.entries) ? response.entries : []; },
 				tabulator: {
@@ -571,14 +572,26 @@
 							title: 'Actions',
 							field: 'id',
 							hozAlign: 'center',
-							width: 120,
+							width: 200,
 							formatter: function(cell) {
-								return '<button type="button" class="btn btn-sm btn-danger deleteButton" data-id="' + cell.getValue() + '">Remove</button>';
+								const data = cell.getRow().getData();
+								const id = cell.getValue();
+								let html = '';
+								if (data.has_archive) {
+									html += '<button type="button" class="btn btn-sm btn-outline-primary restoreButton me-1" data-id="' + id + '">Restore</button>';
+								}
+								html += '<button type="button" class="btn btn-sm btn-danger deleteButton" data-id="' + id + '">Remove</button>';
+								return html;
 							},
 							cellClick: function(event, cell) {
-								if (!event.target.classList.contains('deleteButton')) return;
 								const panel = cell.getTable().element.__panelComponent;
-								panel.removeStarboardEntry(cell.getValue());
+								if (event.target.classList.contains('deleteButton')) {
+									panel.removeStarboardEntry(cell.getValue());
+									return;
+								}
+								if (event.target.classList.contains('restoreButton')) {
+									panel.restoreStarboardEntry(cell.getValue());
+								}
 							},
 						},
 					],
@@ -591,6 +604,7 @@
 				thresholdMin: config.thresholdMin || 1,
 				thresholdMax: config.thresholdMax || 50,
 				isSaving: false,
+				isRestoringAll: false,
 
 				init: function() {
 					if (!Array.isArray(this.settings.allowedRoleIds)) {
@@ -633,6 +647,58 @@
 					}
 					catch (error) {
 						notify('error', error.message);
+					}
+				},
+
+				restoreStarboardEntry: async function(id) {
+					if (!window.confirm('Restore this starboard post from the local archive?')) return;
+					try {
+						const response = await requestJson('/starboard-messages/restore/' + encodeURIComponent(id), {
+							method: 'POST',
+							body: { _csrf: this.csrfToken },
+						});
+						notify('success', response.message || 'Starboard message restored.');
+						await this.refresh({ silent: false });
+					}
+					catch (error) {
+						const message = error.message || 'Could not restore starboard entry.';
+						if (message.includes('still exists') && window.confirm(message + '\n\nForce restore anyway?')) {
+							try {
+								const response = await requestJson('/starboard-messages/restore/' + encodeURIComponent(id), {
+									method: 'POST',
+									body: { _csrf: this.csrfToken, force: 'true' },
+								});
+								notify('success', response.message || 'Starboard message restored.');
+								await this.refresh({ silent: false });
+							}
+							catch (forceError) {
+								notify('error', forceError.message);
+							}
+						} else {
+							notify('error', message);
+						}
+					}
+				},
+
+				restoreAllMissing: async function() {
+					if (!window.confirm('Restore all archived starboard posts that are missing from Discord?')) return;
+					this.isRestoringAll = true;
+					try {
+						const response = await requestJson('/starboard-messages/restore-all', {
+							method: 'POST',
+							body: { _csrf: this.csrfToken },
+						});
+						notify('success', response.message || 'Restore complete.');
+						if (response.errors && response.errors.length) {
+							response.errors.forEach(function(message) { notify('warning', message); });
+						}
+						await this.refresh({ silent: false });
+					}
+					catch (error) {
+						notify('error', error.message);
+					}
+					finally {
+						this.isRestoringAll = false;
 					}
 				},
 

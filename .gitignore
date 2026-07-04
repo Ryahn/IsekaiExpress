@@ -4,6 +4,7 @@
 !.env.example
 .config.js
 **/logs
+**/starboard-archive
 **/level_card.png
 **/cropped_level_card.png
 **/src/bot/media/cards/*

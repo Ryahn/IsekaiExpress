@@ -120,13 +120,19 @@
   <div class="card mt-5">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h5 class="mb-0">Posted messages</h5>
-      <button type="button" class="btn btn-sm btn-outline-secondary" @click="refresh({ silent: false })" :disabled="isRefreshing">
-        <span x-text="isRefreshing ? 'Refreshing...' : 'Refresh'"></span>
-      </button>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-primary" @click="restoreAllMissing()" :disabled="isRestoringAll">
+          <span x-text="isRestoringAll ? 'Restoring...' : 'Restore missing'"></span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @click="refresh({ silent: false })" :disabled="isRefreshing">
+          <span x-text="isRefreshing ? 'Refreshing...' : 'Refresh'"></span>
+        </button>
+      </div>
     </div>
     <div class="card-body">
       <p class="text-body-secondary">
-        Remove an entry to delete its message from the starboard channel. The original message is not affected.
+        Each starred message is archived locally (text, images, embeds) under <code>starboard-archive/</code> on the host.
+        Use restore if Discord posts are missing after a server wipe.
       </p>
       <div class="search-box mb-3">
         <input class="form-control search-input" type="search" x-model="search" placeholder="Search posted messages..." aria-label="Search starboard messages">
