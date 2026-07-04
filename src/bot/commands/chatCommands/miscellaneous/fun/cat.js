@@ -34,7 +34,7 @@ module.exports = class Cat extends BaseCommand {
         .setImage(image.url);
 
       if (breedName) {
-        embed.setFooter({ text: breedName });
+        embed.setFooter({ text: 'Usage: !cat for gif or !cat [static | img | image | pic | photo] for static image' });
       }
 
       await message.channel.send({ embeds: [embed] });
