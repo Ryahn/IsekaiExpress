@@ -7,6 +7,7 @@ class CooldownManager {
     this.commandCooldowns = {
       'youtube': 2000,
       'cat': 3000,
+      'randmeme': 3000,
       'roll': 5000,
       'peperoll': 10000,
       'baka': 10000,
