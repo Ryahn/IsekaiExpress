@@ -134,6 +134,7 @@ test('isRehostableContentType accepts image and video MIME types', () => {
   assert.equal(isRehostableContentType('image/png'), true);
   assert.equal(isRehostableContentType('video/webm'), true);
   assert.equal(isRehostableContentType('video/mp4'), true);
+  assert.equal(isRehostableContentType('application/octet-stream', 'https://cdn.discordapp.com/a.webm'), true);
   assert.equal(isRehostableContentType('text/html'), false);
 });
 

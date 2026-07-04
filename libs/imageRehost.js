@@ -117,8 +117,13 @@ function isDirectImageCandidate(url) {
   return false;
 }
 
-function isRehostableContentType(contentType) {
-  return contentType.startsWith('image/') || contentType.startsWith('video/');
+function isRehostableContentType(contentType, url = '') {
+  const type = String(contentType || '').split(';')[0].trim().toLowerCase();
+  if (type.startsWith('image/') || type.startsWith('video/')) return true;
+  if (!type || type === 'application/octet-stream') {
+    return MEDIA_EXT_PATTERN.test(String(url || ''));
+  }
+  return false;
 }
 
 function classifyUrl(url, skipHosts) {
@@ -359,7 +364,7 @@ async function downloadImage(url, maxBytes, logger) {
       validateStatus: (status) => status >= 200 && status < 300,
     });
     const contentType = String(response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
-    if (!isRehostableContentType(contentType)) {
+    if (!isRehostableContentType(contentType, url)) {
       if (logger?.warn) {
         logger.warn(`Image rehost download for ${url} returned unsupported content-type: ${contentType || '(none)'}`);
       }

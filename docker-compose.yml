@@ -77,6 +77,9 @@ services:
     restart: unless-stopped
     volumes:
       - ./starboard-archive:/usr/src/app/starboard-archive
+      - ./libs:/usr/src/app/libs
+      - ./config:/usr/src/app/config
+      - ./src/web:/usr/src/app/src/web
     networks:
       - default
       - traefik-network
