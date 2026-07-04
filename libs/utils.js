@@ -48,7 +48,7 @@ const self = module.exports = {
 
 	generateUniqueId: () => crypto.randomBytes(9).toString('base64').replace(/\//g, '_').replace(/\+/g, '-').substr(0, 12),
 
-	getRandomColor: () => Math.floor(Math.random() * 16777215).toString(16),
+	getRandomColor: () => Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
 
 	calculateLevel: (xp) => Math.floor(0.47 * Math.sqrt(xp)),
 
