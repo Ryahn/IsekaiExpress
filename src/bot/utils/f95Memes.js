@@ -297,10 +297,37 @@ function isVideoMeme(filename) {
   return VIDEO_EXTENSIONS.has(filename.slice(dot).toLowerCase());
 }
 
+/**
+ * Resolve a meme by list number (1-based) or filename.
+ * @returns {{ filename: string } | { ambiguous: string[] } | null}
+ */
+function resolveMemeQuery(query) {
+  const trimmed = String(query || '').trim();
+  if (!trimmed) return null;
+
+  if (/^\d+$/.test(trimmed)) {
+    const num = parseInt(trimmed, 10);
+    if (num >= 1 && num <= MEME_FILES.length) {
+      return { filename: MEME_FILES[num - 1] };
+    }
+  }
+
+  const lower = trimmed.toLowerCase();
+  const exact = MEME_FILES.find((name) => name.toLowerCase() === lower);
+  if (exact) return { filename: exact };
+
+  const matches = MEME_FILES.filter((name) => name.toLowerCase().includes(lower));
+  if (matches.length === 1) return { filename: matches[0] };
+  if (matches.length > 1) return { ambiguous: matches };
+
+  return null;
+}
+
 module.exports = {
   MEME_BASE_URL,
   MEME_FILES,
   memeUrl,
   pickRandomMeme,
   isVideoMeme,
+  resolveMemeQuery,
 };
