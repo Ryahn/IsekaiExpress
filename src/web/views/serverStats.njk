@@ -1,0 +1,188 @@
+{% extends "layout.njk" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row mb-4">
+    <div class="col">
+      <h2 class="mb-1">Server Stats</h2>
+      <p class="text-body-secondary mb-0">
+        Staff-only channel message activity and XP leaderboard from the bot database.
+      </p>
+    </div>
+  </div>
+
+  <section class="mb-5">
+    <h3 class="h4 mb-3">Channel activity</h3>
+
+    <form class="card mb-4" method="get" action="/server-stats">
+      <div class="card-body row g-3">
+        <div class="col-md-3">
+          <label class="form-label" for="channel_mode">Period</label>
+          <select class="form-select" id="channel_mode" name="channel_mode">
+            <option value="today"{% if channelFilters.mode == 'today' %} selected{% endif %}>Today</option>
+            <option value="date"{% if channelFilters.mode == 'date' %} selected{% endif %}>Specific date</option>
+            <option value="month"{% if channelFilters.mode == 'month' %} selected{% endif %}>Month</option>
+            <option value="all"{% if channelFilters.mode == 'all' %} selected{% endif %}>All time</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="date">Date</label>
+          <input class="form-control" id="date" name="date" value="{{ channelFilters.date }}" placeholder="YYYY-MM-DD">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="month">Month</label>
+          <input class="form-control" id="month" name="month" type="number" min="1" max="12" value="{{ channelFilters.month or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="year">Year</label>
+          <input class="form-control" id="year" name="year" type="number" min="1900" max="2100" value="{{ channelFilters.year or '' }}">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary w-100">Apply</button>
+        </div>
+        <input type="hidden" name="xp_page" value="{{ xpPage }}">
+      </div>
+    </form>
+
+    {% if channel.error %}
+    <div class="alert alert-warning">{{ channel.error }}</div>
+    {% endif %}
+
+    <div class="row g-3 mb-4">
+      <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="text-body-secondary small">Period</div>
+            <div class="fs-6 fw-bold">{{ channel.periodLabel }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="text-body-secondary small">Total messages</div>
+            <div class="fs-5 fw-bold">{{ channel.totalMessagesLabel }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="text-body-secondary small">Channels tracked</div>
+            <div class="fs-5 fw-bold">{{ channel.channelCount }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h5 class="mb-0">Top channels</h5></div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Channel</th>
+              <th class="text-end">Messages</th>
+              <th class="text-end">Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in channel.rows %}
+            <tr>
+              <td>{{ row.rank }}</td>
+              <td>{{ row.channelName }}</td>
+              <td class="text-end">{{ row.totalLabel }}</td>
+              <td class="text-end">{{ row.shareLabel }}</td>
+            </tr>
+            {% endfor %}
+            {% if channel.rows | length == 0 %}
+            <tr><td colspan="4">No channel activity for this filter.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      {% if channel.pages > 1 %}
+      <div class="card-footer d-flex justify-content-between align-items-center">
+        <span>Page {{ channel.page }} of {{ channel.pages }}</span>
+        <div class="btn-group">
+          {% if channel.page > 1 %}
+          <a class="btn btn-sm btn-outline-secondary" href="/server-stats?channel_mode={{ channelFilters.mode }}{% if channelFilters.date %}&amp;date={{ channelFilters.date }}{% endif %}{% if channelFilters.month %}&amp;month={{ channelFilters.month }}{% endif %}{% if channelFilters.year %}&amp;year={{ channelFilters.year }}{% endif %}&amp;channel_page={{ channel.page - 1 }}&amp;xp_page={{ xpPage }}">Previous</a>
+          {% endif %}
+          {% if channel.page < channel.pages %}
+          <a class="btn btn-sm btn-outline-secondary" href="/server-stats?channel_mode={{ channelFilters.mode }}{% if channelFilters.date %}&amp;date={{ channelFilters.date }}{% endif %}{% if channelFilters.month %}&amp;month={{ channelFilters.month }}{% endif %}{% if channelFilters.year %}&amp;year={{ channelFilters.year }}{% endif %}&amp;channel_page={{ channel.page + 1 }}&amp;xp_page={{ xpPage }}">Next</a>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section>
+    <h3 class="h4 mb-3">XP leaderboard</h3>
+
+    <div class="row g-3 mb-4">
+      <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="text-body-secondary small">Ranked users</div>
+            <div class="fs-5 fw-bold">{{ xp.summary.rankedUsersLabel }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="text-body-secondary small">Total XP tracked</div>
+            <div class="fs-5 fw-bold">{{ xp.summary.totalXpLabel }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h5 class="mb-0">Top users by XP</h5></div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Username</th>
+              <th class="text-end">Level</th>
+              <th class="text-end">XP</th>
+              <th class="text-end">Messages</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in xp.rows %}
+            <tr>
+              <td>{{ row.rank }}</td>
+              <td>{{ row.username }}</td>
+              <td class="text-end">{{ row.levelLabel }}</td>
+              <td class="text-end">{{ row.xpLabel }}</td>
+              <td class="text-end">{{ row.messageCountLabel }}</td>
+            </tr>
+            {% endfor %}
+            {% if xp.rows | length == 0 %}
+            <tr><td colspan="5">No XP data yet.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      {% if xp.pages > 1 %}
+      <div class="card-footer d-flex justify-content-between align-items-center">
+        <span>Page {{ xp.page }} of {{ xp.pages }}</span>
+        <div class="btn-group">
+          {% if xp.page > 1 %}
+          <a class="btn btn-sm btn-outline-secondary" href="/server-stats?channel_mode={{ channelFilters.mode }}{% if channelFilters.date %}&amp;date={{ channelFilters.date }}{% endif %}{% if channelFilters.month %}&amp;month={{ channelFilters.month }}{% endif %}{% if channelFilters.year %}&amp;year={{ channelFilters.year }}{% endif %}&amp;channel_page={{ channel.page }}&amp;xp_page={{ xp.page - 1 }}">Previous</a>
+          {% endif %}
+          {% if xp.page < xp.pages %}
+          <a class="btn btn-sm btn-outline-secondary" href="/server-stats?channel_mode={{ channelFilters.mode }}{% if channelFilters.date %}&amp;date={{ channelFilters.date }}{% endif %}{% if channelFilters.month %}&amp;month={{ channelFilters.month }}{% endif %}{% if channelFilters.year %}&amp;year={{ channelFilters.year }}{% endif %}&amp;channel_page={{ channel.page }}&amp;xp_page={{ xp.page + 1 }}">Next</a>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

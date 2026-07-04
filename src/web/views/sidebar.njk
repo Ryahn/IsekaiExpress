@@ -23,6 +23,22 @@
           </div>
         </li>
 
+        <!-- ANALYTICS -->
+        {% if showModCommandDocs %}
+        <li class="nav-item">
+          <p class="navbar-vertical-label">Analytics</p>
+          <hr class="navbar-vertical-line" />
+          <div class="nav-item-wrapper">
+            <a class="nav-link label-1" href="/server-stats" role="button">
+              <div class="d-flex align-items-center">
+                <span class="nav-link-icon"><span data-feather="bar-chart-2"></span></span>
+                <span class="nav-link-text-wrapper"><span class="nav-link-text">Server stats</span></span>
+              </div>
+            </a>
+          </div>
+        </li>
+        {% endif %}
+
         <!-- COMMANDS -->
         <li class="nav-item">
           <p class="navbar-vertical-label">Commands</p>

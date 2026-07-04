@@ -1,5 +1,24 @@
 const db = require('../knex');
 
+function monthYearRange(month, year) {
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+  return { startDate, endDate };
+}
+
+function resolveChannelStatsQuery(mode, params = {}) {
+  if (mode === 'today') {
+    return { type: 'date', date: new Date().toISOString().split('T')[0] };
+  }
+  if (mode === 'date') {
+    return { type: 'date', date: params.date };
+  }
+  if (mode === 'month') {
+    return { type: 'month', month: params.month, year: params.year };
+  }
+  return { type: 'all' };
+}
+
 /**
  * Attention-request system plus miscellaneous utility data that does not belong to another
  * domain. Tables: attention_requests, channel_stats, afk_users.
@@ -87,6 +106,90 @@ module.exports = {
     await db.table('channel_stats')
       .where({ channel_id: channelId, month_day: currentDate })
       .increment('total', 1);
+  },
+
+  listChannelStatsByDate: async (date, { limit = 25, offset = 0 } = {}) => {
+    return db('channel_stats')
+      .select('channel_name', 'total')
+      .where({ month_day: date })
+      .orderBy('total', 'desc')
+      .orderBy('channel_id', 'asc')
+      .limit(limit)
+      .offset(offset);
+  },
+
+  listChannelStatsByMonthYear: async (month, year, { limit = 25, offset = 0 } = {}) => {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+    return db('channel_stats')
+      .select('channel_id')
+      .select(db.raw('MAX(channel_name) as channel_name'))
+      .sum('total as total')
+      .whereBetween('month_day', [startDate, endDate])
+      .groupBy('channel_id')
+      .orderBy('total', 'desc')
+      .orderBy('channel_id', 'asc')
+      .limit(limit)
+      .offset(offset);
+  },
+
+  listTopChannelsAllTime: async ({ limit = 25, offset = 0 } = {}) => {
+    return db('channel_stats')
+      .select('channel_id')
+      .select(db.raw('MAX(channel_name) as channel_name'))
+      .sum('total as total')
+      .groupBy('channel_id')
+      .orderBy('total', 'desc')
+      .orderBy('channel_id', 'asc')
+      .limit(limit)
+      .offset(offset);
+  },
+
+  countChannelStatsForQuery: async (mode, params = {}) => {
+    const resolved = resolveChannelStatsQuery(mode, params);
+    if (resolved.type === 'date') {
+      const row = await db('channel_stats').where({ month_day: resolved.date }).count('* as c').first();
+      return Number(Object.values(row || {})[0] || 0);
+    }
+    if (resolved.type === 'month') {
+      const { startDate, endDate } = monthYearRange(resolved.month, resolved.year);
+      const row = await db('channel_stats')
+        .whereBetween('month_day', [startDate, endDate])
+        .countDistinct('channel_id as c')
+        .first();
+      return Number(Object.values(row || {})[0] || 0);
+    }
+    const row = await db('channel_stats').countDistinct('channel_id as c').first();
+    return Number(Object.values(row || {})[0] || 0);
+  },
+
+  sumChannelMessagesForQuery: async (mode, params = {}) => {
+    const resolved = resolveChannelStatsQuery(mode, params);
+    if (resolved.type === 'date') {
+      const row = await db('channel_stats').where({ month_day: resolved.date }).sum('total as s').first();
+      return Number(Object.values(row || {})[0] || 0);
+    }
+    if (resolved.type === 'month') {
+      const { startDate, endDate } = monthYearRange(resolved.month, resolved.year);
+      const row = await db('channel_stats')
+        .whereBetween('month_day', [startDate, endDate])
+        .sum('total as s')
+        .first();
+      return Number(Object.values(row || {})[0] || 0);
+    }
+    const row = await db('channel_stats').sum('total as s').first();
+    return Number(Object.values(row || {})[0] || 0);
+  },
+
+  listChannelStatsForQuery: async (mode, params = {}, { limit = 25, offset = 0 } = {}) => {
+    const resolved = resolveChannelStatsQuery(mode, params);
+    if (resolved.type === 'date') {
+      return module.exports.listChannelStatsByDate(resolved.date, { limit, offset });
+    }
+    if (resolved.type === 'month') {
+      return module.exports.listChannelStatsByMonthYear(resolved.month, resolved.year, { limit, offset });
+    }
+    return module.exports.listTopChannelsAllTime({ limit, offset });
   },
 
   // --- Misc / utility: AFK users ---

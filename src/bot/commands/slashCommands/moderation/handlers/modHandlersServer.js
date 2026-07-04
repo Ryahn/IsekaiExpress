@@ -1,7 +1,7 @@
 const { EmbedBuilder, MessageFlags } = require('discord.js');
-const moment = require('moment');
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const { requireStaff, requireGuildManager } = require('../../../../utils/permissionGuards');
+const { standardizeDate } = require('../../../../../../libs/standardizeDate');
 const {
   augmentUpdateCommandSubcommand,
   updateCommandSettingsExecute,
@@ -129,80 +129,7 @@ async function channelSettingsExecute(client, interaction) {
   }
 }
 
-function standardizeDate(dateInput) {
-  const formats = [
-    'YYYY-MM-DD',
-    'DD-MM-YYYY',
-    'D-M-YYYY',
-    'D-MM-YYYY',
-    'DD-M-YYYY',
-    'YY-MM-DD',
-    'DD-MM-YY',
-    'D-M-YY',
-    'D-MM-YY',
-    'DD-M-YY',
-    'YYYY-M-D',
-    'YY-M-D',
-    'YYYY-MM-D',
-    'YY-MM-D',
-    'DD-MMM-YYYY',
-    'DD-MMM-YY',
-    'D-MMM-YYYY',
-    'D-MMM-YY',
-    'M-D-YYYY',
-    'MM-DD-YYYY',
-    'M-D-YY',
-    'MM-DD-YY',
-  ];
-
-  const processedInput = dateInput.replace(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/, (match, p1, p2, p3) => {
-    const a = p1.padStart(2, '0');
-    const b = p2.padStart(2, '0');
-    let y = p3;
-    if (y.length === 2) y = `20${y}`;
-    return `${a}-${b}-${y}`;
-  });
-
-  const parsedDate = moment(processedInput, formats, true);
-
-  if (parsedDate.isValid()) {
-    if (parsedDate.year() < 1900 || parsedDate.year() > 2100) {
-      return null;
-    }
-    return parsedDate.format('YYYY-MM-DD');
-  }
-
-  return null;
-}
-
-async function getStatsByDate(db, date) {
-  return db('channel_stats').select('channel_name', 'total').where({ month_day: date }).orderBy('total', 'desc').limit(5);
-}
-
-async function getStatsByMonthYear(db, month, year) {
-  const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-  const endDate = `${year}-${month.toString().padStart(2, '0')}-31`;
-  return db('channel_stats')
-    .select('channel_name')
-    .sum('total as total')
-    .whereBetween('month_day', [startDate, endDate])
-    .groupBy('channel_id')
-    .orderBy('total', 'desc')
-    .limit(5);
-}
-
-async function getTopChannels(db) {
-  return db('channel_stats')
-    .select('channel_name')
-    .sum('total as total')
-    .groupBy('channel_name')
-    .orderBy('total', 'desc')
-    .limit(5);
-}
-
 async function channelStatsExecute(client, interaction) {
-  const dbq = client.db.query;
-
   try {
     const dateInput = interaction.options.getString('date');
     const month = interaction.options.getInteger('month');
@@ -224,7 +151,7 @@ async function channelStatsExecute(client, interaction) {
       if (!standardizedDate) {
         embed.setDescription('Invalid date format. Please use YYYY-MM-DD, DD-MM-YYYY, or similar formats.');
       } else {
-        result = await getStatsByDate(dbq, standardizedDate);
+        result = await client.db.listChannelStatsByDate(standardizedDate, { limit: 5, offset: 0 });
         if (result.length === 0) {
           embed.setDescription(`No data found for ${standardizedDate}`);
         } else {
@@ -234,7 +161,7 @@ async function channelStatsExecute(client, interaction) {
         }
       }
     } else if (month && year) {
-      result = await getStatsByMonthYear(dbq, month, year);
+      result = await client.db.listChannelStatsByMonthYear(month, year, { limit: 5, offset: 0 });
       if (result.length === 0) {
         embed.setDescription(`No data found for ${month}/${year}`);
       } else {
@@ -243,7 +170,7 @@ async function channelStatsExecute(client, interaction) {
           .addFields(result.map((r) => ({ name: r.channel_name, value: `Total: ${r.total}` })));
       }
     } else {
-      result = await getTopChannels(dbq);
+      result = await client.db.listTopChannelsAllTime({ limit: 5, offset: 0 });
       embed.setTitle('Top 5 Channels').addFields(result.map((r) => ({ name: r.channel_name, value: `Total: ${r.total}` })));
     }
 

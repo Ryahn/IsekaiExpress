@@ -51,6 +51,53 @@ const self = (module.exports = {
     }));
   },
 
+  getLeaderboardPage: async ({ page = 1, limit = 25 } = {}) => {
+    const safePage = Math.max(1, parseInt(page, 10) || 1);
+    const safeLimit = Math.max(1, Math.min(100, parseInt(limit, 10) || 25));
+    const offset = (safePage - 1) * safeLimit;
+
+    const countRow = await db('user_xp').count('* as c').first();
+    const total = Number(Object.values(countRow || {})[0] || 0);
+    const pages = Math.max(1, Math.ceil(total / safeLimit));
+
+    const rows = await db('user_xp')
+      .join('users', 'user_xp.user_id', '=', 'users.discord_id')
+      .select(
+        'user_xp.user_id',
+        'user_xp.xp',
+        'user_xp.level',
+        'user_xp.message_count',
+        'users.username',
+      )
+      .orderBy('user_xp.xp', 'desc')
+      .orderBy('user_xp.user_id', 'asc')
+      .limit(safeLimit)
+      .offset(offset);
+
+    return {
+      rows: rows.map((row) => ({
+        user_id: row.user_id,
+        username: row.username,
+        xp: Number(row.xp) || 0,
+        level: Number(row.level) || 0,
+        message_count: Number(row.message_count) || 0,
+      })),
+      total,
+      page: safePage,
+      pages,
+      limit: safeLimit,
+    };
+  },
+
+  getXpSummary: async () => {
+    const countRow = await db('user_xp').count('* as c').first();
+    const sumRow = await db('user_xp').sum('xp as s').first();
+    return {
+      rankedUsers: Number(Object.values(countRow || {})[0] || 0),
+      totalXp: Number(Object.values(sumRow || {})[0] || 0),
+    };
+  },
+
   /**
    * Ensure a row exists for guildId when the table is guild-scoped (has guildId column).
    * Legacy `id`-only tables are left unchanged.
