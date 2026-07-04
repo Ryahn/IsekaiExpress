@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder, MessageFlags } = require('discord.js');
+const { MessageFlags } = require('discord.js');
 const axios = require('axios');
 const path = require('path');
 
@@ -41,11 +41,6 @@ module.exports = {
 
         const post = data.post[Math.floor(Math.random() * data.post.length)];
 
-        const embed = new EmbedBuilder()
-            .setColor(0xf5a623)
-            .setTitle('Catgirl')
-            .setImage(post.file_url);
-
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply({ content: post.file_url });
     },
 };
