@@ -5,6 +5,9 @@ const {
   extractUrls,
   normalizeUrl,
   classifyUrl,
+  parseDiscordAttachmentUrl,
+  discordAttachmentNeedsRefresh,
+  findDiscordAttachment,
   resolveJsonPath,
   replaceUrlsInContent,
   scanCommands,
@@ -40,6 +43,36 @@ test('classifyUrl marks hosted, indirect, and candidate URLs', () => {
   assert.equal(classifyUrl('https://c.tenor.com/abc.gif', skipHosts).status, 'candidate');
   assert.equal(classifyUrl('https://imgur.com/gallery/abc', skipHosts).status, 'flag_indirect');
   assert.equal(classifyUrl('https://i.imgur.com/abc.png', skipHosts).status, 'candidate');
+});
+
+test('parseDiscordAttachmentUrl extracts channel, message, and filename', () => {
+  const url = 'https://cdn.discordapp.com/attachments/309355248575578113/1116689655006494771/pngwing.com.png';
+  assert.deepEqual(parseDiscordAttachmentUrl(url), {
+    channelId: '309355248575578113',
+    messageId: '1116689655006494771',
+    filename: 'pngwing.com.png',
+  });
+  assert.equal(parseDiscordAttachmentUrl('https://example.com/a.png'), null);
+});
+
+test('discordAttachmentNeedsRefresh detects unsigned Discord CDN URLs', () => {
+  assert.equal(
+    discordAttachmentNeedsRefresh('https://cdn.discordapp.com/attachments/1/2/a.png'),
+    true,
+  );
+  assert.equal(
+    discordAttachmentNeedsRefresh('https://cdn.discordapp.com/attachments/1/2/a.png?ex=1&hm=abc'),
+    false,
+  );
+});
+
+test('findDiscordAttachment matches attachment filename', () => {
+  const attachments = [
+    { filename: 'pngwing.com.png', url: 'https://cdn.discordapp.com/attachments/1/2/pngwing.com.png?ex=1' },
+    { filename: 'other.png', url: 'https://cdn.discordapp.com/attachments/1/2/other.png' },
+  ];
+  const match = findDiscordAttachment(attachments, 'pngwing.com.png');
+  assert.equal(match.url.includes('pngwing.com.png'), true);
 });
 
 test('resolveJsonPath reads nested upload response paths', () => {

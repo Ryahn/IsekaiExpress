@@ -19,6 +19,9 @@ const DOWNLOAD_HEADERS = {
   Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
 };
 
+const DISCORD_ATTACHMENT_PATH = /^\/attachments\/(\d+)\/(\d+)\/([^/?#]+)/;
+const DISCORD_CDN_HOST = /(?:^|\.)cdn\.discordapp\.com$|(?:^|\.)media\.discordapp\.net$/i;
+
 function getRehostConfig(overrides = {}) {
   const base = config.imageRehost || {};
   return {
@@ -130,6 +133,93 @@ function classifyUrl(url, skipHosts) {
   return { status: 'candidate', reason: 'probe_required' };
 }
 
+function parseDiscordAttachmentUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (!DISCORD_CDN_HOST.test(parsed.hostname)) return null;
+    const match = parsed.pathname.match(DISCORD_ATTACHMENT_PATH);
+    if (!match) return null;
+    return {
+      channelId: match[1],
+      messageId: match[2],
+      filename: decodeURIComponent(match[3]),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function discordAttachmentNeedsRefresh(url) {
+  try {
+    const parsed = new URL(url);
+    return !parsed.searchParams.has('ex') || !parsed.searchParams.has('hm');
+  } catch {
+    return true;
+  }
+}
+
+function findDiscordAttachment(attachments, filename) {
+  const target = filename.toLowerCase();
+  return (attachments || []).find((attachment) => {
+    const name = String(attachment.filename || '').toLowerCase();
+    return name === target || decodeURIComponent(name) === target;
+  }) || (attachments || []).find((attachment) => {
+    const attachmentUrl = String(attachment.url || attachment.proxy_url || '');
+    return attachmentUrl.includes(filename);
+  });
+}
+
+async function fetchDiscordMessage(channelId, messageId, botToken, logger, cache) {
+  const cacheKey = `${channelId}:${messageId}`;
+  if (cache?.has(cacheKey)) {
+    return cache.get(cacheKey);
+  }
+
+  try {
+    const response = await axios.get(
+      `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
+      {
+        headers: { Authorization: `Bot ${botToken}` },
+        timeout: 15000,
+        validateStatus: (status) => status >= 200 && status < 300,
+      },
+    );
+    const message = response.data;
+    if (cache) cache.set(cacheKey, message);
+    return { ok: true, message };
+  } catch (error) {
+    const status = error.response?.status;
+    if (logger?.warn) {
+      logger.warn(`Discord message fetch failed for ${cacheKey}: ${error.message}`);
+    }
+    if (status === 404) {
+      return { ok: false, reason: 'discord_message_not_found', error: error.message };
+    }
+    if (status === 403) {
+      return { ok: false, reason: 'discord_channel_forbidden', error: error.message };
+    }
+    return { ok: false, reason: 'discord_message_unavailable', error: error.message };
+  }
+}
+
+async function resolveDiscordAttachmentUrl(url, botToken, logger, cache) {
+  const parts = parseDiscordAttachmentUrl(url);
+  if (!parts || !botToken) {
+    return { ok: false, reason: 'discord_refresh_unavailable' };
+  }
+
+  const fetched = await fetchDiscordMessage(parts.channelId, parts.messageId, botToken, logger, cache);
+  if (!fetched.ok) return fetched;
+
+  const attachment = findDiscordAttachment(fetched.message.attachments, parts.filename);
+  const freshUrl = attachment?.url || attachment?.proxy_url;
+  if (!freshUrl) {
+    return { ok: false, reason: 'discord_attachment_not_found' };
+  }
+
+  return { ok: true, url: freshUrl };
+}
+
 function resolveJsonPath(obj, dotPath) {
   const parts = String(dotPath || '').split('.').filter(Boolean);
   let current = obj;
@@ -187,8 +277,52 @@ async function downloadImage(url, maxBytes, logger) {
     if (logger?.warn) {
       logger.warn(`Image rehost download failed for ${url}: ${error.message}`);
     }
-    return { ok: false, reason: 'download_failed', error: error.message };
+    return { ok: false, reason: 'download_failed', error: error.message, status: error.response?.status };
   }
+}
+
+async function downloadWithDiscordRefresh(url, maxBytes, logger, discordCache) {
+  const botToken = config.discord?.botToken;
+  const discordMeta = parseDiscordAttachmentUrl(url);
+
+  async function tryDownload(targetUrl) {
+    return downloadImage(targetUrl, maxBytes, logger);
+  }
+
+  if (discordMeta && botToken && discordAttachmentNeedsRefresh(url)) {
+    const refreshed = await resolveDiscordAttachmentUrl(url, botToken, logger, discordCache);
+    if (refreshed.ok && refreshed.url) {
+      const download = await tryDownload(refreshed.url);
+      if (download.ok) return download;
+    } else if (!refreshed.ok) {
+      return {
+        ok: false,
+        reason: refreshed.reason,
+        error: refreshed.error,
+      };
+    }
+  }
+
+  let download = await tryDownload(url);
+  if (download.ok || !discordMeta || !botToken) {
+    return download;
+  }
+
+  const refreshed = await resolveDiscordAttachmentUrl(url, botToken, logger, discordCache);
+  if (refreshed.ok && refreshed.url) {
+    download = await tryDownload(refreshed.url);
+    if (download.ok) return download;
+  }
+
+  if (!refreshed.ok) {
+    return {
+      ok: false,
+      reason: refreshed.reason || download.reason,
+      error: refreshed.error || download.error,
+    };
+  }
+
+  return download;
 }
 
 async function uploadImage(buffer, filename, cfg, logger) {
@@ -228,7 +362,7 @@ function replaceUrlsInContent(content, replacements) {
   return next;
 }
 
-async function processUrl(url, commandMeta, cfg, logger) {
+async function processUrl(url, commandMeta, cfg, logger, discordCache) {
   const classification = classifyUrl(url, cfg.skipHosts);
   const base = {
     url,
@@ -245,7 +379,7 @@ async function processUrl(url, commandMeta, cfg, logger) {
     return { ...base, action: 'flagged' };
   }
 
-  const download = await downloadImage(url, cfg.maxBytes, logger);
+  const download = await downloadWithDiscordRefresh(url, cfg.maxBytes, logger, discordCache);
   if (!download.ok) {
     return {
       ...base,
@@ -394,6 +528,7 @@ async function rehostCommands(commands, options = {}) {
   const cfg = getRehostConfig(options);
   const dryRun = Boolean(options.dryRun);
   const logger = options.logger;
+  const discordCache = new Map();
   const commandResults = [];
 
   for (const command of commands) {
@@ -422,7 +557,7 @@ async function rehostCommands(commands, options = {}) {
       : await mapWithConcurrency(
         urls,
         cfg.concurrency,
-        (url) => processUrl(url, { id: command.id, name: command.name }, cfg, logger),
+        (url) => processUrl(url, { id: command.id, name: command.name }, cfg, logger, discordCache),
       );
 
     commandResults.push(buildCommandResult(command, urlResults));
@@ -461,11 +596,15 @@ module.exports = {
   extractUrls,
   normalizeUrl,
   classifyUrl,
+  parseDiscordAttachmentUrl,
+  discordAttachmentNeedsRefresh,
+  findDiscordAttachment,
   resolveJsonPath,
   replaceUrlsInContent,
   scanCommands,
   rehostCommands,
   buildFlaggedExport,
   downloadImage,
+  downloadWithDiscordRefresh,
   uploadImage,
 };
