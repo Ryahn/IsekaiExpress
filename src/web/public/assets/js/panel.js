@@ -485,6 +485,87 @@
 			};
 		});
 
+		window.Alpine.data('starboardMessagesPanel', function(config) {
+			return Object.assign(createPollingTable({
+				selector: '#starboardMessagesTable',
+				url: '/starboard-messages/list',
+				searchFields: [
+					'id',
+					'star_count',
+					'source_channel_name',
+					'source_channel_id',
+					'source_message_id',
+					'starboard_message_id',
+					'created_at',
+					'updated_at',
+				],
+				rows: function(response) { return Array.isArray(response.entries) ? response.entries : []; },
+				tabulator: {
+					pagination: 'local',
+					paginationSize: 15,
+					layout: 'fitColumns',
+					initialSort: [{ column: 'created_at', dir: 'desc' }],
+					columns: [
+						{ title: 'Stars', field: 'star_count', width: 80 },
+						{ title: 'Source channel', field: 'source_channel_name' },
+						{
+							title: 'Original',
+							field: 'source_message_url',
+							formatter: function(cell) {
+								const url = cell.getValue();
+								return url ? '<a href="' + url + '" target="_blank" rel="noopener noreferrer">Jump</a>' : '—';
+							},
+						},
+						{
+							title: 'Starboard post',
+							field: 'starboard_message_url',
+							formatter: function(cell) {
+								const url = cell.getValue();
+								return url ? '<a href="' + url + '" target="_blank" rel="noopener noreferrer">View</a>' : '—';
+							},
+						},
+						{ title: 'Posted', field: 'created_at' },
+						{
+							title: 'Actions',
+							field: 'id',
+							hozAlign: 'center',
+							width: 120,
+							formatter: function(cell) {
+								return '<button type="button" class="btn btn-sm btn-danger deleteButton" data-id="' + cell.getValue() + '">Remove</button>';
+							},
+							cellClick: function(event, cell) {
+								if (!event.target.classList.contains('deleteButton')) return;
+								const panel = cell.getTable().element.__panelComponent;
+								panel.removeEntry(cell.getValue());
+							},
+						},
+					],
+				},
+			}), {
+				csrfToken: config.csrfToken,
+				starboardChannelId: config.starboardChannelId || '',
+
+				init: function() {
+					this.initTable();
+				},
+
+				removeEntry: async function(id) {
+					if (!window.confirm('Remove this message from the starboard channel?')) return;
+					try {
+						const response = await requestJson('/starboard-messages/delete/' + encodeURIComponent(id), {
+							method: 'POST',
+							body: { _csrf: this.csrfToken },
+						});
+						notify('success', response.message || 'Starboard message removed.');
+						await this.refresh({ silent: false });
+					}
+					catch (error) {
+						notify('error', error.message);
+					}
+				},
+			});
+		});
+
 		window.Alpine.data('starboardSettingsPanel', function(config) {
 			return {
 				csrfToken: config.csrfToken,

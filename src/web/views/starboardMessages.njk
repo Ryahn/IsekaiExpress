@@ -1,0 +1,27 @@
+{% extends "layout.njk" %}
+{% block css %}
+<link href="https://unpkg.com/tabulator-tables@5.4.3/dist/css/tabulator.min.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div x-data="starboardMessagesPanel({ csrfToken: '{{ csrfToken }}', starboardChannelId: '{{ starboardChannelId }}' })" x-init="init()">
+  <div class="vs-page-header">
+    <h3 class="vs-page-title">Starboard Messages</h3>
+    <p class="vs-page-subtitle">
+      Posted starboard entries{% if starboardChannelName %} in <strong>#{{ starboardChannelName }}</strong>{% endif %}.
+      Removing an entry deletes its message from the starboard channel.
+    </p>
+  </div>
+
+  <div class="search-box">
+    <input class="form-control search-input" type="search" x-model.debounce.250ms="search" @input="applySearch" placeholder="Search starboard entries..." aria-label="Search">
+  </div>
+
+  <p class="text-body-secondary small" x-show="isLoading" x-cloak>Refreshing starboard messages...</p>
+  <div id="starboardMessagesTable"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.4.3/dist/js/tabulator.min.js"></script>
+{% endblock %}

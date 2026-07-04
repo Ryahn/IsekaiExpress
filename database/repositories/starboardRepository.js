@@ -76,6 +76,24 @@ module.exports = {
       .delete();
   },
 
+  listStarboardEntries: async (guildId) => {
+    return db.table('starboard_entries')
+      .where({ guild_id: String(guildId) })
+      .orderBy('created_at', 'desc');
+  },
+
+  getStarboardEntryById: async (id) => {
+    const entryId = Number(id);
+    if (!Number.isInteger(entryId) || entryId <= 0) return null;
+    return db.table('starboard_entries').where({ id: entryId }).first();
+  },
+
+  deleteStarboardEntryById: async (id) => {
+    const entryId = Number(id);
+    if (!Number.isInteger(entryId) || entryId <= 0) return;
+    await db.table('starboard_entries').where({ id: entryId }).delete();
+  },
+
   parseAllowedRoleIdsFromRow: parseJsonArray,
 
   getStarboardSettingDefinitions: () => require('../../libs/starboardSettings').getStarboardSettingDefinitions(),

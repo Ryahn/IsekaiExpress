@@ -1,12 +1,11 @@
 const express = require('express');
-const { REST } = require('@discordjs/rest');
-const { Routes, PermissionFlagsBits } = require('discord-api-types/v10');
+const { Routes } = require('discord-api-types/v10');
 const router = express.Router();
 const { getDiscordAvatarUrl } = require('../../../libs/utils');
 const db = require('../../../database/db');
 const config = require('../../../config');
 const requireCsrf = require('../middleware/requireCsrf');
-const { hasStarboardAccessByRoleIds } = require('../../../libs/starboardAuth');
+const { rest, canManageStarboard } = require('../utils/starboardAccess');
 const {
   getStarboardSettingDefinitions,
   validateEnableSettings,
@@ -16,8 +15,6 @@ const {
 
 router.use(requireCsrf);
 
-const rest = new REST({ version: '10' }).setToken(config.discord.botToken);
-
 function wantsJson(req) {
   const accept = typeof req.get === 'function' ? req.get('accept') : req.headers?.accept;
   return req.xhr || String(accept || '').includes('application/json');
@@ -25,10 +22,6 @@ function wantsJson(req) {
 
 function hasValidCsrf(req) {
   return Boolean(req.session?.csrf && req.session.csrf === req.body?._csrf);
-}
-
-async function fetchGuildMember(userId) {
-  return rest.get(Routes.guildMember(config.discord.guildId, userId));
 }
 
 async function fetchGuildRoles() {
@@ -75,21 +68,6 @@ function normalizeSettingsForPanel(settings = {}) {
     allowedRoleIds: Array.isArray(settings.allowedRoleIds) ? settings.allowedRoleIds.map(String) : [],
     adminRoleIds: Array.isArray(settings.adminRoleIds) ? settings.adminRoleIds.map(String) : [],
   };
-}
-
-async function canManageStarboard(req, settings) {
-  if (!req.session?.user?.id) return false;
-  try {
-    const member = await fetchGuildMember(req.session.user.id);
-    const permissions = BigInt(member.permissions || '0');
-    if ((permissions & BigInt(PermissionFlagsBits.Administrator)) === BigInt(PermissionFlagsBits.Administrator)) {
-      return true;
-    }
-    const userRoles = Array.isArray(member.roles) ? member.roles : [];
-    return hasStarboardAccessByRoleIds(config, userRoles, settings);
-  } catch {
-    return false;
-  }
 }
 
 function baseView(req, extra = {}) {
