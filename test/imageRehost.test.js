@@ -16,6 +16,7 @@ const {
   buildFlaggedExport,
   isRehostConfigured,
   getRehostConfig,
+  isRehostableContentType,
 } = require('../libs/imageRehost');
 
 const skipHosts = ['overlord.lordainz.xyz'];
@@ -42,6 +43,8 @@ test('classifyUrl marks hosted, indirect, and candidate URLs', () => {
   assert.equal(classifyUrl('https://www.youtube.com/watch?v=abc', skipHosts).status, 'flag_indirect');
   assert.equal(classifyUrl('https://tenor.com/view/foo-gif-123', skipHosts).status, 'flag_indirect');
   assert.equal(classifyUrl('https://cdn.discordapp.com/attachments/1/2/image.png', skipHosts).status, 'candidate');
+  assert.equal(classifyUrl('https://cdn.discordapp.com/attachments/1/2/clip.webm', skipHosts).status, 'candidate');
+  assert.equal(classifyUrl('https://cdn.discordapp.com/attachments/1/2/clip.mp4', skipHosts).status, 'candidate');
   assert.equal(classifyUrl('https://c.tenor.com/abc.gif', skipHosts).status, 'candidate');
   assert.equal(classifyUrl('https://imgur.com/gallery/abc', skipHosts).status, 'flag_indirect');
   assert.equal(classifyUrl('https://i.imgur.com/abc.png', skipHosts).status, 'candidate');
@@ -125,6 +128,13 @@ test('buildFlaggedExport wraps items with timestamp', () => {
   assert.ok(payload.generatedAt);
   assert.equal(payload.items.length, 1);
   assert.equal(payload.items[0].reason, 'indirect_host');
+});
+
+test('isRehostableContentType accepts image and video MIME types', () => {
+  assert.equal(isRehostableContentType('image/png'), true);
+  assert.equal(isRehostableContentType('video/webm'), true);
+  assert.equal(isRehostableContentType('video/mp4'), true);
+  assert.equal(isRehostableContentType('text/html'), false);
 });
 
 test('isRehostConfigured requires enabled flag and upload key', () => {

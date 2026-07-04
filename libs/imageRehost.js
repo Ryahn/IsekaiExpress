@@ -2,7 +2,7 @@ const axios = require('axios');
 const config = require('../config');
 
 const URL_PATTERN = /https?:\/\/[^\s~<>)\]}"']+/gi;
-const IMAGE_EXT_PATTERN = /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i;
+const MEDIA_EXT_PATTERN = /\.(png|jpe?g|gif|webp|bmp|svg|webm|mp4|mov|m4v)(\?|$)/i;
 
 const DIRECT_HOST_PATTERNS = [
   /(?:^|\.)cdn\.discordapp\.com$/i,
@@ -16,7 +16,7 @@ const DIRECT_HOST_PATTERNS = [
 
 const DOWNLOAD_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+  Accept: 'image/avif,image/webp,image/apng,image/*,video/webm,video/mp4,video/*,*/*;q=0.8',
 };
 
 const DISCORD_ATTACHMENT_PATH = /^\/attachments\/(\d+)\/(\d+)\/([^/?#]+)/;
@@ -110,11 +110,15 @@ function isIndirectHost(url) {
 }
 
 function isDirectImageCandidate(url) {
-  if (IMAGE_EXT_PATTERN.test(url)) return true;
+  if (MEDIA_EXT_PATTERN.test(url)) return true;
   const host = hostFromUrl(url);
   if (DIRECT_HOST_PATTERNS.some((re) => re.test(host))) return true;
   if (/\/attachments\//i.test(url)) return true;
   return false;
+}
+
+function isRehostableContentType(contentType) {
+  return contentType.startsWith('image/') || contentType.startsWith('video/');
 }
 
 function classifyUrl(url, skipHosts) {
@@ -322,8 +326,8 @@ function resolveJsonPath(obj, dotPath) {
 function guessFilename(url, contentType) {
   try {
     const pathname = new URL(url).pathname;
-    const base = pathname.split('/').pop() || 'image';
-    if (IMAGE_EXT_PATTERN.test(base)) return base.slice(0, 120);
+    const base = pathname.split('/').pop() || 'file';
+    if (MEDIA_EXT_PATTERN.test(base)) return base.slice(0, 120);
   } catch {
     /* ignore */
   }
@@ -334,9 +338,14 @@ function guessFilename(url, contentType) {
     'image/webp': '.webp',
     'image/bmp': '.bmp',
     'image/svg+xml': '.svg',
+    'video/webm': '.webm',
+    'video/mp4': '.mp4',
+    'video/quicktime': '.mov',
+    'video/x-m4v': '.m4v',
   };
-  const ext = extMap[contentType] || '.png';
-  return `image${ext}`;
+  const ext = extMap[contentType] || (contentType.startsWith('video/') ? '.webm' : '.png');
+  const stem = contentType.startsWith('video/') ? 'video' : 'image';
+  return `${stem}${ext}`;
 }
 
 async function downloadImage(url, maxBytes, logger) {
@@ -350,11 +359,11 @@ async function downloadImage(url, maxBytes, logger) {
       validateStatus: (status) => status >= 200 && status < 300,
     });
     const contentType = String(response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
-    if (!contentType.startsWith('image/')) {
+    if (!isRehostableContentType(contentType)) {
       if (logger?.warn) {
-        logger.warn(`Image rehost download for ${url} returned non-image content-type: ${contentType || '(none)'}`);
+        logger.warn(`Image rehost download for ${url} returned unsupported content-type: ${contentType || '(none)'}`);
       }
-      return { ok: false, reason: 'non_image_content_type', contentType };
+      return { ok: false, reason: 'unsupported_content_type', contentType };
     }
     return {
       ok: true,
@@ -685,6 +694,7 @@ module.exports = {
   extractUrls,
   normalizeUrl,
   classifyUrl,
+  isRehostableContentType,
   parseDiscordAttachmentUrl,
   discordAttachmentNeedsRefresh,
   findDiscordAttachment,
