@@ -1,13 +1,17 @@
 {% extends "layout.njk" %}
 
+{% block css %}
+<link href="https://unpkg.com/tabulator-tables@5.4.3/dist/css/tabulator.min.css" rel="stylesheet">
+{% endblock %}
+
 {% block content %}
 <script type="application/json" id="starboardSettingsState">{{ alpineStateJson | safe }}</script>
 <div class="container-fluid py-4" x-data="starboardSettingsPanel(JSON.parse(document.getElementById('starboardSettingsState').textContent))" x-init="init()">
   <div class="row mb-4">
     <div class="col">
-      <h2 class="mb-1">Starboard Settings</h2>
+      <h2 class="mb-1">Starboard</h2>
       <p class="text-body-secondary mb-0">
-        Configure the starboard channel, emoji, threshold, star roles, and admin roles for manual adds.
+        Configure the starboard and manage posted messages{% if starboardChannelName %} in <strong>#{{ starboardChannelName }}</strong>{% endif %}.
       </p>
     </div>
   </div>
@@ -112,5 +116,28 @@
       <span x-text="isSaving ? 'Saving...' : 'Save Settings'"></span>
     </button>
   </form>
+
+  <div class="card mt-5">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0">Posted messages</h5>
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="refresh({ silent: false })" :disabled="isRefreshing">
+        <span x-text="isRefreshing ? 'Refreshing...' : 'Refresh'"></span>
+      </button>
+    </div>
+    <div class="card-body">
+      <p class="text-body-secondary">
+        Remove an entry to delete its message from the starboard channel. The original message is not affected.
+      </p>
+      <div class="search-box mb-3">
+        <input class="form-control search-input" type="search" x-model.debounce.250ms="search" @input="applySearch" placeholder="Search posted messages..." aria-label="Search starboard messages">
+      </div>
+      <p class="text-body-secondary small" x-show="isLoading" x-cloak>Loading starboard messages...</p>
+      <div id="starboardMessagesTable"></div>
+    </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.4.3/dist/js/tabulator.min.js"></script>
 {% endblock %}

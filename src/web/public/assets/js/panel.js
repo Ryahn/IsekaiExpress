@@ -485,7 +485,7 @@
 			};
 		});
 
-		window.Alpine.data('starboardMessagesPanel', function(config) {
+		window.Alpine.data('starboardSettingsPanel', function(config) {
 			return Object.assign(createPollingTable({
 				selector: '#starboardMessagesTable',
 				url: '/starboard-messages/list',
@@ -536,38 +536,12 @@
 							cellClick: function(event, cell) {
 								if (!event.target.classList.contains('deleteButton')) return;
 								const panel = cell.getTable().element.__panelComponent;
-								panel.removeEntry(cell.getValue());
+								panel.removeStarboardEntry(cell.getValue());
 							},
 						},
 					],
 				},
 			}), {
-				csrfToken: config.csrfToken,
-				starboardChannelId: config.starboardChannelId || '',
-
-				init: function() {
-					this.initTable();
-				},
-
-				removeEntry: async function(id) {
-					if (!window.confirm('Remove this message from the starboard channel?')) return;
-					try {
-						const response = await requestJson('/starboard-messages/delete/' + encodeURIComponent(id), {
-							method: 'POST',
-							body: { _csrf: this.csrfToken },
-						});
-						notify('success', response.message || 'Starboard message removed.');
-						await this.refresh({ silent: false });
-					}
-					catch (error) {
-						notify('error', error.message);
-					}
-				},
-			});
-		});
-
-		window.Alpine.data('starboardSettingsPanel', function(config) {
-			return {
 				csrfToken: config.csrfToken,
 				settings: Object.assign({ allowedRoleIds: [], adminRoleIds: [] }, config.settings || {}),
 				guildRoles: config.guildRoles || [],
@@ -586,6 +560,7 @@
 					this.settings.channelId = this.settings.channelId ? String(this.settings.channelId) : '';
 					if (config.success) notify('success', config.success);
 					(config.errors || []).forEach(function(error) { notify('error', error); });
+					this.initTable();
 				},
 
 				toggleRole: function(roleId, checked) {
@@ -602,6 +577,21 @@
 					if (checked && index === -1) ids.push(roleId);
 					if (!checked && index !== -1) ids.splice(index, 1);
 					this.settings.adminRoleIds = ids;
+				},
+
+				removeStarboardEntry: async function(id) {
+					if (!window.confirm('Remove this message from the starboard channel?')) return;
+					try {
+						const response = await requestJson('/starboard-messages/delete/' + encodeURIComponent(id), {
+							method: 'POST',
+							body: { _csrf: this.csrfToken },
+						});
+						notify('success', response.message || 'Starboard message removed.');
+						await this.refresh({ silent: false });
+					}
+					catch (error) {
+						notify('error', error.message);
+					}
 				},
 
 				saveSettings: async function() {
@@ -642,7 +632,7 @@
 						this.isSaving = false;
 					}
 				},
-			};
+			});
 		});
 
 		window.Alpine.data('scamScanSettingsPanel', function(config) {

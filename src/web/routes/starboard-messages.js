@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { getDiscordAvatarUrl } = require('../../../libs/utils');
 const db = require('../../../database/db');
 const config = require('../../../config');
 const requireCsrf = require('../middleware/requireCsrf');
@@ -60,21 +59,7 @@ router.get('/', async (req, res, next) => {
     if (!(await canManageStarboard(req, settings))) {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
-
-    let starboardChannelName = '';
-    if (settings.channelId) {
-      const channels = await fetchGuildChannels().catch(() => []);
-      const match = channels.find((ch) => String(ch.id) === String(settings.channelId));
-      starboardChannelName = match?.name || String(settings.channelId);
-    }
-
-    return res.render('starboardMessages', {
-      username: req.session.user.username,
-      avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar),
-      csrfToken: req.session.csrf,
-      starboardChannelId: settings.channelId || '',
-      starboardChannelName,
-    });
+    return res.redirect(302, '/starboard-settings');
   } catch (e) {
     next(e);
   }

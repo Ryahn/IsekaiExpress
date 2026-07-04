@@ -87,11 +87,17 @@ function baseView(req, extra = {}) {
 async function buildPageState(req, extra = {}) {
   const rawSettings = extra.settings || await db.getStarboardSettings(config.discord.guildId);
   const settings = normalizeSettingsForPanel(rawSettings);
-  const [guildRoles, textChannels] = await Promise.all([
+  const [guildRoles, textChannels, allChannels] = await Promise.all([
     fetchGuildRoles().catch(() => []),
     fetchTextChannels(settings.channelId).catch(() => []),
+    fetchGuildChannels().catch(() => []),
   ]);
-  const state = baseView(req, { settings, guildRoles, textChannels, ...extra });
+  let starboardChannelName = '';
+  if (settings.channelId) {
+    const match = allChannels.find((ch) => String(ch.id) === String(settings.channelId));
+    starboardChannelName = match?.name || String(settings.channelId);
+  }
+  const state = baseView(req, { settings, guildRoles, textChannels, starboardChannelName, ...extra });
   return {
     ...state,
     alpineStateJson: JSON.stringify({
