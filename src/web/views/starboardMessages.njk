@@ -14,7 +14,7 @@
   </div>
 
   <div class="search-box">
-    <input class="form-control search-input" type="search" x-model.debounce.250ms="search" @input="applySearch" placeholder="Search starboard entries..." aria-label="Search">
+    <input class="form-control search-input" type="search" x-model="search" placeholder="Search starboard entries..." aria-label="Search">
   </div>
 
   <p class="text-body-secondary small" x-show="isLoading" x-cloak>Refreshing starboard messages...</p>

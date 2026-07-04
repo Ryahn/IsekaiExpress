@@ -1,6 +1,47 @@
 /* global Tabulator */
 (function() {
 	const pollIntervalMs = 15000;
+	const liveFilterDebounceMs = 300;
+
+	function debounceFn(fn, ms) {
+		let timer = null;
+		return function() {
+			const self = this;
+			const args = arguments;
+			if (timer) clearTimeout(timer);
+			timer = setTimeout(function() {
+				fn.apply(self, args);
+			}, ms);
+		};
+	}
+
+	function bindLiveTableSearch(component) {
+		if (!component || typeof component.$watch !== 'function') return;
+		component.$watch('search', function() {
+			component.applySearch();
+		});
+	}
+
+	function bindLiveFilters(component, debounceMs) {
+		if (!component || typeof component.$watch !== 'function') return;
+		component._filterWatchPaused = false;
+		const schedule = debounceFn(function() {
+			if (component._filterWatchPaused) return;
+			if (typeof component.applyFilters === 'function') {
+				component.applyFilters({ silent: true });
+			}
+		}, debounceMs == null ? liveFilterDebounceMs : debounceMs);
+		component.$watch('filters', function(newVal, oldVal) {
+			if (component._filterWatchPaused) return;
+			const withoutPage = function(filters) {
+				const copy = Object.assign({}, filters || {});
+				delete copy.page;
+				return copy;
+			};
+			if (JSON.stringify(withoutPage(newVal)) === JSON.stringify(withoutPage(oldVal))) return;
+			schedule.call(component);
+		}, { deep: true });
+	}
 
 	function replaceFeather() {
 		if (window.feather && typeof window.feather.replace === 'function') {
@@ -96,6 +137,7 @@
 					data: [],
 				}));
 				this.table.element.__panelComponent = this;
+				bindLiveTableSearch(this);
 				this.refresh({ silent: true });
 				this.pollTimer = window.setInterval(function() {
 					self.refresh({ silent: true, poll: true });
@@ -701,6 +743,7 @@
 					this.pollTimer = window.setInterval(function() {
 						self.refresh({ silent: true });
 					}, pollIntervalMs);
+					bindLiveFilters(this);
 				},
 
 				destroy: function() {
@@ -778,13 +821,21 @@
 					return params.toString();
 				},
 
-				applyFilters: async function() {
-					this.filters.page = 1;
-					await this.refresh({ silent: false, updateUrl: true });
+				applyFilters: async function(options) {
+					const settings = options || {};
+					if (!settings.keepPage) {
+						this.filters.page = 1;
+					}
+					await this.refresh({
+						silent: settings.silent === true,
+						updateUrl: settings.updateUrl !== false,
+					});
 				},
 
 				nextPage: async function() {
+					this._filterWatchPaused = true;
 					this.filters.page = Number(this.page.page || this.filters.page || 1) + 1;
+					this._filterWatchPaused = false;
 					await this.refresh({ silent: false, updateUrl: true });
 				},
 
@@ -796,7 +847,9 @@
 					try {
 						const query = this.queryString();
 						const response = await requestJson('/scam-scan-history' + (query ? '?' + query : ''));
+						this._filterWatchPaused = true;
 						this.filters = initialFilters(response.filters);
+						this._filterWatchPaused = false;
 						this.metrics = response.metrics || {};
 						this.ruleHits = response.ruleHits || [];
 						this.scans = response.scans || [];
@@ -849,6 +902,7 @@
 					this.pollTimer = window.setInterval(function() {
 						self.refresh({ silent: true });
 					}, pollIntervalMs);
+					bindLiveFilters(this);
 				},
 
 				destroy: function() {
@@ -924,13 +978,21 @@
 					return params.toString();
 				},
 
-				applyFilters: async function() {
-					this.filters.page = 1;
-					await this.refresh({ silent: false, updateUrl: true });
+				applyFilters: async function(options) {
+					const settings = options || {};
+					if (!settings.keepPage) {
+						this.filters.page = 1;
+					}
+					await this.refresh({
+						silent: settings.silent === true,
+						updateUrl: settings.updateUrl !== false,
+					});
 				},
 
 				nextPage: async function() {
+					this._filterWatchPaused = true;
 					this.filters.page = Number(this.page.page || this.filters.page || 1) + 1;
+					this._filterWatchPaused = false;
 					await this.refresh({ silent: false, updateUrl: true });
 				},
 
@@ -942,7 +1004,9 @@
 					try {
 						const query = this.queryString();
 						const response = await requestJson('/moderation-review-history' + (query ? '?' + query : ''));
+						this._filterWatchPaused = true;
 						this.filters = initialFilters(response.filters);
+						this._filterWatchPaused = false;
 						this.metrics = response.metrics || {};
 						this.events = response.events || [];
 						this.page = response.page || { page: 1, limit: 25, hasMore: false };
@@ -990,6 +1054,7 @@
 					this.pollTimer = window.setInterval(function() {
 						self.refresh({ silent: true });
 					}, pollIntervalMs);
+					bindLiveFilters(this);
 				},
 
 				destroy: function() {
@@ -1076,13 +1141,21 @@
 					return params.toString();
 				},
 
-				applyFilters: async function() {
-					this.filters.page = 1;
-					await this.refresh({ silent: false, updateUrl: true });
+				applyFilters: async function(options) {
+					const settings = options || {};
+					if (!settings.keepPage) {
+						this.filters.page = 1;
+					}
+					await this.refresh({
+						silent: settings.silent === true,
+						updateUrl: settings.updateUrl !== false,
+					});
 				},
 
 				nextPage: async function() {
+					this._filterWatchPaused = true;
 					this.filters.page = Number(this.page.page || this.filters.page || 1) + 1;
+					this._filterWatchPaused = false;
 					await this.refresh({ silent: false, updateUrl: true });
 				},
 
@@ -1094,7 +1167,9 @@
 					try {
 						const query = this.queryString();
 						const response = await requestJson('/moderation-action-logs' + (query ? '?' + query : ''));
+						this._filterWatchPaused = true;
 						this.filters = initialFilters(response.filters);
+						this._filterWatchPaused = false;
 						this.metrics = response.metrics || {};
 						this.logs = response.logs || [];
 						this.page = response.page || { page: 1, limit: 25, hasMore: false };

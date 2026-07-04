@@ -129,7 +129,7 @@
         Remove an entry to delete its message from the starboard channel. The original message is not affected.
       </p>
       <div class="search-box mb-3">
-        <input class="form-control search-input" type="search" x-model.debounce.250ms="search" @input="applySearch" placeholder="Search posted messages..." aria-label="Search starboard messages">
+        <input class="form-control search-input" type="search" x-model="search" placeholder="Search posted messages..." aria-label="Search starboard messages">
       </div>
       <p class="text-body-secondary small" x-show="isLoading" x-cloak>Loading starboard messages...</p>
       <div id="starboardMessagesTable"></div>

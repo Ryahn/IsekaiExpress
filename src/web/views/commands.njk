@@ -12,7 +12,7 @@
 </div>
 
 <div class="search-box">
-  <input class="form-control search-input" type="search" x-model.debounce.250ms="search" @input="applySearch" placeholder="Search commands..." aria-label="Search">
+  <input class="form-control search-input" type="search" x-model="search" placeholder="Search commands..." aria-label="Search">
   {% if allow %}
   <button class="btn btn-primary add-button" type="button" @click="openAdd">Add Command</button>
   {% endif %}
