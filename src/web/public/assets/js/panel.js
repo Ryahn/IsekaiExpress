@@ -277,19 +277,21 @@
 		if (!window.Alpine) return;
 
 		window.Alpine.data('commandsPanel', function(config) {
+			function parseCommandRows(response) {
+				if (!Array.isArray(response.commands)) return [];
+				const seen = new Set();
+				return response.commands.filter(function(command) {
+					if (seen.has(command.id)) return false;
+					seen.add(command.id);
+					return true;
+				});
+			}
+
 			const baseTable = createPollingTable({
 				selector: '#commandsTable',
 				url: '/commands/list',
 				searchFields: ['name', 'content', 'usage', 'created_by_username', 'updated_by_username', 'created_at', 'updated_at', 'last_used_at'],
-				rows: function(response) {
-					if (!Array.isArray(response.commands)) return [];
-					const seen = new Set();
-					return response.commands.filter(function(command) {
-						if (seen.has(command.id)) return false;
-						seen.add(command.id);
-						return true;
-					});
-				},
+				rows: parseCommandRows,
 				tabulator: {
 					pagination: 'local',
 					paginationSize: 10,
@@ -329,7 +331,7 @@
 				imageRehostEnabled: Boolean(config.imageRehostEnabled),
 				commandFilter: 'all',
 				commandSort: 'name',
-				summary: null,
+				summary: { total: 0, neverUsed: 0, stale90d: 0 },
 				edit: { id: '', name: '', content: '' },
 				add: { name: '', content: '' },
 				rehostBusy: false,
@@ -378,8 +380,8 @@
 					this.isLoading = true;
 					try {
 						const response = await requestJson(this.buildListUrl());
-						this.summary = response.summary || null;
-						const rows = baseTable.rows(response).map(function(command) {
+						this.summary = response.summary || { total: 0, neverUsed: 0, stale90d: 0 };
+						const rows = parseCommandRows(response).map(function(command) {
 							return Object.assign({}, command, {
 								is_stale: Boolean(command.is_stale),
 							});
