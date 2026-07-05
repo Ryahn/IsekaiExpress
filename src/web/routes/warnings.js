@@ -5,6 +5,7 @@ const db = require("../../../database/db");
 const crypto = require('crypto');
 const config = require('../../../config');
 const requireCsrf = require('../middleware/requireCsrf');
+const { hasStaffRole } = require('../utils/roleAccess');
 router.use(requireCsrf);
 const WARNING_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const DISCORD_USER_ID_PATTERN = /^\d{17,20}$/;
@@ -42,7 +43,7 @@ function parseWarningReason(body) {
 }
 
 router.get("/", (req, res) => {
-	const allowed = req.session.roles.includes(config.roles.staff);
+	const allowed = hasStaffRole(req.session);
 	res.render('warnings', { username: req.session.user.username,  avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar), csrfToken: req.session.csrf, allow: allowed });
 });
 
@@ -58,7 +59,7 @@ router.get("/list", async (req, res) => {
 });
 
 router.post("/add", async (req, res) => {
-	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
+	if (!hasStaffRole(req.session)) {
 		return res.status(403).json({ message: 'You do not have permission to add warnings' });
 	}
 
@@ -87,7 +88,7 @@ router.post("/add", async (req, res) => {
 });
 
 router.post("/edit/:id", async (req, res) => {
-	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
+	if (!hasStaffRole(req.session)) {
 		return res.status(403).json({ message: 'You do not have permission to edit warnings' });
 	}
 	if (!validateWarningId(req.params.id)) {
@@ -108,7 +109,7 @@ router.post("/edit/:id", async (req, res) => {
 });
 
 router.post("/delete/:id", async (req, res) => {
-	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
+	if (!hasStaffRole(req.session)) {
 		return res.status(403).json({ message: 'You do not have permission to delete warnings' });
 	}
 	if (!validateWarningId(req.params.id)) {
@@ -126,4 +127,4 @@ router.post("/delete/:id", async (req, res) => {
 
 
 module.exports = router;
-module.exports.requiredRoles = [config.roles.staff, config.roles.mod, config.roles.uploader];
+module.exports.requiredRoles = [config.roles.staff, config.roles.mod];

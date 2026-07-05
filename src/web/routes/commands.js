@@ -1,7 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const fs = require('node:fs');
-const path = require('node:path');
 const { getDiscordAvatarUrl } = require("../../../libs/utils");
 const db = require("../../../database/db");
 const config = require('../../../config');
@@ -13,9 +11,9 @@ const {
 	buildFlaggedExport,
 } = require('../../../libs/imageRehost');
 const { getChatCommands } = require('../../../libs/chatCommandCatalog');
+const { getSlashCommands } = require('../../../libs/slashCommandCatalog');
+const { hasStaffRole } = require('../utils/roleAccess');
 router.use(requireCsrf);
-
-const slashCommandsPath = path.join(__dirname, '../../bot/commands/slashCommands');
 const COMMAND_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const COMMAND_CONTENT_MAX_LENGTH = 4000;
 const COMMAND_ID_PATTERN = /^\d+$/;
@@ -40,7 +38,7 @@ function validateCommandId(id) {
 }
 
 function requireStaff(req, res) {
-	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
+	if (!hasStaffRole(req.session)) {
 		res.status(403).json({ message: 'You do not have permission to manage commands' });
 		return false;
 	}
@@ -85,45 +83,8 @@ function serializeCommandScanResult(cmd) {
 	};
 }
 
-function getSlashCommandFiles(dir) {
-	if (!fs.existsSync(dir)) {
-		return [];
-	}
-
-	return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-		const entryPath = path.join(dir, entry.name);
-
-		if (entry.isDirectory()) {
-			return entry.name === 'handlers' ? [] : getSlashCommandFiles(entryPath);
-		}
-
-		return entry.isFile() && entry.name.endsWith('.js') ? [entryPath] : [];
-	});
-}
-
-async function getSlashCommands() {
-	const commands = [];
-
-	for (const file of getSlashCommandFiles(slashCommandsPath)) {
-		try {
-			const command = require(file);
-			const commandData = typeof command.data === 'function' ? await command.data() : command.data;
-			if (!commandData || typeof commandData.toJSON !== 'function') {
-				continue;
-			}
-
-			const { name, description } = commandData.toJSON();
-			commands.push({ name, description });
-		} catch (error) {
-			console.error(`Failed to load slash command metadata from ${file}:`, error);
-		}
-	}
-
-	return commands;
-}
-
 router.get("/", (req, res) => {
-	const allowed = req.session.roles.includes(config.roles.staff);
+	const allowed = hasStaffRole(req.session);
 	res.render('commands', {
 		username: req.session.user.username,
 		avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar),
@@ -152,7 +113,7 @@ router.get("/list", async (req, res) => {
 });
 
 router.post("/add", async (req, res) => {
-	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
+	if (!hasStaffRole(req.session)) {
 		return res.status(403).json({ message: 'You do not have permission to add commands' });
 	}
 
@@ -177,7 +138,7 @@ router.post("/add", async (req, res) => {
 });
 
 router.post("/edit/:id", async (req, res) => {
-	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
+	if (!hasStaffRole(req.session)) {
 		return res.status(403).json({ message: 'You do not have permission to edit commands' });
 	}
 	if (!validateCommandId(req.params.id)) {
@@ -207,7 +168,7 @@ router.post("/edit/:id", async (req, res) => {
 });
 
 router.post("/delete/:id", async(req, res) => {
-	if (!req.session.roles || !req.session.roles.includes(config.roles.staff)) {
+	if (!hasStaffRole(req.session)) {
 		return res.status(403).json({ message: 'You do not have permission to delete commands' });
 	}
 	if (!validateCommandId(req.params.id)) {
@@ -419,4 +380,4 @@ router.get('/chat/list', async (req, res) => {
 });
 
 module.exports = router;
-module.exports.requiredRoles = [config.roles.staff, config.roles.mod, config.roles.uploader];
+module.exports.requiredRoles = [];

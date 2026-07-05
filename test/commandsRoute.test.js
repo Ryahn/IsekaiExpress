@@ -59,6 +59,30 @@ test.after(async () => {
   }
 });
 
+test('commands route allows any logged-in user to list but not mutate', async () => {
+  assert.deepEqual(router.requiredRoles, []);
+
+  const restore = patchDb({
+    sql: async () => ([{ id: 1, name: 'hello', content: 'world' }]),
+  });
+
+  try {
+    const listRes = fakeRes();
+    await routeHandler('/list', 'get')(fakeReq({ staff: false }), listRes, assert.ifError);
+    assert.equal(listRes.statusCode, 200);
+    assert.ok(Array.isArray(listRes.body.commands));
+
+    const addRes = fakeRes();
+    await routeHandler('/add', 'post')(fakeReq({
+      staff: false,
+      body: { _csrf: 'token', name: 'hello', content: 'hi' },
+    }), addRes, assert.ifError);
+    assert.equal(addRes.statusCode, 403);
+  } finally {
+    restore();
+  }
+});
+
 test('web command add edit and delete route through repository methods', async () => {
   const calls = [];
   const restore = patchDb({

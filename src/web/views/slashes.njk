@@ -12,10 +12,11 @@
 </div>
 
 <div class="search-box">
-  <input class="form-control search-input" type="search" x-model="search" placeholder="Search slash commands..." aria-label="Search">
+  <input class="form-control search-input" type="search" x-model="search" @input="onSearchInput()" placeholder="Search slash commands..." aria-label="Search">
 </div>
 
-<p class="text-body-secondary small" x-show="isLoading" x-cloak>Refreshing slash commands...</p>
+<p class="text-body-secondary small" x-show="isLoading" x-cloak>Loading slash commands...</p>
+<p class="text-body-secondary small" x-show="!isLoading && totalCount > 0" x-cloak>Showing <span x-text="filteredCount"></span> of <span x-text="totalCount"></span> commands</p>
 <div id="slashCommandsTable"></div>
 
 <footer class="footer mt-5">

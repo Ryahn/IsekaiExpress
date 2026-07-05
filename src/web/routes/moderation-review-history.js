@@ -3,12 +3,13 @@ const router = express.Router();
 const { getDiscordAvatarUrl } = require('../../../libs/utils');
 const db = require('../../../database/db');
 const config = require('../../../config');
+const { hasModOrStaffRole } = require('../utils/roleAccess');
 
 const VALID_RANGES = new Set(['24h', '7d', '30d']);
 const VALID_HANDLED_STATES = new Set(['pending', 'handled']);
 
 function canView(req) {
-	return Boolean(req.session?.roles?.includes(config.roles.staff));
+	return hasModOrStaffRole(req.session);
 }
 
 function wantsJson(req) {
@@ -190,4 +191,4 @@ router.get('/', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports.requiredRoles = [config.roles.staff];
+module.exports.requiredRoles = [config.roles.staff, config.roles.mod];

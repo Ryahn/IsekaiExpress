@@ -4,13 +4,14 @@ const { getDiscordAvatarUrl } = require('../../../libs/utils');
 const { standardizeDate } = require('../../../libs/standardizeDate');
 const db = require('../../../database/db');
 const config = require('../../../config');
+const { hasModOrStaffRole } = require('../utils/roleAccess');
 
 const VALID_CHANNEL_MODES = new Set(['today', 'date', 'month', 'all']);
 const CHANNEL_PAGE_SIZE = 25;
 const XP_PAGE_SIZE = 25;
 
 function canView(req) {
-	return Boolean(req.session?.roles?.includes(config.roles.staff));
+	return hasModOrStaffRole(req.session);
 }
 
 function wantsJson(req) {
@@ -259,4 +260,4 @@ router.get('/', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports.requiredRoles = [config.roles.staff];
+module.exports.requiredRoles = [config.roles.staff, config.roles.mod];

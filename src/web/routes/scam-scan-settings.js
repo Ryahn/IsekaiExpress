@@ -4,10 +4,15 @@ const { getDiscordAvatarUrl } = require('../../../libs/utils');
 const db = require('../../../database/db');
 const config = require('../../../config');
 const requireCsrf = require('../middleware/requireCsrf');
+const { hasStaffRole, hasModOrStaffRole } = require('../utils/roleAccess');
 router.use(requireCsrf);
 
+function canView(req) {
+	return hasModOrStaffRole(req.session);
+}
+
 function canEdit(req) {
-	return Boolean(req.session?.roles?.includes(config.roles.staff));
+	return hasStaffRole(req.session);
 }
 
 function wantsJson(req) {
@@ -50,7 +55,7 @@ async function buildPageState(req, extra = {}) {
 
 router.get('/', async (req, res, next) => {
 	try {
-		if (!canEdit(req)) return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+		if (!canView(req)) return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
 		const state = await buildPageState(req);
 		if (wantsJson(req)) {
 			return res.json({
@@ -123,4 +128,4 @@ router.post('/save', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports.requiredRoles = [config.roles.staff];
+module.exports.requiredRoles = [config.roles.staff, config.roles.mod];

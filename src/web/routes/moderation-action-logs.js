@@ -4,11 +4,12 @@ const { getDiscordAvatarUrl } = require('../../../libs/utils');
 const db = require('../../../database/db');
 const config = require('../../../config');
 const { VALID_ACTION_TYPES } = require('../../../database/repositories/moderationActionLogRepository');
+const { hasModOrStaffRole } = require('../utils/roleAccess');
 
 const VALID_RANGES = new Set(['24h', '7d', '30d']);
 
 function canView(req) {
-	return Boolean(req.session?.roles?.includes(config.roles.staff));
+	return hasModOrStaffRole(req.session);
 }
 
 function wantsJson(req) {
@@ -197,4 +198,4 @@ router.get('/', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports.requiredRoles = [config.roles.staff];
+module.exports.requiredRoles = [config.roles.staff, config.roles.mod];

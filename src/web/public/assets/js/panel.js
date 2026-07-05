@@ -122,11 +122,15 @@
 	}
 
 	function createPollingTable(options) {
+		const enablePolling = options.polling !== false;
+
 		return {
 			table: null,
 			search: '',
 			isLoading: false,
 			isRefreshing: false,
+			filteredCount: 0,
+			totalCount: 0,
 			pollTimer: null,
 			modalOpen: false,
 
@@ -145,7 +149,7 @@
 					data: [],
 				}));
 				this.table.element.__panelComponent = this;
-				if (!this._searchBound) {
+				if (!this._searchBound && enablePolling) {
 					bindLiveTableSearch(this);
 					this._searchBound = true;
 				}
@@ -156,9 +160,11 @@
 					});
 				}
 				this.refresh({ silent: true });
-				this.pollTimer = window.setInterval(function() {
-					self.refresh({ silent: true, poll: true });
-				}, options.interval || pollIntervalMs);
+				if (enablePolling) {
+					this.pollTimer = window.setInterval(function() {
+						self.refresh({ silent: true, poll: true });
+					}, options.interval || pollIntervalMs);
+				}
 			},
 
 			destroy: function() {
@@ -189,7 +195,11 @@
 							this.table.restoreRedraw();
 						}
 					}
-					this.applySearch();
+					if (enablePolling) {
+						this.applySearch();
+					} else {
+						this.updateSearchSummary();
+					}
 				}
 				catch (error) {
 					if (!settings.silent) {
@@ -202,8 +212,19 @@
 				}
 			},
 
+			onSearchInput: function() {
+				this.applySearch();
+			},
+
+			updateSearchSummary: function() {
+				if (!this.table) return;
+				this.filteredCount = this.table.getDataCount('active');
+				this.totalCount = this.table.getDataCount();
+			},
+
 			applySearch: function() {
 				applyTableSearch(this.table, this.search, options.searchFields);
+				this.updateSearchSummary();
 			},
 		};
 	}
@@ -562,22 +583,23 @@
 			return Object.assign(createPollingTable({
 				selector: '#slashCommandsTable',
 				url: '/commands/slashes/list',
-				searchFields: ['name', 'description'],
+				polling: false,
+				searchFields: ['command', 'path', 'category', 'description'],
 				rows: function(response) { return Array.isArray(response.commands) ? response.commands : []; },
 				tabulator: {
 					pagination: 'local',
-					paginationSize: 10,
+					paginationSize: 15,
 					layout: 'fitColumns',
-					initialSort: [{ column: 'name', dir: 'asc' }],
+					initialSort: [{ column: 'command', dir: 'asc' }],
 					columns: [
-						{ title: 'Name', field: 'name' },
+						{ title: 'Command', field: 'command', width: 220 },
+						{ title: 'Category', field: 'category', width: 120 },
 						{ title: 'Description', field: 'description' },
 					],
 				},
 			}), {
 				init: function() {
 					this.initTable();
-					syncModalClosed(this, ['#editModal', '#fullReasonModal']);
 				},
 			});
 		});
@@ -588,6 +610,7 @@
 			return Object.assign(createPollingTable({
 				selector: '#chatCommandsTable',
 				url: '/commands/chat/list',
+				polling: false,
 				searchFields: ['name', 'category', 'aliasesText', 'description', 'command'],
 				rows: function(response) {
 					const rowPrefix = response.prefix || prefix;
@@ -608,7 +631,7 @@
 					pagination: 'local',
 					paginationSize: 15,
 					layout: 'fitColumns',
-					initialSort: [{ column: 'name', dir: 'asc' }],
+					initialSort: [{ column: 'command', dir: 'asc' }],
 					columns: [
 						{ title: 'Command', field: 'command', width: 140 },
 						{ title: 'Category', field: 'category', width: 120 },

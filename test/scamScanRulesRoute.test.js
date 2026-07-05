@@ -11,12 +11,17 @@ function routeHandler(path, method) {
   return layer.route.stack[0].handle;
 }
 
-function fakeReq({ staff = true, csrf = 'token', body = {} } = {}) {
+function fakeReq({ staff = true, mod = false, csrf = 'token', body = {} } = {}) {
+  const roles = staff
+    ? [config.roles.staff]
+    : mod
+      ? [config.roles.mod]
+      : ['user-role'];
   return {
     body,
     session: {
       csrf: 'token',
-      roles: staff ? [config.roles.staff] : ['user-role'],
+      roles,
       user: { id: 'user-1', username: 'Staff', avatar: null },
     },
   };
@@ -56,7 +61,7 @@ function patchDb(overrides) {
   };
 }
 
-test('scam scan rules route denies non-staff GET and POST save', async () => {
+test('scam scan rules route denies users without mod or staff access', async () => {
   const restore = patchDb({
     parseScamScanRulesText: () => ({ ok: true, errors: [], rules: [] }),
   });
@@ -68,6 +73,29 @@ test('scam scan rules route denies non-staff GET and POST save', async () => {
     const postRes = fakeRes();
     await routeHandler('/save', 'post')(fakeReq({
       staff: false,
+      body: { _csrf: 'token', rules: 'porewin' },
+    }), postRes, assert.ifError);
+    assert.equal(postRes.statusCode, 403);
+  } finally {
+    restore();
+  }
+});
+
+test('mod can GET scam scan rules but cannot save', async () => {
+  const restore = patchDb({
+    exportScamScanRulesText: async () => 'porewin',
+    parseScamScanRulesText: () => ({ ok: true, errors: [], rules: [{ type: 'keyword', pattern: 'porewin' }] }),
+  });
+  try {
+    const getRes = fakeRes();
+    await routeHandler('/', 'get')(fakeReq({ staff: false, mod: true }), getRes, assert.ifError);
+    const render = getRes._calls.find((call) => call.type === 'render');
+    assert.equal(render.view, 'scamScanRules');
+
+    const postRes = fakeRes();
+    await routeHandler('/save', 'post')(fakeReq({
+      staff: false,
+      mod: true,
       body: { _csrf: 'token', rules: 'porewin' },
     }), postRes, assert.ifError);
     assert.equal(postRes.statusCode, 403);

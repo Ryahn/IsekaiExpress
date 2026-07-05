@@ -11,13 +11,18 @@ function routeHandler(path, method) {
 	return layer.route.stack[0].handle;
 }
 
-function fakeReq({ staff = true, query = {} } = {}) {
+function fakeReq({ staff = true, mod = false, query = {} } = {}) {
+	const roles = staff
+		? [config.roles.staff]
+		: mod
+			? [config.roles.mod]
+			: ['user-role'];
 	return {
 		query,
 		headers: {},
 		session: {
 			csrf: 'token',
-			roles: staff ? [config.roles.staff] : ['user-role'],
+			roles,
 			user: { id: 'user-1', username: 'Staff', avatar: null },
 		},
 	};
@@ -57,10 +62,26 @@ function patchDb(overrides) {
 	};
 }
 
-test('moderation action logs route denies non-staff access', async () => {
+test('moderation action logs route denies users without mod or staff access', async () => {
 	const res = fakeRes();
 	await routeHandler('/', 'get')(fakeReq({ staff: false }), res, assert.ifError);
 	assert.equal(res.statusCode, 403);
+});
+
+test('mod can GET moderation action logs dashboard', async () => {
+	const restore = patchDb({
+		getModerationActionLogMetrics: async () => ({ total: 0, byActionType: {} }),
+		getModerationActionLogsPage: async () => ({ page: 1, limit: 25, rows: [], hasMore: false }),
+	});
+	try {
+		const res = fakeRes();
+		await routeHandler('/', 'get')(fakeReq({ staff: false, mod: true }), res, assert.ifError);
+		const render = res._calls.find((call) => call.type === 'render');
+		assert.equal(render.view, 'moderationActionLogs');
+	}
+	finally {
+		restore();
+	}
 });
 
 test('staff can GET moderation action logs dashboard', async () => {

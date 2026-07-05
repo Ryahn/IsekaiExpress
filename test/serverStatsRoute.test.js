@@ -11,7 +11,12 @@ function routeHandler(path, method) {
 	return layer.route.stack[0].handle;
 }
 
-function fakeReq({ staff = true, query = {}, accept = '' } = {}) {
+function fakeReq({ staff = true, mod = false, query = {}, accept = '' } = {}) {
+	const roles = staff
+		? [config.roles.staff]
+		: mod
+			? [config.roles.mod]
+			: ['user-role'];
 	return {
 		query,
 		headers: accept ? { accept } : {},
@@ -21,7 +26,7 @@ function fakeReq({ staff = true, query = {}, accept = '' } = {}) {
 		},
 		session: {
 			csrf: 'token',
-			roles: staff ? [config.roles.staff] : ['user-role'],
+			roles,
 			user: { id: 'user-1', username: 'Staff', avatar: null },
 		},
 	};
@@ -281,6 +286,40 @@ test('server stats xp pagination returns correct page metadata', async () => {
 	}
 });
 
-test('server stats route requires staff role export', () => {
-	assert.deepEqual(router.requiredRoles, [config.roles.staff]);
+test('server stats route requires mod or staff role export', () => {
+	assert.deepEqual(router.requiredRoles, [config.roles.staff, config.roles.mod]);
+});
+
+test('mod can GET server stats dashboard', async () => {
+	const restore = patchDb({
+		getChannelStatsCoverage: async () => ({
+			earliest: '2024-09-26',
+			latest: '2024-09-27',
+			rowCount: 28,
+		}),
+		sumChannelMessagesForQuery: async () => 120,
+		countChannelStatsForQuery: async () => 2,
+		listChannelStatsForQuery: async () => [
+			{ channel_name: 'general', total: 80 },
+			{ channel_name: 'off-topic', total: 40 },
+		],
+		getXpSummary: async () => ({ rankedUsers: 10, totalXp: 5000 }),
+		getLeaderboardPage: async () => ({
+			rows: [{ user_id: '1', username: 'Alice', xp: 900, level: 5, message_count: 100 }],
+			total: 10,
+			page: 1,
+			pages: 1,
+			limit: 25,
+		}),
+	});
+
+	try {
+		const res = fakeRes();
+		await routeHandler('/', 'get')(fakeReq({ staff: false, mod: true }), res, assert.ifError);
+		const render = res._calls.find((call) => call.type === 'render');
+		assert.equal(render.view, 'serverStats');
+	}
+	finally {
+		restore();
+	}
 });

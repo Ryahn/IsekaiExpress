@@ -4,6 +4,7 @@ const axios = require('axios');
 const { getDiscordAvatarUrl } = require('../../../libs/utils');
 const db = require('../../../database/db');
 const config = require('../../../config');
+const { hasModOrStaffRole } = require('../utils/roleAccess');
 
 const VALID_RANGES = new Set(['24h', '7d', '30d']);
 const VALID_STATUSES = new Set(['clean', 'hit', 'timeout', 'failed', 'skipped']);
@@ -12,7 +13,7 @@ const DISCORD_NAME_CACHE_MS = 10 * 60 * 1000;
 const discordNameCache = new Map();
 
 function canView(req) {
-	return Boolean(req.session?.roles?.includes(config.roles.staff));
+	return hasModOrStaffRole(req.session);
 }
 
 function wantsJson(req) {
@@ -281,4 +282,4 @@ router.get('/', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports.requiredRoles = [config.roles.staff];
+module.exports.requiredRoles = [config.roles.staff, config.roles.mod];
