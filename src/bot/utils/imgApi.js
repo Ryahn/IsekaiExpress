@@ -130,10 +130,27 @@ async function getCachedTypes(category, apiKey) {
 
 function filterAutocompleteTypes(types, query, limit = 25) {
   const q = String(query || '').trim().toLowerCase();
-  const filtered = q
-    ? types.filter((t) => t.toLowerCase().includes(q))
-    : types.slice();
-  return filtered.slice(0, limit).map((t) => ({ name: t.slice(0, 100), value: t.slice(0, 100) }));
+
+  // Discord allows at most 25 autocomplete choices — require typing to search the full list.
+  if (!q) return [];
+
+  const ranked = types
+    .map((type) => {
+      const lower = type.toLowerCase();
+      let score = 0;
+      if (lower === q) score = 100;
+      else if (lower.startsWith(q)) score = 80;
+      else if (lower.includes(q)) score = 50;
+      else return null;
+      return { type, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || a.type.localeCompare(b.type));
+
+  return ranked.slice(0, limit).map(({ type }) => ({
+    name: type.slice(0, 100),
+    value: type.slice(0, 100),
+  }));
 }
 
 async function fetchImageForInteraction(client, { category, type }) {
