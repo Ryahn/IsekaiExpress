@@ -13,10 +13,24 @@
 
 <div class="search-box">
   <input class="form-control search-input" type="search" x-model="search" placeholder="Search commands..." aria-label="Search">
+  <select class="form-select" style="max-width: 11rem;" x-model="commandFilter" @change="onCommandFilterChange()" aria-label="Filter commands">
+    <option value="all">All commands</option>
+    <option value="never_used">Never used</option>
+    <option value="stale">Stale 90d+</option>
+  </select>
+  <select class="form-select" style="max-width: 11rem;" x-model="commandSort" @change="onCommandSortChange()" aria-label="Sort commands">
+    <option value="name">Sort: Name</option>
+    <option value="usage_desc">Sort: Usage</option>
+  </select>
   {% if allow %}
   <button class="btn btn-outline-secondary add-button" type="button" x-show="imageRehostEnabled" x-cloak @click="openRehost">Rehost Images</button>
   <button class="btn btn-primary add-button" type="button" @click="openAdd">Add Command</button>
   {% endif %}
+</div>
+
+<div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2" x-show="summary && summary.stale90d > 0" x-cloak>
+  <span x-text="summary.stale90d + ' command(s) unused in 90+ days.'"></span>
+  <button type="button" class="btn btn-sm btn-outline-dark" @click="showStaleOnly()">Show stale only</button>
 </div>
 
 <p class="text-body-secondary small" x-show="isLoading" x-cloak>Refreshing commands...</p>

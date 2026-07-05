@@ -1,79 +1,24 @@
 const BaseCommand = require('../../../../utils/structures/BaseCommand');
 const {
-  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
-} = require('discord.js');
-const {
-  MEME_FILES,
-  memeUrl,
   pickRandomMeme,
-  isVideoMeme,
   resolveMemeQuery,
+  buildMemeListEmbed,
+  buildMemeListButtons,
+  paginateMemeLines,
+  sendMemeToChannel,
+  LIST_PAGE_SIZE,
+  PAGINATION_TIME_MS,
 } = require('../../../../utils/f95Memes');
 
-const LIST_PAGE_SIZE = 20;
-const PAGINATION_TIME_MS = 300000;
-
-async function sendMeme(message, filename, title = 'F95 meme') {
-  const url = memeUrl(filename);
-
-  if (isVideoMeme(filename)) {
-    const embed = new EmbedBuilder()
-      .setColor(0xe74c3c)
-      .setTitle(title)
-      .setDescription(filename);
-
-    await message.channel.send({ content: url, embeds: [embed] });
-    return;
-  }
-
-  const embed = new EmbedBuilder()
-    .setColor(0xe74c3c)
-    .setTitle(title)
-    .setDescription(filename)
-    .setImage(url);
-
-  await message.channel.send({ embeds: [embed] });
-}
-
 async function handleMemeList(message, prefix) {
-  const lines = MEME_FILES.map((name, index) => {
-    const num = String(index + 1).padStart(3, ' ');
-    return `\`${num}\` [${name}](${memeUrl(name)})`;
-  });
-  const pages = [];
-
-  for (let i = 0; i < lines.length; i += LIST_PAGE_SIZE) {
-    pages.push(lines.slice(i, i + LIST_PAGE_SIZE));
-  }
-
-  let currentPage = 0;
+  const pages = paginateMemeLines();
   const totalPages = pages.length;
-
-  const createEmbed = (page) => new EmbedBuilder()
-    .setColor(0xe74c3c)
-    .setTitle(`F95 memes (${MEME_FILES.length} total)`)
-    .setDescription(pages[page].join('\n'))
-    .setFooter({
-      text: `Page ${page + 1}/${totalPages} | Use ${prefix}meme <number> or ${prefix}meme <filename>`,
-    });
-
-  const createButtons = (page) => new ActionRowBuilder()
-    .addComponents(
-      new ButtonBuilder()
-        .setCustomId('meme_list_prev')
-        .setLabel('◀ Previous')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(page === 0),
-      new ButtonBuilder()
-        .setCustomId('meme_list_next')
-        .setLabel('Next ▶')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(page === totalPages - 1),
-    );
+  let currentPage = 0;
+  const footerHint = `Use ${prefix}meme <number> or ${prefix}meme <filename>`;
 
   const response = await message.reply({
-    embeds: [createEmbed(currentPage)],
-    components: totalPages > 1 ? [createButtons(currentPage)] : [],
+    embeds: [buildMemeListEmbed(currentPage, totalPages, footerHint)],
+    components: totalPages > 1 ? [buildMemeListButtons(currentPage, totalPages)] : [],
   });
 
   if (totalPages <= 1) return;
@@ -91,8 +36,8 @@ async function handleMemeList(message, prefix) {
     }
 
     await interaction.update({
-      embeds: [createEmbed(currentPage)],
-      components: [createButtons(currentPage)],
+      embeds: [buildMemeListEmbed(currentPage, totalPages, footerHint)],
+      components: [buildMemeListButtons(currentPage, totalPages)],
     });
   });
 
@@ -133,11 +78,11 @@ module.exports = class RandMeme extends BaseCommand {
           return;
         }
 
-        await sendMeme(message, resolved.filename);
+        await sendMemeToChannel(message, resolved.filename);
         return;
       }
 
-      await sendMeme(message, pickRandomMeme(), 'Random F95 meme');
+      await sendMemeToChannel(message, pickRandomMeme(), 'Random F95 meme');
     } catch (error) {
       client.logger.error('Error executing the randmeme command:', error);
       await message.reply('Something went wrong while fetching a meme.');

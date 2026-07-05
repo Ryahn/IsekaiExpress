@@ -277,10 +277,10 @@
 		if (!window.Alpine) return;
 
 		window.Alpine.data('commandsPanel', function(config) {
-			return Object.assign(createPollingTable({
+			const baseTable = createPollingTable({
 				selector: '#commandsTable',
 				url: '/commands/list',
-				searchFields: ['name', 'content', 'usage', 'created_by_username', 'updated_by_username', 'created_at', 'updated_at'],
+				searchFields: ['name', 'content', 'usage', 'created_by_username', 'updated_by_username', 'created_at', 'updated_at', 'last_used_at'],
 				rows: function(response) {
 					if (!Array.isArray(response.commands)) return [];
 					const seen = new Set();
@@ -295,10 +295,17 @@
 					paginationSize: 10,
 					layout: 'fitColumns',
 					initialSort: [{ column: 'name', dir: 'asc' }],
+					rowFormatter: function(row) {
+						const data = row.getData();
+						if (data && data.is_stale) {
+							row.getElement().classList.add('table-warning');
+						}
+					},
 					columns: [
 						{ title: 'Name', field: 'name' },
 						{ title: 'Content', field: 'content' },
-						{ title: 'Usage', field: 'usage' },
+						{ title: 'Usage', field: 'usage', sorter: 'number' },
+						{ title: 'Last Used', field: 'last_used_at', formatter: function(cell) { return formatUnixTimestamp(cell.getValue()); } },
 						{ title: 'Created By', field: 'created_by_username' },
 						{ title: 'Updated By', field: 'updated_by_username' },
 						{ title: 'Created At', field: 'created_at', formatter: function(cell) { return formatUnixTimestamp(cell.getValue()); } },
@@ -315,9 +322,14 @@
 						},
 					],
 				},
-			}), {
+			});
+
+			return Object.assign(baseTable, {
 				csrfToken: config.csrfToken,
 				imageRehostEnabled: Boolean(config.imageRehostEnabled),
+				commandFilter: 'all',
+				commandSort: 'name',
+				summary: null,
 				edit: { id: '', name: '', content: '' },
 				add: { name: '', content: '' },
 				rehostBusy: false,
@@ -328,10 +340,75 @@
 				editRehostBusy: false,
 				editRehostMessage: '',
 
+				buildListUrl: function() {
+					const params = new URLSearchParams();
+					if (this.commandFilter && this.commandFilter !== 'all') {
+						params.set('filter', this.commandFilter);
+					}
+					if (this.commandSort && this.commandSort !== 'name') {
+						params.set('sort', this.commandSort);
+					}
+					const query = params.toString();
+					return query ? '/commands/list?' + query : '/commands/list';
+				},
+
+				onCommandFilterChange: function() {
+					this.refresh();
+				},
+
+				onCommandSortChange: function() {
+					this.refresh();
+				},
+
+				showStaleOnly: function() {
+					this.commandFilter = 'stale';
+					this.refresh();
+				},
+
 				init: function() {
 					this.initTable();
 					syncModalClosed(this, ['#editModal', '#addModal', '#rehostModal']);
 					this.bindCommandActions();
+				},
+
+				refresh: async function(refreshOptions) {
+					const settings = refreshOptions || {};
+					if (this.isRefreshing || (settings.poll && this.modalOpen)) return;
+					this.isRefreshing = true;
+					this.isLoading = true;
+					try {
+						const response = await requestJson(this.buildListUrl());
+						this.summary = response.summary || null;
+						const rows = baseTable.rows(response).map(function(command) {
+							return Object.assign({}, command, {
+								is_stale: Boolean(command.is_stale),
+							});
+						});
+						if (this.table) {
+							this.table.blockRedraw();
+							try {
+								await this.table.replaceData(rows);
+								if (this.commandSort === 'usage_desc') {
+									this.table.setSort([{ column: 'usage', dir: 'desc' }]);
+								} else {
+									this.table.setSort([{ column: 'name', dir: 'asc' }]);
+								}
+							}
+							finally {
+								this.table.restoreRedraw();
+							}
+						}
+						this.applySearch();
+					}
+					catch (error) {
+						if (!settings.silent) {
+							notify('error', error.message);
+						}
+					}
+					finally {
+						this.isLoading = false;
+						this.isRefreshing = false;
+					}
 				},
 
 				bindCommandActions: function() {
@@ -1537,6 +1614,56 @@
 					} finally {
 						this.isLoading = false;
 						this.isRefreshing = false;
+					}
+				},
+			};
+		});
+
+		window.Alpine.data('systemHealthCard', function(config) {
+			return {
+				health: config.initial || {},
+				isLoading: false,
+
+				init: function() {
+					if (!this.health || !this.health.mysql) {
+						this.refresh({ silent: true });
+					}
+				},
+
+				starboardLabel: function() {
+					if (!this.health.starboardArchive?.enabled) return 'Disabled';
+					const archive = this.health.starboardArchive;
+					const suffix = archive.truncated ? ' (partial scan)' : '';
+					return `${archive.entryCount} entries, ${archive.totalBytesLabel}${suffix}`;
+				},
+
+				phishLabel: function() {
+					if (!this.health.phishGg?.enabled) return 'Disabled';
+					const phish = this.health.phishGg;
+					return `${phish.lastSyncStatus || 'unknown'} · ${phish.lastSyncRelative || 'Never'}`;
+				},
+
+				phishBadgeClass: function() {
+					if (!this.health.phishGg?.enabled) return 'text-bg-secondary';
+					if (this.health.phishGg.lastSyncStatus === 'ok') return 'text-bg-success';
+					if (this.health.phishGg.lastSyncStatus === 'error') return 'text-bg-danger';
+					return 'text-bg-warning';
+				},
+
+				refresh: async function(options) {
+					const settings = options || {};
+					this.isLoading = true;
+					try {
+						const response = await requestJson('/system-health');
+						this.health = response.health || {};
+					}
+					catch (error) {
+						if (!settings.silent) {
+							notify('error', error.message || 'Failed to refresh system health.');
+						}
+					}
+					finally {
+						this.isLoading = false;
 					}
 				},
 			};

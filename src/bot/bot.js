@@ -5,6 +5,7 @@ const config = require('../../config');
 const { farmManager } = require('./utils/farm/farmManager');
 const db = require('../../database/db');
 const { syncPhishGgServers } = require('../../libs/phishGgSync');
+const { recordPhishGgSyncState } = require('../../libs/systemHealth');
 const { timestamp } = require('../../libs/utils');
 const logger = require('../../libs/logger');
 const process = require('process');
@@ -218,11 +219,25 @@ let shuttingDown = false;
 			const runPhishSync = createNonOverlappingJob('phish sync', logger, async () => {
 				try {
 					const r = await syncPhishGgServers(db.query, { addedBy: null, dryRun: false });
+					await recordPhishGgSyncState({
+						status: 'ok',
+						summary: {
+							apiCount: r.apiCount,
+							guildRows: r.guildRows,
+							inviteRows: r.inviteRows,
+						},
+					});
 					logger.info(
 						`[PHISH-SYNC] api rows=${r.apiCount} guild upserts=${r.guildRows} invite upserts=${r.inviteRows}`,
 					);
 				}
 				catch (err) {
+					await recordPhishGgSyncState({
+						status: 'error',
+						summary: { message: err instanceof Error ? err.message : String(err) },
+					}).catch((recordErr) => {
+						logger.error('[PHISH-SYNC] failed to record sync state', recordErr);
+					});
 					logger.error('[PHISH-SYNC] failed', err);
 				}
 			});

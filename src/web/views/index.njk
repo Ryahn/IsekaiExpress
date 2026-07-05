@@ -24,6 +24,38 @@
 <!-- Feature Cards -->
 <p class="vs-section-title">Quick Access</p>
 
+{% if showModCommandDocs and systemHealth %}
+<div class="card mb-4" x-data="systemHealthCard({ initial: {{ systemHealthJson | safe }} })" x-init="init()">
+  <div class="card-body">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+      <h5 class="card-title mb-0">System status</h5>
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="refresh()" :disabled="isLoading">
+        <span x-show="!isLoading">Refresh</span>
+        <span x-show="isLoading">Refreshing...</span>
+      </button>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <span class="badge" :class="health.imgApi.configured ? 'text-bg-success' : 'text-bg-warning'">Img API</span>
+        <div class="small text-body-secondary" x-text="health.imgApi.configured ? 'Configured' : 'Not configured'"></div>
+      </div>
+      <div class="col-md-3">
+        <span class="badge" :class="health.mysql.ok ? 'text-bg-success' : 'text-bg-danger'">MySQL</span>
+        <div class="small text-body-secondary" x-text="health.mysql.ok ? 'Connected' : 'Unreachable'"></div>
+      </div>
+      <div class="col-md-3">
+        <span class="badge" :class="health.starboardArchive.enabled ? 'text-bg-info' : 'text-bg-secondary'">Starboard archive</span>
+        <div class="small text-body-secondary" x-text="starboardLabel()"></div>
+      </div>
+      <div class="col-md-3">
+        <span class="badge" :class="phishBadgeClass()">phish.gg sync</span>
+        <div class="small text-body-secondary" x-text="phishLabel()"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div class="row g-4">
   <div class="col-md-4">
     <a href="/commands" class="vs-card">

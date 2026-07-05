@@ -304,8 +304,27 @@ app.get('/stats/farm', async (req, res, next) => {
 const indexRouter = require("./routes/routerIndex");
 app.use("/", indexRouter);
 
-app.get('/', (req, res) => {
-  res.render('index', { username: req.session.user.username,  avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar), csrfToken: req.session.csrf });
+app.get('/', async (req, res, next) => {
+  try {
+    let systemHealth = null;
+    const roles = req.session?.roles;
+    const isStaff = Array.isArray(roles)
+      && (roles.includes(config.roles.staff) || roles.includes(config.roles.mod));
+    if (isStaff) {
+      const { getSystemHealth } = require('../../libs/systemHealth');
+      systemHealth = await getSystemHealth();
+    }
+
+    res.render('index', {
+      username: req.session.user.username,
+      avatarUrl: getDiscordAvatarUrl(req.session.user.id, req.session.user.avatar),
+      csrfToken: req.session.csrf,
+      systemHealth,
+      systemHealthJson: systemHealth ? JSON.stringify(systemHealth) : null,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use((req, res) => {

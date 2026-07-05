@@ -1,33 +1,15 @@
 const BaseCommand = require("../../../../utils/structures/BaseCommand");
 const { EmbedBuilder, userMention } = require('discord.js');
 
-// Cooldown map to store user cooldowns
-const cooldowns = new Map();
-
 module.exports = class Gaydar extends BaseCommand {
     constructor() {
         super('gaydar', 'fun', ['gay', 'gdar']);
     }
 
     async run(client, message) {
-        const cooldownTime = 2 * 1000; // Cooldown time in milliseconds (e.g., 10 seconds)
-        const user = message.author;
-
-        // Get mentioned member or the author if none is mentioned
         const member = message.mentions.members.first() || message.member;
         const targetUser = member.user;
 
-        // Check if the user is on cooldown
-        if (cooldowns.has(user.id)) {
-            const expirationTime = cooldowns.get(user.id) + cooldownTime;
-
-            if (Date.now() < expirationTime) {
-                const timeLeft = (expirationTime - Date.now()) / 1000;
-                return message.reply(`You are on cooldown! Please wait ${timeLeft.toFixed(1)} more seconds.`);
-            }
-        }
-
-        // Calculate random gayness percentage
         let percent = Math.floor(Math.random() * 100) + 1;
         let image = '';
         let description = '';
@@ -39,21 +21,16 @@ module.exports = class Gaydar extends BaseCommand {
             description = `${userMention(targetUser.id)} has been scanned by the gaydar and is ${percent}% gay.`;
         }
 
-        // Create the embed
-        let embed = new EmbedBuilder()
+        const embed = new EmbedBuilder()
             .setColor(0x3498DB)
             .setTitle('Gayness Detected')
             .setImage(image)
             .setTimestamp();
 
-        // Send the embed mentioning the target user
         await message.channel.send({
             content: description,
             embeds: [embed],
             allowedMentions: { users: [targetUser.id] },
         });
-
-        // Set the cooldown for the user
-        cooldowns.set(user.id, Date.now());
     }
 }

@@ -63,7 +63,7 @@ test('commands route allows any logged-in user to list but not mutate', async ()
   assert.deepEqual(router.requiredRoles, []);
 
   const restore = patchDb({
-    sql: async () => ([{ id: 1, name: 'hello', content: 'world' }]),
+    sql: async () => ([{ id: 1, name: 'hello', content: 'world', usage: 0 }]),
   });
 
   try {
@@ -71,6 +71,8 @@ test('commands route allows any logged-in user to list but not mutate', async ()
     await routeHandler('/list', 'get')(fakeReq({ staff: false }), listRes, assert.ifError);
     assert.equal(listRes.statusCode, 200);
     assert.ok(Array.isArray(listRes.body.commands));
+    assert.ok(listRes.body.summary);
+    assert.equal(listRes.body.summary.total, 1);
 
     const addRes = fakeRes();
     await routeHandler('/add', 'post')(fakeReq({

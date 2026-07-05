@@ -118,7 +118,11 @@ const self = (module.exports = {
   },
 
   incrementCustomCommandUsage: async (commandNameHash) => {
-    await db.table('commands').increment('usage', 1).where({ hash: commandNameHash });
+    const ts = nowUnix();
+    await db.table('commands')
+      .increment('usage', 1)
+      .update({ last_used_at: ts })
+      .where({ hash: commandNameHash });
   },
 
   normalizeCustomCommandName,

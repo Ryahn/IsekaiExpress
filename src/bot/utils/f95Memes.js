@@ -1,4 +1,11 @@
 /** F95 meme filenames served from https://overlord.lordainz.xyz/f/f95/ */
+const {
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} = require('discord.js');
+
 const MEME_BASE_URL = 'https://overlord.lordainz.xyz/f/f95/';
 
 const MEME_FILES = [
@@ -323,11 +330,119 @@ function resolveMemeQuery(query) {
   return null;
 }
 
+const LIST_PAGE_SIZE = 20;
+const PAGINATION_TIME_MS = 300000;
+
+function paginateMemeLines(pageSize = LIST_PAGE_SIZE) {
+  const lines = MEME_FILES.map((name, index) => {
+    const num = String(index + 1).padStart(3, ' ');
+    return `\`${num}\` [${name}](${memeUrl(name)})`;
+  });
+  const pages = [];
+  for (let i = 0; i < lines.length; i += pageSize) {
+    pages.push(lines.slice(i, i + pageSize));
+  }
+  return pages.length ? pages : [[]];
+}
+
+function buildMemeListEmbed(pageIndex, totalPages, footerHint = '/meme send name:<filename>') {
+  const pages = paginateMemeLines();
+  const page = Math.min(Math.max(pageIndex, 0), totalPages - 1);
+
+  return new EmbedBuilder()
+    .setColor(0xe74c3c)
+    .setTitle(`F95 memes (${MEME_FILES.length} total)`)
+    .setDescription((pages[page] || []).join('\n') || 'No memes found.')
+    .setFooter({
+      text: `Page ${page + 1}/${totalPages} | ${footerHint}`,
+    });
+}
+
+function buildMemeListButtons(pageIndex, totalPages) {
+  return new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId('meme_list_prev')
+        .setLabel('◀ Previous')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(pageIndex === 0),
+      new ButtonBuilder()
+        .setCustomId('meme_list_next')
+        .setLabel('Next ▶')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(pageIndex >= totalPages - 1),
+    );
+}
+
+function buildMemeEmbed(filename, title = 'F95 meme') {
+  const url = memeUrl(filename);
+
+  if (isVideoMeme(filename)) {
+    return {
+      content: url,
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xe74c3c)
+          .setTitle(title)
+          .setDescription(filename),
+      ],
+    };
+  }
+
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle(title)
+        .setDescription(filename)
+        .setImage(url),
+    ],
+  };
+}
+
+async function sendMemeToChannel(message, filename, title = 'F95 meme') {
+  await message.channel.send(buildMemeEmbed(filename, title));
+}
+
+async function sendMemeToInteraction(interaction, filename, title = 'F95 meme') {
+  await interaction.editReply(buildMemeEmbed(filename, title));
+}
+
+function filterAutocompleteMemes(query, limit = 25) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+
+  const ranked = MEME_FILES
+    .map((name) => {
+      const lower = name.toLowerCase();
+      let score = 0;
+      if (lower === q) score = 100;
+      else if (lower.startsWith(q)) score = 80;
+      else if (lower.includes(q)) score = 50;
+      else return null;
+      return { name, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+    .slice(0, limit);
+
+  return ranked.map((entry) => ({ name: entry.name, value: entry.name }));
+}
+
 module.exports = {
   MEME_BASE_URL,
   MEME_FILES,
+  LIST_PAGE_SIZE,
+  PAGINATION_TIME_MS,
   memeUrl,
   pickRandomMeme,
   isVideoMeme,
   resolveMemeQuery,
+  paginateMemeLines,
+  buildMemeListEmbed,
+  buildMemeListButtons,
+  buildMemeEmbed,
+  sendMemeToChannel,
+  sendMemeToInteraction,
+  filterAutocompleteMemes,
 };

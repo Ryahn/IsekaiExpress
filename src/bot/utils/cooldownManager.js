@@ -30,6 +30,9 @@ class CooldownManager {
       'wink': 10000,
       'yawn': 10000,
       'level': 10000,
+      'gaydar': 2000,
+      'thiccdar': 2000,
+      'meme': 3000,
       // Add more as needed
     };
   }

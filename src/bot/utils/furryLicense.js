@@ -4,10 +4,8 @@ const crypto = require('crypto');
 const moment = require('moment');
 const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
 
-const CANVAS_WIDTH = 944;
-const CANVAS_HEIGHT = 600;
 const LICENSE_FONT = 'FurryLicenseFont';
-const BASE_IMAGE = path.join(__dirname, '../media/images/furry_license.png');
+const MEDIA_IMAGES = path.join(__dirname, '../media/images');
 
 const SEX_OPTIONS = ['Male', 'Female'];
 const SPECIES_OPTIONS = [
@@ -20,6 +18,9 @@ const SPECIES_OPTIONS = [
   'Serpent', 'Wyvern', 'Drake',
 ];
 
+const LOLI_SEX_OPTIONS = ['Male', 'Female', 'Binary', 'Souleater'];
+const LOLI_LIMIT_OPTIONS = ['One time only', 'Unlimited', 'Siblings only', 'UwU', 'Souleater'];
+
 /** Edit these coordinates when tuning layout (see scripts/test-furry-license.js). */
 const DEFAULT_POSITIONS = {
   agentName: { x: 317, y: 225 },
@@ -29,6 +30,105 @@ const DEFAULT_POSITIONS = {
   expires: { x: 575, y: 225 },
   avatar: { x: 45, y: 155, width: 240, height: 300 },
 };
+
+const LOLI_DEFAULT_POSITIONS = {
+  agentName: { x: 192, y: 155 },
+  agentNum: { x: 192, y: 222 },
+  sex: { x: 417, y: 152 },
+  birth: { x: 417, y: 222 },
+  limit: { x: 417, y: 291 },
+  expires: { x: 319, y: 415 },
+  avatar: { x: 654, y: 46, width: 152, height: 218 },
+};
+
+function randomFurryFields() {
+  const agentNum = [2, 4, 12]
+    .map((n) => crypto.randomBytes(n / 2).toString('hex'))
+    .join('-')
+    .toUpperCase();
+
+  return {
+    agentNum,
+    sex: SEX_OPTIONS[Math.floor(Math.random() * SEX_OPTIONS.length)],
+    species: SPECIES_OPTIONS[Math.floor(Math.random() * SPECIES_OPTIONS.length)],
+    issuedDate: moment().format('MMM/DD/YYYY'),
+  };
+}
+
+function randomLoliFields() {
+  const agentNum = [2, 8]
+    .map((n) => crypto.randomBytes(n / 2).toString('hex'))
+    .join('-')
+    .toUpperCase();
+
+  return {
+    agentNum,
+    sex: LOLI_SEX_OPTIONS[Math.floor(Math.random() * LOLI_SEX_OPTIONS.length)],
+    birth: moment().subtract(Math.floor(Math.random() * (40 - 18 + 1) + 18), 'years').format('MMM/DD/YYYY'),
+    limit: LOLI_LIMIT_OPTIONS[Math.floor(Math.random() * LOLI_LIMIT_OPTIONS.length)],
+    expires: moment().add(20, 'years').format('MMM/DD/YYYY'),
+  };
+}
+
+const LICENSE_TEMPLATES = {
+  furry: {
+    width: 944,
+    height: 600,
+    baseImage: path.join(MEDIA_IMAGES, 'furry_license.png'),
+    positions: DEFAULT_POSITIONS,
+    textStyle: 'outlined',
+    nameField: 'displayName',
+    bodyFontSize: 20,
+    agentNumFontSize: 28,
+    randomFields: randomFurryFields,
+    drawFields(context, positions, fields, fontFamily, drawText) {
+      context.font = `${this.bodyFontSize}pt "${fontFamily}"`;
+      drawText(context, fields.agentName, positions.agentName.x, positions.agentName.y);
+      drawText(context, fields.sex, positions.sex.x, positions.sex.y);
+      drawText(context, fields.species, positions.species.x, positions.species.y);
+      drawText(context, fields.issuedDate, positions.expires.x, positions.expires.y);
+      context.font = `${this.agentNumFontSize}pt "${fontFamily}"`;
+      drawText(context, fields.agentNum, positions.agentNum.x, positions.agentNum.y);
+    },
+    prepareFields(user, fields, positions) {
+      const licenseFields = { ...this.randomFields(), ...fields };
+      return {
+        ...licenseFields,
+        agentName: displayName(user),
+      };
+    },
+  },
+  loli: {
+    width: 853,
+    height: 512,
+    baseImage: path.join(MEDIA_IMAGES, 'lolilicense.png'),
+    positions: LOLI_DEFAULT_POSITIONS,
+    textStyle: 'plain',
+    nameField: 'username',
+    bodyFontSize: 20,
+    randomFields: randomLoliFields,
+    drawFields(context, positions, fields, fontFamily, drawText) {
+      context.font = `${this.bodyFontSize}pt "${fontFamily}"`;
+      drawText(context, fields.agentName, positions.agentName.x, positions.agentName.y);
+      drawText(context, fields.agentNum, positions.agentNum.x, positions.agentNum.y);
+      drawText(context, fields.sex, positions.sex.x, positions.sex.y);
+      drawText(context, fields.limit, positions.limit.x, positions.limit.y);
+      drawText(context, fields.birth, positions.birth.x, positions.birth.y);
+      drawText(context, fields.expires, positions.expires.x, positions.expires.y);
+    },
+    prepareFields(user, fields) {
+      const licenseFields = { ...this.randomFields(), ...fields };
+      return {
+        ...licenseFields,
+        agentName: user.username,
+      };
+    },
+  },
+};
+
+const CANVAS_WIDTH = LICENSE_TEMPLATES.furry.width;
+const CANVAS_HEIGHT = LICENSE_TEMPLATES.furry.height;
+const BASE_IMAGE = LICENSE_TEMPLATES.furry.baseImage;
 
 let fontRegistered = false;
 
@@ -69,17 +169,7 @@ function displayName(user) {
 }
 
 function randomLicenseFields() {
-  const agentNum = [2, 4, 12]
-    .map((n) => crypto.randomBytes(n / 2).toString('hex'))
-    .join('-')
-    .toUpperCase();
-
-  return {
-    agentNum,
-    sex: SEX_OPTIONS[Math.floor(Math.random() * SEX_OPTIONS.length)],
-    species: SPECIES_OPTIONS[Math.floor(Math.random() * SPECIES_OPTIONS.length)],
-    issuedDate: moment().format('MMM/DD/YYYY'),
-  };
+  return randomFurryFields();
 }
 
 function drawOutlinedText(context, text, x, y) {
@@ -87,30 +177,87 @@ function drawOutlinedText(context, text, x, y) {
   context.fillText(text, x, y);
 }
 
-function drawPositionGrid(context) {
+function drawPlainText(context, text, x, y) {
+  context.fillText(text, x, y);
+}
+
+function drawPositionGrid(context, width, height) {
   context.save();
   context.strokeStyle = 'rgba(255, 0, 0, 0.35)';
   context.fillStyle = 'rgba(255, 0, 0, 0.35)';
   context.lineWidth = 1;
   context.font = '12pt sans-serif';
 
-  for (let x = 0; x <= CANVAS_WIDTH; x += 50) {
+  for (let x = 0; x <= width; x += 50) {
     context.beginPath();
     context.moveTo(x, 0);
-    context.lineTo(x, CANVAS_HEIGHT);
+    context.lineTo(x, height);
     context.stroke();
     context.fillText(String(x), x + 2, 12);
   }
 
-  for (let y = 0; y <= CANVAS_HEIGHT; y += 50) {
+  for (let y = 0; y <= height; y += 50) {
     context.beginPath();
     context.moveTo(0, y);
-    context.lineTo(CANVAS_WIDTH, y);
+    context.lineTo(width, y);
     context.stroke();
     context.fillText(String(y), 2, y + 12);
   }
 
   context.restore();
+}
+
+/**
+ * @param {object} opts
+ * @param {'furry'|'loli'} opts.templateId
+ * @param {{ id: string, username: string, avatar?: string|null, global_name?: string|null, globalName?: string|null, displayName?: string }} opts.user
+ * @param {object} [opts.positions]
+ * @param {boolean} [opts.drawGrid=false]
+ * @param {object} [opts.fields]
+ */
+async function renderLicense({ templateId, user, positions, drawGrid = false, fields }) {
+  const template = LICENSE_TEMPLATES[templateId];
+  if (!template) {
+    throw new Error(`Unknown license template: ${templateId}`);
+  }
+
+  const fontFamily = registerLicenseFont();
+  const resolvedPositions = positions || template.positions;
+  const licenseFields = template.prepareFields(user, fields || {}, resolvedPositions);
+  const avatarUrl = discordAvatarUrl(user);
+
+  const canvas = createCanvas(template.width, template.height);
+  const context = canvas.getContext('2d');
+
+  const [baseImage, avatarImage] = await Promise.all([
+    loadImage(template.baseImage),
+    loadImage(avatarUrl),
+  ]);
+
+  context.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
+  context.drawImage(
+    avatarImage,
+    resolvedPositions.avatar.x,
+    resolvedPositions.avatar.y,
+    resolvedPositions.avatar.width,
+    resolvedPositions.avatar.height,
+  );
+
+  if (drawGrid) {
+    drawPositionGrid(context, template.width, template.height);
+  }
+
+  if (template.textStyle === 'outlined') {
+    context.fillStyle = 'white';
+    context.strokeStyle = 'black';
+    context.lineWidth = 6;
+    template.drawFields(context, resolvedPositions, licenseFields, fontFamily, drawOutlinedText);
+  } else {
+    context.fillStyle = '#000000';
+    template.drawFields(context, resolvedPositions, licenseFields, fontFamily, drawPlainText);
+  }
+
+  return canvas.encode('png');
 }
 
 /**
@@ -121,56 +268,20 @@ function drawPositionGrid(context) {
  * @param {{ agentNum?: string, sex?: string, species?: string, issuedDate?: string }} [opts.fields]
  */
 async function renderFurryLicense({ user, positions = DEFAULT_POSITIONS, drawGrid = false, fields }) {
-  const fontFamily = registerLicenseFont();
-  const licenseFields = { ...randomLicenseFields(), ...fields };
-  const name = displayName(user);
-  const avatarUrl = discordAvatarUrl(user);
-
-  const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
-  const context = canvas.getContext('2d');
-
-  const [baseImage, avatarImage] = await Promise.all([
-    loadImage(BASE_IMAGE),
-    loadImage(avatarUrl),
-  ]);
-
-  context.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
-  context.drawImage(
-    avatarImage,
-    positions.avatar.x,
-    positions.avatar.y,
-    positions.avatar.width,
-    positions.avatar.height,
-  );
-
-  if (drawGrid) {
-    drawPositionGrid(context);
-  }
-
-  context.fillStyle = 'white';
-  context.strokeStyle = 'black';
-  context.lineWidth = 6;
-  context.font = `20pt "${fontFamily}"`;
-
-  drawOutlinedText(context, name, positions.agentName.x, positions.agentName.y);
-  drawOutlinedText(context, licenseFields.sex, positions.sex.x, positions.sex.y);
-  drawOutlinedText(context, licenseFields.species, positions.species.x, positions.species.y);
-  drawOutlinedText(context, licenseFields.issuedDate, positions.expires.x, positions.expires.y);
-
-  context.font = `28pt "${fontFamily}"`;
-  drawOutlinedText(context, licenseFields.agentNum, positions.agentNum.x, positions.agentNum.y);
-
-  return canvas.encode('png');
+  return renderLicense({ templateId: 'furry', user, positions, drawGrid, fields });
 }
 
 module.exports = {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   DEFAULT_POSITIONS,
+  LOLI_DEFAULT_POSITIONS,
+  LICENSE_TEMPLATES,
   BASE_IMAGE,
   registerLicenseFont,
   discordAvatarUrl,
   displayName,
   randomLicenseFields,
+  renderLicense,
   renderFurryLicense,
 };

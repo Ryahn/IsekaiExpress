@@ -37,6 +37,71 @@ function validateCommandId(id) {
 	return COMMAND_ID_PATTERN.test(String(id || ''));
 }
 
+const STALE_DAYS = 90;
+const STALE_SECONDS = STALE_DAYS * 24 * 60 * 60;
+
+function nowUnix() {
+	return Math.floor(Date.now() / 1000);
+}
+
+function isCommandStale(command, now = nowUnix()) {
+	const cutoff = now - STALE_SECONDS;
+	const usage = Number(command.usage) || 0;
+	const createdAt = Number(command.created_at) || 0;
+	const lastUsedAt = command.last_used_at != null ? Number(command.last_used_at) : null;
+
+	if (lastUsedAt != null) {
+		return lastUsedAt < cutoff;
+	}
+	return usage === 0 && createdAt > 0 && createdAt < cutoff;
+}
+
+function summarizeCommands(commands) {
+	const rows = Array.isArray(commands) ? commands : [];
+	const now = nowUnix();
+	let neverUsed = 0;
+	let stale90d = 0;
+
+	for (const command of rows) {
+		const usage = Number(command.usage) || 0;
+		if (usage === 0) neverUsed += 1;
+		if (isCommandStale(command, now)) stale90d += 1;
+	}
+
+	return {
+		total: rows.length,
+		neverUsed,
+		stale90d,
+		staleDays: STALE_DAYS,
+	};
+}
+
+function filterCommands(commands, filter) {
+	const rows = Array.isArray(commands) ? commands : [];
+	if (filter === 'never_used') {
+		return rows.filter((command) => (Number(command.usage) || 0) === 0);
+	}
+	if (filter === 'stale') {
+		const now = nowUnix();
+		return rows.filter((command) => isCommandStale(command, now));
+	}
+	return rows;
+}
+
+function sortCommands(commands, sort) {
+	const rows = Array.isArray(commands) ? commands.slice() : [];
+	if (sort === 'usage_desc') {
+		rows.sort((a, b) => {
+			const usageDiff = (Number(b.usage) || 0) - (Number(a.usage) || 0);
+			if (usageDiff !== 0) return usageDiff;
+			return String(a.name || '').localeCompare(String(b.name || ''));
+		});
+		return rows;
+	}
+	rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+	return rows;
+}
+
 function requireStaff(req, res) {
 	if (!hasStaffRole(req.session)) {
 		res.status(403).json({ message: 'You do not have permission to manage commands' });
@@ -102,10 +167,28 @@ router.get("/list", async (req, res) => {
     LEFT JOIN users u1 ON commands.created_by = u1.discord_id
     LEFT JOIN users u2 ON commands.updated_by = u2.discord_id`;
 
+	const filter = String(req.query?.filter || 'all');
+	const sort = String(req.query?.sort || 'name');
+	const validFilters = new Set(['all', 'never_used', 'stale']);
+	const validSorts = new Set(['name', 'usage_desc']);
+
 	try {
 		const results = await db.sql(query);
+		const safeResults = Array.isArray(results) ? results : [];
+		const summary = summarizeCommands(safeResults);
+		const filtered = filterCommands(safeResults, validFilters.has(filter) ? filter : 'all');
+		const now = nowUnix();
+		const commands = sortCommands(filtered, validSorts.has(sort) ? sort : 'name').map((command) => ({
+			...command,
+			is_stale: isCommandStale(command, now),
+		}));
 
-		res.json({ commands: results });
+		res.json({
+			commands,
+			summary,
+			filter: validFilters.has(filter) ? filter : 'all',
+			sort: validSorts.has(sort) ? sort : 'name',
+		});
 	} catch (error) {
 		console.error(error);
 		res.status(400).json({ message: 'Error fetching commands' });

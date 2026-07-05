@@ -1,8 +1,6 @@
 const BaseCommand = require("../../../../utils/structures/BaseCommand");
 const { EmbedBuilder, userMention } = require('discord.js');
 
-const cooldowns = new Map();
-
 const images = {
     '0%-10%': 'https://overlord.lordainz.xyz/f/2026_Jul_03-15_30_48_zZMJWleA.gif',
     '11%-20%': 'https://overlord.lordainz.xyz/f/2026_Jul_03-15_30_48_zZMJWleA.gif',
@@ -44,20 +42,8 @@ module.exports = class Thiccdar extends BaseCommand {
     }
 
     async run(client, message) {
-        const cooldownTime = 2 * 1000;
-        const user = message.author;
-
         const member = message.mentions.members.first() || message.member;
         const targetUser = member.user;
-
-        if (cooldowns.has(user.id)) {
-            const expirationTime = cooldowns.get(user.id) + cooldownTime;
-
-            if (Date.now() < expirationTime) {
-                const timeLeft = (expirationTime - Date.now()) / 1000;
-                return message.reply(`You are on cooldown! Please wait ${timeLeft.toFixed(1)} more seconds.`);
-            }
-        }
 
         const percent = Math.floor(Math.random() * 100) + 1;
         const image = getImageForPercent(percent);
@@ -74,7 +60,5 @@ module.exports = class Thiccdar extends BaseCommand {
             embeds: [embed],
             allowedMentions: { users: [targetUser.id] },
         });
-
-        cooldowns.set(user.id, Date.now());
     }
 }
