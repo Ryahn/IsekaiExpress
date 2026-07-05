@@ -8,7 +8,6 @@ const cmd = createImgReactionCommand({
   description: 'bang someone really hard',
   action: (user, target) => `${user} bangs the shit out of ${target}`,
   targetOption: true,
-  targetRequired: true,
   nsfw: true,
 });
 

@@ -29,11 +29,14 @@ module.exports = {
             const img = data.results[0].url;
 
             const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} has big brain moment`)
                 .setColor(`#${getRandomColor()}`)
                 .setImage(img);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({
+                content: `${interaction.user} has big brain moment`,
+                embeds: [embed],
+                allowedMentions: { users: [] },
+            });
         } catch (error) {
             client.logger.error('Error executing the think command:', error);
             await interaction.editReply('Something went wrong.');

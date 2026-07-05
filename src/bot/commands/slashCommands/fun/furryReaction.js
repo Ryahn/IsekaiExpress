@@ -14,7 +14,7 @@ const {
   fetchImageForInteraction,
   getCachedTypes,
   filterAutocompleteTypes,
-  pickRandomPerson,
+  buildReactionReply,
 } = require('../../../utils/imgApi');
 
 const LIST_PAGE_SIZE = 20;
@@ -136,7 +136,6 @@ async function handleSend(client, interaction) {
 
   const type = interaction.options.getString('type', true);
   const targetUser = interaction.options.getUser('target');
-  const targetLabel = targetUser ? `${targetUser}` : pickRandomPerson();
   const { getRandomColor } = client.utils;
 
   let knownTypes;
@@ -160,12 +159,14 @@ async function handleSend(client, interaction) {
 
   try {
     const data = await fetchImageForInteraction(client, { category: 'furry', type });
-    const embed = new EmbedBuilder()
-      .setDescription(`${interaction.user} sends ${type} to ${targetLabel}`)
-      .setColor(`#${getRandomColor()}`)
-      .setImage(data.url);
 
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply(buildReactionReply({
+      actor: interaction.user,
+      targetUser,
+      actionText: (user, target) => `${user} sends ${type} to ${target}`,
+      imageUrl: data.url,
+      color: `#${getRandomColor()}`,
+    }));
   } catch (error) {
     client.logger.error('Error executing the furry send command:', error);
     const payload = {

@@ -30,11 +30,14 @@ module.exports = {
             const img = data.results[0].url;
 
             const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} thought it was smart to do ZzZz`)
                 .setColor(`#${getRandomColor()}`)
                 .setImage(img);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({
+                content: `${interaction.user} thought it was smart to do ZzZz`,
+                embeds: [embed],
+                allowedMentions: { users: [] },
+            });
         } catch (error) {
             client.logger.error('Error executing the sleep command:', error);
             await interaction.editReply('Something went wrong.');

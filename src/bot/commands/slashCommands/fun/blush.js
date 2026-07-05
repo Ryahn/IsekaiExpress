@@ -36,11 +36,14 @@ module.exports = {
             const { url: img } = await fetchImageForInteraction(client, { category: 'sfw', type: 'blush' });
 
             const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} uhm you're a bit red in your face`)
                 .setColor(`#${getRandomColor()}`)
                 .setImage(img);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({
+                content: `${interaction.user} uhm you're a bit red in your face`,
+                embeds: [embed],
+                allowedMentions: { users: [] },
+            });
         } catch (error) {
             client.logger.error('Error executing the blush command:', error);
             if (!interaction.replied) {

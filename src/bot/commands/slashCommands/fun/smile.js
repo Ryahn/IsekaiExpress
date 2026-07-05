@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder, MessageFlags } = require('discord.js');
-const { fetchImageForInteraction } = require('../../../utils/imgApi');
+const { MessageFlags } = require('discord.js');
+const { fetchImageForInteraction, buildReactionReply } = require('../../../utils/imgApi');
 const config = require('../../../../../config');
 const path = require('path');
 
@@ -13,9 +13,6 @@ module.exports = {
         .addUserOption(option => option.setName('target').setDescription('The user you want to smile at')),
 
     async execute(client, interaction) {
-
-        
-        
         const { getRandomColor } = client.utils;
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'smile');
         if (cooldownTime) {
@@ -25,8 +22,7 @@ module.exports = {
             });
         }
         try {
-
-            let targetUser = interaction.options.getUser('target');
+            const targetUser = interaction.options.getUser('target');
 
             if (!config.imgApi.apiKey) {
                 return interaction.editReply({
@@ -37,29 +33,13 @@ module.exports = {
 
             const { url: img } = await fetchImageForInteraction(client, { category: 'sfw', type: 'smile' });
 
-            let people = [
-                'at random person',
-                'at OEJ',
-                'at M4zy',
-                'at Astolfokyun1',
-                'at Ryahn',
-                'at Sam',
-                'at furry',
-                'at 12 foot dildo',
-                'at dakimakura',
-                'at waifu',
-                'at husbando'];
-            let random = Math.floor(Math.random() * people.length);
-        
-
-            let smileTarget = targetUser ? `${targetUser}` : people[random];
-
-            const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} smiles ${smileTarget}`)
-                .setColor(`#${getRandomColor()}`)
-                .setImage(img);
-
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply(buildReactionReply({
+                actor: interaction.user,
+                targetUser,
+                actionText: (user, target) => `${user} smiles at ${target}`,
+                imageUrl: img,
+                color: `#${getRandomColor()}`,
+            }));
         } catch (error) {
             client.logger.error('Error executing the smile command:', error);
             await interaction.editReply('Something went wrong.');

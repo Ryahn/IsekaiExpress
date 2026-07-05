@@ -32,11 +32,14 @@ module.exports = {
             });
 
             const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} is bored so do something or they will stab you`)
                 .setColor(`#${getRandomColor()}`)
                 .setImage(img);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({
+                content: `${interaction.user} is bored so do something or they will stab you`,
+                embeds: [embed],
+                allowedMentions: { users: [] },
+            });
         } catch (error) {
             client.logger.error('Error executing the bored command:', error);
             if (!interaction.replied) {

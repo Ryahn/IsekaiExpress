@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder, MessageFlags } = require('discord.js');
-const { fetchImageForInteraction } = require('../../../utils/imgApi');
+const { MessageFlags } = require('discord.js');
+const { fetchImageForInteraction, buildReactionReply } = require('../../../utils/imgApi');
 const config = require('../../../../../config');
 const path = require('path');
 
@@ -13,8 +13,6 @@ module.exports = {
         .addUserOption(option => option.setName('target').setDescription('The user you want to tickle')),
 
     async execute(client, interaction) {
-        
-        
         const { getRandomColor } = client.utils;
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'tickle');
         if (cooldownTime) {
@@ -24,8 +22,7 @@ module.exports = {
             });
         }
         try {
-
-            let targetUser = interaction.options.getUser('target');
+            const targetUser = interaction.options.getUser('target');
 
             if (!config.imgApi.apiKey) {
                 return interaction.editReply({
@@ -36,29 +33,13 @@ module.exports = {
 
             const { url: img } = await fetchImageForInteraction(client, { category: 'sfw', type: 'tickle' });
 
-            let people = [
-                'a random person',
-                'OEJ',
-                'M4zy',
-                'Astolfokyun1',
-                'Ryahn',
-                'Sam',
-                'a furry',
-                'a 12 foot dildo',
-                'a dakimakura',
-                'a waifu',
-                'a husbando'];
-            let random = Math.floor(Math.random() * people.length);
-        
-
-            let tickleTarget = targetUser ? `${targetUser}` : people[random];
-
-            const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} tickles ${tickleTarget}`)
-                .setColor(`#${getRandomColor()}`)
-                .setImage(img);
-
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply(buildReactionReply({
+                actor: interaction.user,
+                targetUser,
+                actionText: (user, target) => `${user} tickles ${target}`,
+                imageUrl: img,
+                color: `#${getRandomColor()}`,
+            }));
         } catch (error) {
             client.logger.error('Error executing the tickle command:', error);
             await interaction.editReply('Something went wrong.');

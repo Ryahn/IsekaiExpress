@@ -28,6 +28,30 @@ function pickRandomPerson() {
   return RANDOM_PEOPLE[Math.floor(Math.random() * RANDOM_PEOPLE.length)];
 }
 
+/**
+ * Build a reply payload with action text in message content (so mentions ping)
+ * and the image in an embed without a description.
+ *
+ * @param {object} opts
+ * @param {import('discord.js').User} opts.actor
+ * @param {import('discord.js').User|null} [opts.targetUser]
+ * @param {(user: import('discord.js').User, target: string) => string} opts.actionText
+ * @param {string} opts.imageUrl
+ * @param {string|number} opts.color
+ */
+function buildReactionReply({ actor, targetUser, actionText, imageUrl, color }) {
+  const targetLabel = targetUser ? `<@${targetUser.id}>` : pickRandomPerson();
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setImage(imageUrl);
+
+  return {
+    content: actionText(actor, targetLabel),
+    embeds: [embed],
+    allowedMentions: { users: targetUser ? [targetUser.id] : [] },
+  };
+}
+
 function getBaseUrl() {
   return (config.imgApi?.baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '');
 }
@@ -227,13 +251,14 @@ function createImgReactionCommand(opts) {
     try {
       const data = await fetchImageForInteraction(client, { category, type: apiType });
       const targetUser = targetOption ? interaction.options.getUser('target') : null;
-      const targetLabel = targetUser ? `${targetUser}` : pickRandomPerson();
-      const embed = new EmbedBuilder()
-        .setDescription(action(interaction.user, targetLabel))
-        .setColor(`#${getRandomColor()}`)
-        .setImage(data.url);
 
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.editReply(buildReactionReply({
+        actor: interaction.user,
+        targetUser,
+        actionText: action,
+        imageUrl: data.url,
+        color: `#${getRandomColor()}`,
+      }));
     } catch (error) {
       client.logger.error(`Error executing the ${name} command:`, error);
       const payload = {
@@ -296,11 +321,14 @@ function createNekoCommand({ name, category, description, nsfw = false }) {
     try {
       const data = await fetchImageForInteraction(client, { category, type });
       const embed = new EmbedBuilder()
-        .setDescription(`${interaction.user} shares a neko ${still ? 'image' : 'gif'}`)
         .setColor(`#${getRandomColor()}`)
         .setImage(data.url);
 
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.editReply({
+        content: `${interaction.user} shares a neko ${still ? 'image' : 'gif'}`,
+        embeds: [embed],
+        allowedMentions: { users: [] },
+      });
     } catch (error) {
       client.logger.error(`Error executing the ${name} command:`, error);
       await interaction.editReply({
@@ -321,6 +349,7 @@ module.exports = {
   DEFAULT_BASE_URL,
   RANDOM_PEOPLE,
   pickRandomPerson,
+  buildReactionReply,
   channelIsNsfw,
   resolveChannel,
   fetchRandomImage,

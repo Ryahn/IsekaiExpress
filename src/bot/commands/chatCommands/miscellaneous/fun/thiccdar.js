@@ -66,11 +66,14 @@ module.exports = class Thiccdar extends BaseCommand {
         const embed = new EmbedBuilder()
             .setColor(0x3498DB)
             .setTitle('Thiccness Detected')
-            .setDescription(description)
             .setImage(image)
             .setTimestamp();
 
-        await message.channel.send({ embeds: [embed] });
+        await message.channel.send({
+            content: description,
+            embeds: [embed],
+            allowedMentions: { users: [targetUser.id] },
+        });
 
         cooldowns.set(user.id, Date.now());
     }

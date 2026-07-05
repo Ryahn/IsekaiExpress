@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder, MessageFlags } = require('discord.js');
+const { MessageFlags } = require('discord.js');
+const { buildReactionReply } = require('../../../utils/imgApi');
 const { fetchRandom } = require('../../../utils/nekosBest');
 const path = require('path');
 
@@ -12,9 +13,6 @@ module.exports = {
         .addUserOption(option => option.setName('target').setDescription('The user you want to be smug with')),
 
     async execute(client, interaction) {
-
-        
-        
         const { getRandomColor } = client.utils;
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'smug');
         if (cooldownTime) {
@@ -24,37 +22,20 @@ module.exports = {
             });
         }
         try {
-
-            let targetUser = interaction.options.getUser('target');
+            const targetUser = interaction.options.getUser('target');
 
             const data = await client.rateLimitHandler.executeWithRateLimit('nekos-best', async () => {
                 return await fetchRandom('smug');
             });
             const img = data.results[0].url;
 
-            let people = [
-                'at random person',
-                'at OEJ',
-                'at M4zy',
-                'at Astolfokyun1',
-                'at Ryahn',
-                'at Sam',
-                'at furry',
-                'at 12 foot dildo',
-                'at dakimakura',
-                'at waifu',
-                'at husbando'];
-            let random = Math.floor(Math.random() * people.length);
-        
-
-            let smugTarget = targetUser ? `${targetUser}` : people[random];
-
-            const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} smugs ${smugTarget}`)
-                .setColor(`#${getRandomColor()}`)
-                .setImage(img);
-
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply(buildReactionReply({
+                actor: interaction.user,
+                targetUser,
+                actionText: (user, target) => `${user} smugs at ${target}`,
+                imageUrl: img,
+                color: `#${getRandomColor()}`,
+            }));
         } catch (error) {
             client.logger.error('Error executing the smug command:', error);
             await interaction.editReply('Something went wrong.');

@@ -32,11 +32,14 @@ module.exports = {
             });
 
             const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} shows how dumb that shit was`)
                 .setColor(`#${getRandomColor()}`)
                 .setImage(img);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({
+                content: `${interaction.user} shows how dumb that shit was`,
+                embeds: [embed],
+                allowedMentions: { users: [] },
+            });
         } catch (error) {
             client.logger.error('Error executing the facepalm command:', error);
             if (!interaction.replied) {

@@ -33,11 +33,14 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setTitle('stupid!')
-                .setDescription(`${interaction.user} went tsundere`)
                 .setColor(`#${getRandomColor()}`)
                 .setImage(img);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({
+                content: `${interaction.user} went tsundere`,
+                embeds: [embed],
+                allowedMentions: { users: [] },
+            });
             
             // Set cooldown after successful execution
             client.cooldownManager.setCooldown(interaction.user.id, 'baka');

@@ -37,11 +37,14 @@ module.exports = {
             const { url: img } = await fetchImageForInteraction(client, { category: 'sfw', type: 'cry' });
 
             const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} cries`)
                 .setColor(`#${getRandomColor()}`)
                 .setImage(img);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({
+                content: `${interaction.user} cries`,
+                embeds: [embed],
+                allowedMentions: { users: [] },
+            });
         } catch (error) {
             client.logger.error('Error executing the cry command:', error);
             if (!interaction.replied) {

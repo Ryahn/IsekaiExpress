@@ -46,12 +46,15 @@ module.exports = {
 
 		const embed = new EmbedBuilder()
 			.setTitle('Femboy')
-			.setDescription(`${interaction.user} wants ${query}`)
 			.addFields({ name: 'Tags', value: `${post.tags}`, inline: false })
 			.addFields({ name: 'Source', value: `[Click here](${sourceUrl})`, inline: false })
 			.setColor(`#${getRandomColor()}`)
 
-		await interaction.editReply({ embeds: [embed] });
+		await interaction.editReply({
+			content: `${interaction.user} wants ${query}`,
+			embeds: [embed],
+			allowedMentions: { users: [] },
+		});
 		await interaction.followUp(`|| ${post.file_url} ||`);
 
     },

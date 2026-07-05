@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 const axios = require('axios');
+const { pickRandomPerson } = require('../../../utils/imgApi');
 const path = require('path');
 
 module.exports = {
@@ -12,9 +13,6 @@ module.exports = {
         .addUserOption(option => option.setName('target').setDescription('user to magik').setRequired(false)),
 
     async execute(client, interaction) {
-
-        
-        
         const { getRandomColor } = client.utils;
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'magik');
         if (cooldownTime) {
@@ -24,20 +22,25 @@ module.exports = {
             });
         }
         try {
-
-            let target = interaction.options.getUser('target') || interaction.user;
-            const avatar = target.displayAvatarURL({ size: 512, format: 'jpg', dynamic: false });
+            const targetUser = interaction.options.getUser('target');
+            const imageUser = targetUser || interaction.user;
+            const targetLabel = targetUser ? `<@${targetUser.id}>` : pickRandomPerson();
+            const avatar = imageUser.displayAvatarURL({ size: 512, format: 'jpg', dynamic: false });
             const response = await client.rateLimitHandler.executeWithRateLimit('nekobot-api', async () => {
                 return await axios.get(`https://nekobot.xyz/api/imagegen?type=magik&image=${avatar}`, { timeout: 10000 });
             });
             const data = response.data;
 
-            const embed = new EmbedBuilder() // or MessageEmbed based on your version
+            const embed = new EmbedBuilder()
                 .setTitle('Magik')
                 .setColor(`#${getRandomColor()}`)
                 .setImage(data.message);
             
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({
+                content: `${interaction.user} magiks ${targetLabel}`,
+                embeds: [embed],
+                allowedMentions: { users: targetUser ? [targetUser.id] : [] },
+            });
         } catch (error) {
             console.error('Error executing the magik command:', error);
             if (!interaction.replied) {

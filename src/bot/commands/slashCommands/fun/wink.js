@@ -29,11 +29,14 @@ module.exports = {
             const img = data.results[0].url;
 
             const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} might want to tell us what is happening?`)
                 .setColor(`#${getRandomColor()}`)
                 .setImage(img);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({
+                content: `${interaction.user} might want to tell us what is happening?`,
+                embeds: [embed],
+                allowedMentions: { users: [] },
+            });
         } catch (error) {
             client.logger.error('Error in wink command:', error);
             await interaction.editReply('An error occurred while processing your request.');

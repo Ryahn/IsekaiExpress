@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder, MessageFlags } = require('discord.js');
-const { fetchImageForInteraction } = require('../../../utils/imgApi');
+const { MessageFlags } = require('discord.js');
+const { fetchImageForInteraction, buildReactionReply } = require('../../../utils/imgApi');
 const config = require('../../../../../config');
 const path = require('path');
 
@@ -13,9 +13,6 @@ module.exports = {
         .addUserOption(option => option.setName('target').setDescription('The user you want to cuddle with')),
 
     async execute(client, interaction) {
-
-        
-        
         const { getRandomColor } = client.utils;
 
         const cooldownTime = client.cooldownManager.isOnCooldown(interaction.user.id, 'cuddle');
@@ -27,10 +24,8 @@ module.exports = {
         }
 
         try {
+            const targetUser = interaction.options.getUser('target');
 
-            let targetUser = interaction.options.getUser('target');
-
-            // Use rate limiting for the API call
             if (!config.imgApi.apiKey) {
                 return interaction.editReply({
                     content: 'This command needs `IMG_API_KEY` in the environment.',
@@ -40,28 +35,13 @@ module.exports = {
 
             const { url: img } = await fetchImageForInteraction(client, { category: 'sfw', type: 'cuddle' });
 
-            let people = [
-                'a random person',
-                'OEJ',
-                'M4zy',
-                'Astolfokyun1',
-                'Ryahn',
-                'Sam',
-                'a furry',
-                'a 12 foot dildo',
-                'a dakimakura',
-                'a waifu',
-                'a husbando'
-            ];
-            let random = Math.floor(Math.random() * people.length);
-
-            let cuddleTarget = targetUser ? `${targetUser}` : people[random];
-            const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} cuddles ${cuddleTarget}`)
-                .setColor(`#${getRandomColor()}`)
-                .setImage(img);
-
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply(buildReactionReply({
+                actor: interaction.user,
+                targetUser,
+                actionText: (user, target) => `${user} cuddles ${target}`,
+                imageUrl: img,
+                color: `#${getRandomColor()}`,
+            }));
         } catch (error) {
             client.logger.error('Error executing the cuddle command:', error);
             if (!interaction.replied) {

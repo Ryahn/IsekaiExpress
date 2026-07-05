@@ -32,11 +32,14 @@ module.exports = {
             const img = data.results[0].url;
 
             const embed = new EmbedBuilder()
-                .setDescription(`${interaction.user} is veri happi`)
                 .setColor(`#${getRandomColor()}`)
                 .setImage(img);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({
+                content: `${interaction.user} is veri happi`,
+                embeds: [embed],
+                allowedMentions: { users: [] },
+            });
         } catch (error) {
             client.logger.error('Error fetching happy image:', error);
             await interaction.editReply('Failed to fetch a happy image.');

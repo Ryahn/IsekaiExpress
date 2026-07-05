@@ -43,12 +43,15 @@ module.exports = class Gaydar extends BaseCommand {
         let embed = new EmbedBuilder()
             .setColor(0x3498DB)
             .setTitle('Gayness Detected')
-            .setDescription(description)
             .setImage(image)
             .setTimestamp();
 
         // Send the embed mentioning the target user
-        await message.channel.send({ embeds: [embed] });
+        await message.channel.send({
+            content: description,
+            embeds: [embed],
+            allowedMentions: { users: [targetUser.id] },
+        });
 
         // Set the cooldown for the user
         cooldowns.set(user.id, Date.now());
