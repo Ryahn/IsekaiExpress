@@ -42,6 +42,27 @@ function authHeaders(apiKey) {
   return { 'X-API-Key': key };
 }
 
+/** Rewrite localhost/private API image URLs to the public img API host for Discord embeds. */
+function normalizeImageUrl(url, baseUrl) {
+  const publicBase = (baseUrl || getBaseUrl()).replace(/\/$/, '');
+  if (!url || typeof url !== 'string') return url;
+
+  if (url.startsWith('/')) {
+    return `${publicBase}${url}`;
+  }
+
+  try {
+    const parsed = new URL(url);
+    const isLocal = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    if (isLocal) {
+      return `${publicBase}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
+
 function channelIsNsfw(channel) {
   if (!channel) return false;
   if (channel.isThread()) {
@@ -71,7 +92,11 @@ async function fetchRandomImage({ category, type, apiKey, baseUrl } = {}) {
     throw new Error(`Unexpected response from Image API for ${category}/${type}`);
   }
 
-  return data;
+  const resolvedBase = baseUrl || getBaseUrl();
+  return {
+    ...data,
+    url: normalizeImageUrl(data.url, resolvedBase),
+  };
 }
 
 async function fetchTypes({ category, apiKey, baseUrl } = {}) {
@@ -288,4 +313,5 @@ module.exports = {
   fetchImageForInteraction,
   createImgReactionCommand,
   createNekoCommand,
+  normalizeImageUrl,
 };
