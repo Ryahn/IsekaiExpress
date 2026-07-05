@@ -59,7 +59,7 @@ module.exports = {
             expires: { x: 319, y: 415, date: expiryDate },
             avatar: { x: 654, y: 46, width: 152, height: 218, path: avatar },
             // base: 'https://overlord.lordainz.xyz/f/2024_Sep_19-23_13_42_50ySZTtQ.png',
-			base: path.resolve(__dirname, '../../media/images/lolilicense.png'),
+			base: path.resolve(__dirname, '../../../media/images/lolilicense.png'),
         };
 
         try {

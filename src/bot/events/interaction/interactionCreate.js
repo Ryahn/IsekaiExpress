@@ -64,6 +64,13 @@ module.exports = class InteractionEvent extends BaseEvent {
             }
           }
         }
+        if (interaction.commandName === 'furry') {
+          const cmd = client.slashCommands.get('furry');
+          if (cmd?.autocomplete) {
+            await cmd.autocomplete(client, interaction);
+            return;
+          }
+        }
         await interaction.respond([]);
       } catch (e) {
         client.logger.error('Autocomplete error:', e);

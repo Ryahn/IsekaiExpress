@@ -2,14 +2,12 @@ const path = require('path');
 const { createImgReactionCommand } = require('../../../utils/imgApi');
 
 const cmd = createImgReactionCommand({
-  name: 'fuck',
-  category: 'nsfw',
-  apiType: 'fuck',
-  description: 'bang someone really hard',
-  action: (user, target) => `${user} bangs the shit out of ${target}`,
+  name: 'eevee_gif',
+  category: 'sfw',
+  apiType: 'eevee/gif',
+  description: "eevee gif",
+  action: (u, t) => `${u} shares an eevee gif with ${t}`,
   targetOption: true,
-  targetRequired: true,
-  nsfw: true,
 });
 
 module.exports = { ...cmd, category: path.basename(__dirname) };

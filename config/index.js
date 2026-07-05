@@ -130,7 +130,10 @@ module.exports = {
     apiKey: str('THE_CAT_API_KEY', ''),
   },
 
-  fluxpointApiKey: str('FLUXPOINT_API_KEY', ''),
+  imgApi: {
+    apiKey: str('IMG_API_KEY', ''),
+    baseUrl: str('IMG_API_BASE_URL', 'https://imgapi.zonies.xyz'),
+  },
 
   currencyApiKey: str('CURRENCY_API_KEY', ''),
   youtubeApiKey: str('YOUTUBE_API_KEY', ''),

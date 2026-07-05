@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
-const { fetchRandom } = require('../../../utils/nekosBest');
+const { fetchImageForInteraction } = require('../../../utils/imgApi');
+const config = require('../../../../../config');
 const path = require('path');
 
 module.exports = {
@@ -25,11 +26,14 @@ module.exports = {
 
         try {
 
-            // Use rate limiting for the API call
-            const img = await client.rateLimitHandler.executeWithRateLimit('nekos-best-api', async () => {
-                const response = await fetchRandom('blush');
-                return response.results[0].url;
-            });
+            if (!config.imgApi.apiKey) {
+                return interaction.editReply({
+                    content: 'This command needs `IMG_API_KEY` in the environment.',
+                    flags: MessageFlags.Ephemeral,
+                });
+            }
+
+            const { url: img } = await fetchImageForInteraction(client, { category: 'sfw', type: 'blush' });
 
             const embed = new EmbedBuilder()
                 .setDescription(`${interaction.user} uhm you're a bit red in your face`)

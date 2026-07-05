@@ -2,13 +2,12 @@ const path = require('path');
 const { createImgReactionCommand } = require('../../../utils/imgApi');
 
 const cmd = createImgReactionCommand({
-  name: 'fuck',
+  name: 'threesome_ffm',
   category: 'nsfw',
-  apiType: 'fuck',
-  description: 'bang someone really hard',
-  action: (user, target) => `${user} bangs the shit out of ${target}`,
+  apiType: 'threesome_ffm',
+  description: "threesome ffm",
+  action: (user, target) => `${user} shares threesome ffm with ${target}`,
   targetOption: true,
-  targetRequired: true,
   nsfw: true,
 });
 

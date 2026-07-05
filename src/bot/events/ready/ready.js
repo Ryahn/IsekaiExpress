@@ -283,6 +283,13 @@ module.exports = class ReadyEvent extends BaseEvent {
             client.logger.warn(`scamImageScan OCR warmup failed: ${e?.message ?? String(e)}`);
         });
 
+        if (client.config.imgApi?.apiKey) {
+            const { getCachedTypes } = require('../../utils/imgApi');
+            getCachedTypes('furry', client.config.imgApi.apiKey).catch((e) => {
+                client.logger.warn(`Image API furry types warmup failed: ${e?.message ?? String(e)}`);
+            });
+        }
+
         client.user.setActivity('zonies cry', { type: ActivityType.Listening });
         client.logger.info(`${client.user.tag} has logged in. Using prefix: ${client.guildCommandPrefixes.get(client.config.discord.guildId)}`);
         client.logger.info('Collection refreshed, no errors occurred while starting the program! SUCCESS!');

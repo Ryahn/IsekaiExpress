@@ -54,7 +54,7 @@ module.exports = {
 			species: { x: 317, y: 435, text: species },
 			expires: { x: 575, y: 225, date: expiryDate },
 			avatar: { x: 45, y: 155, width: 240, height: 300, path: avatar },
-			base: path.resolve(__dirname, '../../media/images/furry_license.png'),
+			base: path.resolve(__dirname, '../../../media/images/furry_license.png'),
 		};
 
         try {
