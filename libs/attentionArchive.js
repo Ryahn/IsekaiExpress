@@ -68,6 +68,28 @@ function archiveEmbedsFromMessage(message) {
   return message.embeds.map((embed) => EmbedBuilder.from(embed));
 }
 
+function resolvedAttentionStatusLabel(status) {
+  if (status === 'handled') return 'Handled';
+  if (status === 'rejected') return 'Rejected';
+  return 'Dismissed';
+}
+
+function appendResolvedAttentionField(embed, row, options = {}) {
+  const reviewedBy = options.resolvedBy || row?.reviewed_by;
+  const resolvedAt = options.resolvedAt || row?.resolved_at;
+  const status = row?.status;
+
+  embed.addFields({
+    name: 'Resolved',
+    value: [
+      status ? `**Status:** ${resolvedAttentionStatusLabel(status)}` : null,
+      reviewedBy ? `**By:** <@${reviewedBy}>` : null,
+      resolvedAt ? `**At:** <t:${Math.floor(new Date(resolvedAt).getTime() / 1000)}:f>` : null,
+    ].filter(Boolean).join('\n'),
+    inline: false,
+  });
+}
+
 async function archiveAttentionRequestMessage(client, guild, row, options = {}) {
   if (!row || !RESOLVED_ATTENTION_STATUSES.has(row.status)) {
     return { status: 'skipped', reason: 'request is not resolved' };
@@ -104,18 +126,7 @@ async function archiveAttentionRequestMessage(client, guild, row, options = {}) 
   }
 
   const primaryEmbed = embeds[0];
-  const statusLabel =
-    row.status === 'handled' ? 'Handled' : row.status === 'rejected' ? 'Rejected' : 'Dismissed';
-  
-  primaryEmbed.addFields({
-    name: 'Resolved',
-    value: [
-      `**Status:** ${statusLabel}`,
-      row.reviewed_by ? `**By:** <@${row.reviewed_by}>` : null,
-      row.resolved_at ? `**At:** <t:${Math.floor(new Date(row.resolved_at).getTime() / 1000)}:f>` : null,
-    ].filter(Boolean).join('\n'),
-    inline: false,
-  });
+  appendResolvedAttentionField(primaryEmbed, row, options);
 
   const archiveMessage = await archiveChannel.send({ embeds, components: [] });
   const marked = await client.db.markAttentionRequestArchived(row.id, archiveMessage.id, archiveChannel.id);

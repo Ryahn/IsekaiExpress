@@ -165,6 +165,8 @@ async function handleAttentionButton(client, interaction) {
     const result = await archiveAttentionRequestMessage(client, interaction.guild, updatedRow, {
       queueChannel,
       archiveChannel: archiveChannels.archiveChannel,
+      resolvedBy: interaction.user.id,
+      resolvedAt: updatedRow?.resolved_at || new Date(),
     }).catch((e) => ({ status: 'failed', reason: e?.message || String(e) }));
     if (result.status !== 'archived' && result.status !== 'skipped') {
       client.logger.warn(`attention: archive request ${id} failed: ${result.reason || result.status}`);

@@ -57,6 +57,8 @@ services:
       - ./chatdump:/usr/src/app/chatdump
       # Starboard disaster-recovery archives (images, text, embeds). Survives container rebuilds.
       - ./starboard-archive:/usr/src/app/starboard-archive
+      # Live libs (attention archive, buttons, etc.) without rebuilding the image on every edit.
+      - ./libs:/usr/src/app/libs
 
   web:
     image: f95bot-app:latest
