@@ -103,6 +103,20 @@ async function archiveAttentionRequestMessage(client, guild, row, options = {}) 
     return { status: 'failed', reason: 'queue message has no embeds to archive' };
   }
 
+  const primaryEmbed = embeds[0];
+  const statusLabel =
+    row.status === 'handled' ? 'Handled' : row.status === 'rejected' ? 'Rejected' : 'Dismissed';
+  
+  primaryEmbed.addFields({
+    name: 'Resolved',
+    value: [
+      `**Status:** ${statusLabel}`,
+      row.reviewed_by ? `**By:** <@${row.reviewed_by}>` : null,
+      row.resolved_at ? `**At:** <t:${Math.floor(new Date(row.resolved_at).getTime() / 1000)}:f>` : null,
+    ].filter(Boolean).join('\n'),
+    inline: false,
+  });
+
   const archiveMessage = await archiveChannel.send({ embeds, components: [] });
   const marked = await client.db.markAttentionRequestArchived(row.id, archiveMessage.id, archiveChannel.id);
   if (marked !== 1) {

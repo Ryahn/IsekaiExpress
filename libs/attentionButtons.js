@@ -161,7 +161,8 @@ async function handleAttentionButton(client, interaction) {
     return null;
   });
   if (archiveChannels?.archiveChannel) {
-    const result = await archiveAttentionRequestMessage(client, interaction.guild, { ...row, status }, {
+    const updatedRow = await client.db.getAttentionRequestById(id);
+    const result = await archiveAttentionRequestMessage(client, interaction.guild, updatedRow, {
       queueChannel,
       archiveChannel: archiveChannels.archiveChannel,
     }).catch((e) => ({ status: 'failed', reason: e?.message || String(e) }));
