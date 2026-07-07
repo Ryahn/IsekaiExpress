@@ -12,11 +12,10 @@ exports.up = async function up(knex) {
     });
   }
 
-  await knex.raw(`
-    UPDATE commands
-    SET last_used_at = updated_at
-    WHERE usage > 0 AND last_used_at IS NULL
-  `);
+  await knex('commands')
+    .where('usage', '>', 0)
+    .whereNull('last_used_at')
+    .update({ last_used_at: knex.ref('updated_at') });
 };
 
 /**
