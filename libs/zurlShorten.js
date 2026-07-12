@@ -2,6 +2,7 @@ const axios = require('axios');
 const logger = require('./logger');
 
 const ZURL_API = 'https://zurl.zonies.xyz/api/v1/urls';
+const RETRYABLE_STATUSES = new Set([404, 429, 502, 503, 504]);
 const F95_HOST_RE = /^(?:https?:\/\/)?(?:www\.)?f95zone\.to(?:\/|$)/i;
 const F95_TEXT_URL_RE = /\b(?:https?:\/\/)?(?:www\.)?f95zone\.to(?:\/[^\s<>"']*)?/gi;
 const TRAILING_PUNCTUATION_RE = /[),.;:!?]+$/;
@@ -39,23 +40,32 @@ async function shortenUrlWithZurl(apiKey, longUrl) {
     return url;
   }
 
+  const request = () => axios.post(ZURL_API, { url }, {
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    timeout: 12_000,
+    validateStatus: () => true,
+  });
+
   try {
-    const res = await axios.post(ZURL_API, { url }, {
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 12_000,
-      validateStatus: () => true,
-    });
+    let res = await request();
+    if (RETRYABLE_STATUSES.has(res.status)) {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      res = await request();
+    }
 
     if (res.status >= 200 && res.status < 300 && res.data && typeof res.data.short_url === 'string') {
       const short = res.data.short_url.trim();
       if (short) return short;
     }
 
+    const body = typeof res.data === 'object'
+      ? JSON.stringify(res.data).slice(0, 200)
+      : String(res.data).slice(0, 200);
     logger.warn(
-      `zurl: shorten failed (${res.status}) for url prefix ${url.slice(0, 48)}… body=${typeof res.data === 'object' ? JSON.stringify(res.data).slice(0, 200) : String(res.data)}`,
+      `zurl: shorten failed (${res.status}) for url prefix ${url.slice(0, 48)}… body=${body}`,
     );
   } catch (e) {
     logger.warn(`zurl: shorten request error: ${e?.message || e}`);

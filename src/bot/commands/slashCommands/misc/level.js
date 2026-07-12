@@ -36,18 +36,7 @@ module.exports = {
             
             let { xp, level, message_count } = userData;
             let requiredXP = client.utils.calculateXPForNextLevel(level);
-
-			const member = interaction.guild?.members.cache.get(user.id);
-            let status = "offline";
-            let color = "#b1b1b1";
-
-			if (member && member.presence) {
-				status = member.presence.status;
-                if (status === "dnd") { color = "#ff0048"; }
-                else if (status === "online") { color = "#00fa81"; }
-                else if (status === "idle") { color = "#ffbe00"; }
-                else if (status === "streaming") { color = "#a85fc5"; }
-            }
+            const accentColor = "#5865F2";
 
             const userRank = await client.db.getUserRank(user.id);
 			const progressPercentage = Math.min(100, Math.max(0, (xp / requiredXP) * 100));
@@ -55,18 +44,18 @@ module.exports = {
             await client.rateLimitHandler.executeWithRateLimit('image-generation', async () => {
                 const rank = new canvacord.Rank()
                     .setAvatar(avatar)
-                    .setCurrentXP(Number(xp), color)
-                    .setRequiredXP(Number(requiredXP), color)
-                    .setStatus(status, false, 7)
+                    .setCurrentXP(Number(xp), accentColor)
+                    .setRequiredXP(Number(requiredXP), accentColor)
+                    .setStatus("offline", false, 7)
                     .renderEmojis(true)
-                    .setProgressBar(color, "COLOR", true)
+                    .setProgressBar(accentColor, "COLOR", true)
                     .setProgressBarTrack('#000000', "COLOR")
-                    .setRankColor(color, "COLOR")
-                    .setLevelColor(color, "COLOR")
-                    .setUsername(user.username, color)
+                    .setRankColor(accentColor, "COLOR")
+                    .setLevelColor(accentColor, "COLOR")
+                    .setUsername(user.username, accentColor)
                     .setRank(Number(userRank), "Rank", true)
                     .setLevel(Number(level), "Level", true)
-                    .setDiscriminator(user.discriminator, color);
+                    .setDiscriminator(user.discriminator, accentColor);
 
                 const data = await rank.build();
                 const attachment = new AttachmentBuilder(data, { name: 'RankCard.png' });
@@ -82,7 +71,7 @@ module.exports = {
                         value: `${Number(progressPercentage).toFixed(2)}%`,
                         inline: true
                     })
-                    .setColor(color)
+                    .setColor(accentColor)
                     .setImage("attachment://RankCard.png");
                 await interaction.editReply({ embeds: [embed], files: [attachment] });
             });
